@@ -1,0 +1,22 @@
+import uuid
+from sqlmodel import Relationship, Field
+from typing import List
+
+from db.models.base import CommonBaseModel
+
+
+class SubDomain(CommonBaseModel, table=True):
+    __tablename__ = 'sub_domain'
+
+    name: str = Field(..., description="Name of the sub domain")
+    description: str | None = Field(default=None, nullable=True, description="Optional description of the sub domain")
+    domain_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='domain_intervention.uuid')
+    domain: 'DomainIntervention' = Relationship(back_populates='subdomains', sa_relationship_kwargs={'lazy': 'selectin'})
+
+
+class DomainIntervention(CommonBaseModel, table=True):
+    __tablename__ = 'domain_intervention'
+
+    name: str = Field(..., description="Name of the domain intervention")
+    description: str | None = Field(default=None, nullable=True, description="Optional description of the domain intervention")
+    subdomains: List[SubDomain] = Relationship(back_populates='domain', sa_relationship_kwargs={'lazy': 'selectin'})

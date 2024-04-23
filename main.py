@@ -1,0 +1,35 @@
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from api.endpoints import auth, budget_type, organization_type, funding_source, funding_unit, domain_intervention, input_category, sub_domain, input
+import uvicorn
+
+from db.database import create_db_and_tables, async_session
+from utils.security import create_admin
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await create_db_and_tables()
+    async with async_session() as db:
+        await create_admin(db)
+    yield
+    print("Cleanup tasks go here")
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(budget_type.router, prefix='/api/v1/budget_type', tags=["Budget Type"])
+app.include_router(organization_type.router, prefix='/api/v1/organization_type', tags=["Organization Type"])
+app.include_router(funding_source.router, prefix='/api/v1/funding_source', tags=["Funding Source"])
+app.include_router(funding_unit.router, prefix='/api/v1/funding_unit', tags=["Funding Unit"])
+app.include_router(domain_intervention.router, prefix='/api/v1/domain_intervention', tags=["Domain Intervention"])
+app.include_router(input_category.router, prefix='/api/v1/input_category', tags=["Input Category"])
+app.include_router(sub_domain.router, prefix='/api/v1/sub_domain', tags=["Sub Domain"])
+app.include_router(input.router, prefix='/api/v1/input', tags=["Input"])
+
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=7000, reload=True)
