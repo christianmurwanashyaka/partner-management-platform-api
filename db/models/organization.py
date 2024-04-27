@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 import uuid
 from pydantic import EmailStr
@@ -7,6 +7,7 @@ import sqlalchemy as sa
 
 from db.models.address import BaseAddress
 from db.models.base import CommonBaseModel
+from db.models.document import Document
 
 
 class OrganizationAddress(BaseAddress, table=True):
@@ -32,3 +33,4 @@ class Organization(CommonBaseModel, table=True):
     rwanda_address: OrganizationAddress = Relationship(back_populates='organizations', sa_relationship_kwargs={'lazy': 'selectin'})
     organization_type_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization_type.uuid')
     organization_type: 'OrganizationType' = Relationship(back_populates='organizations', sa_relationship_kwargs={'lazy': 'selectin'})
+    documents: List[Document] = Relationship(back_populates='organization', sa_relationship_kwargs={'lazy': 'selectin'})
