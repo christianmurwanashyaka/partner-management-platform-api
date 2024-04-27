@@ -25,11 +25,7 @@ class Settings(BaseSettings):
         env_file = env_path
 
     def __init__(self, **kwargs):
-        # TODO: REMOVE LOGS
         super().__init__(**kwargs)
-        print(f'SECRET KEY is {self.SECRET_KEY}')
-        print(f'ALGORITHM IS {self.ALGORITHM}')
-        print(f'ACCESS TOKEN EXPIRES IN {self.ACCESS_TOKEN_EXPIRES_IN}')
 
 
 settings = Settings()
