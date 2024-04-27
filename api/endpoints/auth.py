@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.auth import get_current_user
 from db.database import get_db
-from db.models.user import User
-from helpers.db import get_first_item
+from db.models.user import User, UserRole, SwapTeamLevel
+from helpers.db import get_first_item, check_if_exists
 from schemas.user import UserCreate, Token, LoginRequest, UserProfile
 from utils.security import get_password_hash, verify_password, create_access_token
 
@@ -14,9 +14,15 @@ router = APIRouter()
 
 @router.post("/signup", response_model=User)
 async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
-    db_user = await db.get(User, user.email)
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+    if await check_if_exists(User, db, email=user.email):
+        raise HTTPException(status.HTTP_409_CONFLICT, detail='User with this email already exists')
+
+    if user.role == UserRole.SWAPTEAM_MEMBER:
+        if user.level is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Level is required for Swap Team members')
+        if user.level not in SwapTeamLevel:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Invalid level for Swap Team members')
+
     hashed_password = get_password_hash(user.password)
     db_user = User(
         email=user.email,
@@ -25,6 +31,7 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
         last_name=user.last_name,
         role=user.role,
         level=user.level,
+        created_by=user.email
     )
     db.add(db_user)
     await db.commit()
@@ -39,12 +46,14 @@ async def login_for_access_token(
 ):
     query = select(User).filter(User.email == login_request.email)
     user = await get_first_item(db, query)
+
     if not user or not verify_password(login_request.password, user.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
