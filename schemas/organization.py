@@ -35,6 +35,7 @@ class OrganizationRead(BaseModel):
     phone_number: str
     email: EmailStr
     website: str
+    created_by: str
     home_country_representative: Optional[str] = None
     rwanda_representative: str
 

@@ -48,7 +48,7 @@ async def create_organization(
     user = request.state.user.email
 
     # Create organization instance
-    organization = Organization(
+    new_organization = Organization(
         name=name,
         phone_number=phone_number,
         email=email,
@@ -68,9 +68,9 @@ async def create_organization(
         created_by=user,
     )
     try:
-        db.add(organization)
+        db.add(new_organization)
         await db.commit()
-        await db.refresh(organization)
+        await db.refresh(new_organization)
 
         # Handle file uploads
         appointment_letter_path, appointment_letter_filename = await handle_upload_file(appointment_letter)
@@ -79,7 +79,7 @@ async def create_organization(
             document_type=DocumentType.APPOINTMENT_LETTER,
             path=appointment_letter_path,
             filename=appointment_letter_filename,
-            organization=organization,
+            organization=new_organization,
             created_by=user
         )
         db.add(appointment_letter_doc)
@@ -91,7 +91,7 @@ async def create_organization(
                 document_type=DocumentType.NOTIFIED_CONSTITUTION_BYLAWS,
                 path=notified_path,
                 filename=notified_filename,
-                organization=organization,
+                organization=new_organization,
                 created_by=user
             )
             db.add(notified_constitution_bylaws_doc)
@@ -120,7 +120,7 @@ async def create_organization(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-    return organization
+    return new_organization
 
 
 @router.get('/', response_model=PaginatedResponse[OrganizationRead], dependencies=[Depends(swapteam_member_access)])

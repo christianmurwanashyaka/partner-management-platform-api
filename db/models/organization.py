@@ -45,3 +45,5 @@ class Organization(CommonBaseModel, table=True):
         back_populates='organization',
         sa_relationship_kwargs={'lazy': 'selectin'}
     )
+
+    projects: List['Project'] = Relationship(back_populates='', sa_relationship_kwargs={'lazy': 'selectin'})

@@ -6,6 +6,8 @@ from pydantic import BaseModel
 
 from schemas.budget_type import BudgetTypeRead
 from schemas.domain_intervention import DomainInterventionRead
+from schemas.funding_source import FundingSourceRead
+from schemas.funding_unit import FundingUnitRead
 
 
 class OperationalZoneCreate(BaseModel):
@@ -36,6 +38,9 @@ class ProjectCreate(BaseModel):
     start_date: date
     end_date: date
     operational_zone: OperationalZoneCreate
+    organization_id: uuid.UUID
+    funding_unit_id: uuid.UUID
+    funding_source_id: uuid.UUID
 
     class Config:
         from_attributes = True
@@ -59,6 +64,8 @@ class ProjectRead(BaseModel):
     description: Optional[str] = None
     domain_intervention: DomainInterventionRead
     budget_type: BudgetTypeRead
+    funding_unit: FundingUnitRead
+    funding_source: FundingSourceRead
     planned_budget: float
     start_date: date
     end_date: date
