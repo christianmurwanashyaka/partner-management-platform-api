@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from api.endpoints import auth, budget_type, organization_type, funding_source, funding_unit, domain_intervention, input_category, sub_domain, input
+from api.endpoints import auth, budget_type, organization_type, funding_source, funding_unit, domain_intervention, input_category, sub_domain, input, organization, user
 import uvicorn
 
 from db.database import create_db_and_tables, async_session
@@ -29,6 +29,8 @@ app.include_router(domain_intervention.router, prefix='/api/v1/domain_interventi
 app.include_router(input_category.router, prefix='/api/v1/input_category', tags=["Input Category"])
 app.include_router(sub_domain.router, prefix='/api/v1/sub_domain', tags=["Sub Domain"])
 app.include_router(input.router, prefix='/api/v1/input', tags=["Input"])
+app.include_router(organization.router, prefix='/api/v1/organization', tags=["Organization"])
+app.include_router(user.router, prefix='/api/v1/user', tags=["User"])
 
 
 if __name__ == "__main__":

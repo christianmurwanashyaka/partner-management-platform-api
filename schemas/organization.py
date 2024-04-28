@@ -1,10 +1,8 @@
 from typing import Optional, List
-
 import uuid
 from fastapi import UploadFile
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr
 
-from schemas.address import OrganizationAddress
 from schemas.document import DocumentRead
 from schemas.organization_type import OrganizationTypeRead
 
@@ -16,34 +14,19 @@ class OrganizationCreate(BaseModel):
     email: EmailStr
     home_country_representative: Optional[str] = None
     rwanda_representative: str
-    home_country_address: Optional[OrganizationAddress] = None
-    rwanda_address: OrganizationAddress
     organization_type_id: uuid.UUID
-    appointment_letter: UploadFile
-    notified_constitution_bylaws: Optional[UploadFile] = None
 
-    @field_validator('home_country_address', 'home_country_representative')
-    def validate_home_country_fields(cls, v, field):
-        if field.name == 'home_country_address' and cls.rwanda_address.country == 'Rwanda':
-            return None
-        if field.name == 'home_country_representative' and cls.rwanda_address.country == 'Rwanda':
-            return None
-        return v
+    # Simplified address fields
+    home_country: Optional[str] = None
+    home_country_province_state: Optional[str] = None
+    home_country_district: Optional[str] = None
+    home_country_avenue: Optional[str] = None
+    home_country_po_box: Optional[str] = None
 
-    @field_validator('rwanda_address', 'rwanda_representative')
-    def validate_rwanda_fields(cls, v, field):
-        if not v:
-            raise ValueError(f'{field.name.replace("_", " ").title()} is required.')
-        return v
-
-    @field_validator('notified_constitution_bylaws')
-    def validate_notified_constitution_bylaws(cls, v, values):
-        if values['rwanda_address'].country != 'Rwanda' and not v:
-            raise ValueError("Notified Constitution Bylaws is required for international organizations.")
-        return v
-
-    class Config:
-        arbitrary_types_allowed = True
+    rwanda_province: str
+    rwanda_district: str
+    rwanda_avenue: str
+    rwanda_po_box: str
 
 
 class OrganizationRead(BaseModel):
@@ -54,10 +37,18 @@ class OrganizationRead(BaseModel):
     website: str
     home_country_representative: Optional[str] = None
     rwanda_representative: str
-    home_country_address: Optional[OrganizationAddress] = None
-    rwanda_address: OrganizationAddress
+
+    # Direct string address components for output
+    home_country: Optional[str] = None
+    home_country_province_state: Optional[str] = None
+    home_country_district: Optional[str] = None
+    home_country_avenue: Optional[str] = None
+    home_country_po_box: Optional[str] = None
+
+    rwanda_province: str
+    rwanda_district: str
+    rwanda_avenue: str
+    rwanda_po_box: str
+
     organization_type: OrganizationTypeRead
     documents: List[DocumentRead] = []
-
-    class Config:
-        from_attributes = True

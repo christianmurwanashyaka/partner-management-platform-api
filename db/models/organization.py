@@ -2,35 +2,46 @@ from typing import Optional, List
 
 import uuid
 from pydantic import EmailStr
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship
 import sqlalchemy as sa
 
-from db.models.address import BaseAddress
 from db.models.base import CommonBaseModel
 from db.models.document import Document
-
-
-class OrganizationAddress(BaseAddress, table=True):
-    __tablename__ = 'organization_address'
-
-    country: Optional[str] = None
-    avenue: Optional[str] = None
-    po_box: Optional[str] = None
 
 
 class Organization(CommonBaseModel, table=True):
     __tablename__ = 'organization'
 
-    name: str
-    phone_number: str
-    email: EmailStr = Field(sa_column=sa.Column(sa.String, unique=True, index=True))
-    website: str
-    home_country_representative: Optional[str] = None
-    rwanda_representative: str
-    home_country_address_id: Optional[uuid.UUID] = Field(default=None, foreign_key='organization_address.uuid')
-    home_country_address: Optional[OrganizationAddress] = Relationship(back_populates='organizations', sa_relationship_kwargs={'lazy': 'selectin'})
-    rwanda_address_id: uuid.UUID = Field(default=None, foreign_key='organization_address.uuid')
-    rwanda_address: OrganizationAddress = Relationship(back_populates='organizations', sa_relationship_kwargs={'lazy': 'selectin'})
-    organization_type_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization_type.uuid')
-    organization_type: 'OrganizationType' = Relationship(back_populates='organizations', sa_relationship_kwargs={'lazy': 'selectin'})
-    documents: List[Document] = Relationship(back_populates='organization', sa_relationship_kwargs={'lazy': 'selectin'})
+    name: str = Field(sa_column=sa.Column(sa.String, index=True))
+    phone_number: str = Field(sa_column=sa.Column(sa.String))
+    email: EmailStr = Field(sa_column=sa.Column(sa.String, unique=True))
+    website: str = Field(sa_column=sa.Column(sa.String))
+
+    home_country_representative: Optional[str] = Field(sa_column=sa.Column(sa.String))
+    rwanda_representative: str = Field(sa_column=sa.Column(sa.String))
+
+    # Home country address components
+    home_country: Optional[str] = Field(sa_column=sa.Column(sa.String), default=None)
+    home_country_province_state: Optional[str] = Field(sa_column=sa.Column(sa.String), default=None)
+    home_country_district: Optional[str] = Field(sa_column=sa.Column(sa.String), default=None)
+    home_country_avenue: Optional[str] = Field(sa_column=sa.Column(sa.String), default=None)
+    home_country_po_box: Optional[str] = Field(sa_column=sa.Column(sa.String), default=None)
+
+    # Rwanda address components
+    rwanda_province: str = Field(sa_column=sa.Column(sa.String))
+    rwanda_district: str = Field(sa_column=sa.Column(sa.String))
+    rwanda_avenue: str = Field(sa_column=sa.Column(sa.String))
+    rwanda_po_box: str = Field(sa_column=sa.Column(sa.String))
+
+    organization_type_id: uuid.UUID = Field(
+        default=None,
+        sa_column=sa.Column(sa.ForeignKey('organization_type.uuid'))
+    )
+    organization_type: 'OrganizationType' = Relationship(
+        back_populates='organizations',
+        sa_relationship_kwargs={'lazy': 'selectin'}
+    )
+    documents: List[Document] = Relationship(
+        back_populates='organization',
+        sa_relationship_kwargs={'lazy': 'selectin'}
+    )

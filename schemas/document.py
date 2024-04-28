@@ -16,7 +16,7 @@ class DocumentRead(BaseModel):
     filename: str
     registration: bool
     created_at: datetime
-    created_bg: str
+    created_by: str
 
     class Config:
         from_attributes = True

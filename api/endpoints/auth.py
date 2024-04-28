@@ -4,15 +4,16 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.auth import get_current_user
 from db.database import get_db
+from db.models.organization import Organization
 from db.models.user import User, UserRole, SwapTeamLevel
-from helpers.db import get_first_item, check_if_exists
-from schemas.user import UserCreate, Token, LoginRequest, UserProfile
+from helpers.db import get_first_item, check_if_exists, get_items_by_criteria
+from schemas.user import UserCreate, Token, LoginRequest, UserProfile, SignupResponse, UserOrganization
 from utils.security import get_password_hash, verify_password, create_access_token
 
 router = APIRouter()
 
 
-@router.post("/signup", response_model=User)
+@router.post("/signup", response_model=SignupResponse)
 async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
     if await check_if_exists(User, db, email=user.email):
         raise HTTPException(status.HTTP_409_CONFLICT, detail='User with this email already exists')
@@ -36,7 +37,9 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
-    return db_user
+
+    token = create_access_token(data={"sub": user.email})
+    return {"user": db_user, "token": {"access_token": token, "token_type": "bearer"}}
 
 
 @router.post("/login", response_model=Token)
@@ -59,5 +62,33 @@ async def login_for_access_token(
 
 
 @router.get("/users/me", response_model=UserProfile)
-async def get_user_profile(current_user: User = Depends(get_current_user)):
-    return current_user
+async def get_user_profile(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if current_user.role == UserRole.PARTNER:
+        query = select(Organization).where(Organization.created_by == current_user.email)
+        organizations = await get_items_by_criteria(db, query)
+        organization_summaries = [
+            UserOrganization(
+                uuid=org.uuid,
+                name=org.name,
+                email=org.email
+            )
+            for org in organizations
+        ]
+        return UserProfile(
+            uuid=current_user.uuid,
+            first_name=current_user.first_name,
+            last_name=current_user.last_name,
+            email=current_user.email,
+            role=current_user.role,
+            level=current_user.level,
+            organizations=organization_summaries
+        )
+    else:
+        return UserProfile(
+            uuid=current_user.uuid,
+            first_name=current_user.first_name,
+            last_name=current_user.last_name,
+            email=current_user.email,
+            role=current_user.role,
+            level=current_user.level
+        )

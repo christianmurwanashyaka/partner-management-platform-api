@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from db.models.user import UserRole, SwapTeamLevel
@@ -45,12 +45,25 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class UserOrganization(BaseModel):
+    uuid: UUID
+    name: str
+    email: EmailStr
+
+
 class UserProfile(BaseModel):
     uuid: UUID
     first_name: str
     last_name: str
     email: EmailStr
     role: UserRole
+    level: Optional[SwapTeamLevel] = None
+    organizations: Optional[List[UserOrganization]] = None
 
     class Config:
         from_attributes = True
+
+
+class SignupResponse(BaseModel):
+    user: UserProfile
+    token: Token
