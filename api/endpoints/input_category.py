@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
-from api.dependencies.access_control import admin_access
+from api.dependencies.access_control import admin_access, partner_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models.input_category import InputCategory
@@ -31,12 +31,12 @@ async def create_input_category(request: Request, input_category: InputCategoryC
     return new_input_category
 
 
-@router.get('/', response_model=PaginatedResponse[InputCategoryList], dependencies=[Depends(admin_access)])
+@router.get('/', response_model=PaginatedResponse[InputCategoryList], dependencies=[Depends(partner_access)])
 async def get_input_categories(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, InputCategory, page=page, page_size=page_size)
 
 
-@router.get('/{uuid}', response_model=InputCategoryRead, dependencies=[Depends(admin_access)])
+@router.get('/{uuid}', response_model=InputCategoryRead, dependencies=[Depends(partner_access)])
 async def get_input_category(uuid: str, db: AsyncSession = Depends(get_db)):
     query = select(InputCategory).filter(InputCategory.uuid == uuid)
     input_category = await get_first_item(db, query)

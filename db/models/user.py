@@ -32,4 +32,3 @@ class User(CommonBaseModel, table=True):
     last_name: str
     role: UserRole
     level: Optional[SwapTeamLevel] = None
-    created_by: Optional[str] = None

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
-from api.dependencies.access_control import admin_access
+from api.dependencies.access_control import admin_access, partner_access
 from db.database import get_db
 from db.models.budget_type import BudgetType
 from db.models.pagination import PaginatedResponse
@@ -27,12 +27,12 @@ async def create_budget_type(request: Request, budget_type: BudgetTypeCreate, db
     return new_budget_type
 
 
-@router.get('/', response_model=PaginatedResponse[BudgetTypeRead], dependencies=[Depends(admin_access)])
+@router.get('/', response_model=PaginatedResponse[BudgetTypeRead], dependencies=[Depends(partner_access)])
 async def get_budget_types(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, BudgetType, page=page, page_size=page_size)
 
 
-@router.get('/{uuid}', response_model=BudgetTypeRead, dependencies=[Depends(admin_access)])
+@router.get('/{uuid}', response_model=BudgetTypeRead, dependencies=[Depends(partner_access)])
 async def get_budget_type(uuid: str, db: AsyncSession = Depends(get_db)):
     query = select(BudgetType).filter(BudgetType.uuid == uuid)
     budget_type = await get_first_item(db, query)
