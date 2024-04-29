@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
-from api.dependencies.access_control import admin_access
+from api.dependencies.access_control import admin_access, partner_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models.organization_type import OrganizationType
@@ -28,12 +28,12 @@ async def create_organization_type(request: Request, organization_type: Organiza
     return new_organization_type
 
 
-@router.get('/', response_model=PaginatedResponse[OrganizationType], dependencies=[Depends(admin_access)])
+@router.get('/', response_model=PaginatedResponse[OrganizationType], dependencies=[Depends(partner_access)])
 async def get_organization_types(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, OrganizationType, page=page, page_size=page_size)
 
 
-@router.get('/{uuid}', response_model=OrganizationTypeRead, dependencies=[Depends(admin_access)])
+@router.get('/{uuid}', response_model=OrganizationTypeRead, dependencies=[Depends(partner_access)])
 async def get_organization_type(uuid: str, db: AsyncSession = Depends(get_db)):
     query = select(OrganizationType).filter(OrganizationType.uuid == uuid)
     organization_type = await get_first_item(db, query)

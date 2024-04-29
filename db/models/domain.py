@@ -20,3 +20,4 @@ class DomainIntervention(CommonBaseModel, table=True):
     name: str = Field(..., description="Name of the domain intervention")
     description: str | None = Field(default=None, nullable=True, description="Optional description of the domain intervention")
     subdomains: List[SubDomain] = Relationship(back_populates='domain', sa_relationship_kwargs={'lazy': 'selectin'})
+    projects: List['Project'] = Relationship(back_populates='domain_intervention', sa_relationship_kwargs={'lazy': 'selectin'})

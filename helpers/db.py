@@ -70,3 +70,16 @@ async def get_all_items(db: AsyncSession, model: Any, *, page: int = 1, page_siz
         total_pages=total_pages,
         data=items
     )
+
+
+async def get_items_by_criteria(db: AsyncSession, query: Selectable):
+    """
+    Retrieves items from the database based on the provided query criteria.
+
+    :param db: An AsyncSession instance representing the database session.
+    :param query: A Selectable object representing the query with the desired criteria.
+
+    :return: A list of items retrieved from the database matching the specified criteria.
+    """
+    result = await db.execute(query)
+    return result.scalars().all()

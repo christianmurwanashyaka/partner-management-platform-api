@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
-from api.dependencies.access_control import admin_access
+from api.dependencies.access_control import admin_access, partner_access
 from db.database import get_db
 from db.models.funding_source import FundingSource
 from db.models.pagination import PaginatedResponse
@@ -27,12 +27,12 @@ async def create_funding_source(request: Request, funding_source: FundingSourceC
     return funding_source
 
 
-@router.get('/', response_model=PaginatedResponse[FundingSource], dependencies=[Depends(admin_access)])
+@router.get('/', response_model=PaginatedResponse[FundingSource], dependencies=[Depends(partner_access)])
 async def get_funding_sources(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, FundingSource, page=page, page_size=page_size)
 
 
-@router.get('/{uuid}', response_model=FundingSourceRead, dependencies=[Depends(admin_access)])
+@router.get('/{uuid}', response_model=FundingSourceRead, dependencies=[Depends(partner_access)])
 async def get_funding_source(uuid: str, db: AsyncSession = Depends(get_db)):
     query = select(FundingSource).filter(FundingSource.uuid == uuid)
     funding_source = await get_first_item(db, query)
