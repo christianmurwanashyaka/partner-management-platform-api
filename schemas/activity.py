@@ -1,0 +1,49 @@
+from datetime import datetime
+from typing import List
+
+import uuid
+from pydantic import BaseModel
+
+from schemas.input_detail import InputDetailCreate, InputDetailRead
+from schemas.sub_domain import SubDomainRead
+
+
+class ActivityCreate(BaseModel):
+    project_id: uuid.UUID
+    name: str
+    implementer: str
+    fiscal_year: str
+    sub_domain_id: uuid.UUID
+    districts: List[str]
+    provinces: List[str]
+    input_details: List[InputDetailCreate]
+
+    class Config:
+        from_attributes = True
+
+
+class ActivityList(BaseModel):
+    uuid: uuid.UUID
+    name: str
+    implement: str
+    fiscal_year: str
+
+    class Config:
+        from_attributes = True
+
+
+class ActivityRead(BaseModel):
+    uuid: uuid.UUID
+    project_id: uuid.UUID
+    name: str
+    implementer: str
+    fiscal_year: str
+    sub_domain: SubDomainRead
+    districts: List[str]
+    provinces: List[str]
+    input_details: List[InputDetailRead]
+    created_at: datetime
+    created_by: str
+
+    class Config:
+        from_attributes = True
