@@ -11,6 +11,7 @@ class Input(CommonBaseModel, table=True):
     category: 'InputCategory' = Relationship(back_populates='inputs', sa_relationship_kwargs={'lazy': 'selectin'})
     name: str = Field(..., description='Name of the input')
     description: str | None = Field(default=None, nullable=True, description='Optional description of the input')
+    input_details: List['InputDetail'] = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
 
 
 class InputCategory(CommonBaseModel, table=True):
@@ -19,4 +20,4 @@ class InputCategory(CommonBaseModel, table=True):
     name: str = Field(..., description="Name of the input category")
     description: str | None = Field(default=None, nullable=True, description="Optional description of the input category")
     inputs: List[Input] = Relationship(back_populates='category', sa_relationship_kwargs={'lazy': 'selectin'})
-    
+    input_details: List['InputDetail'] = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
