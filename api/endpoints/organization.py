@@ -40,7 +40,7 @@ async def create_organization(
         rwanda_po_box: str = Form(...),
         organization_type_id: uuid.UUID = Form(...),
         appointment_letter: UploadFile = File(...),
-        notified_constitution_bylaws: Optional[UploadFile] = File(None),
+        notified_constitution_bylaws: UploadFile = None,
         db: AsyncSession = Depends(get_db),
 ):
     if await check_if_exists(Organization, db, name=name):
