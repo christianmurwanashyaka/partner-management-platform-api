@@ -30,6 +30,5 @@ class User(CommonBaseModel, table=True):
     password: str
     first_name: str
     last_name: str
-    phone_number:int
     role: UserRole
     level: Optional[SwapTeamLevel] = None
