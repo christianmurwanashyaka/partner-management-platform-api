@@ -56,6 +56,7 @@ class UserProfile(BaseModel):
     first_name: str
     last_name: str
     email: EmailStr
+    phone_number:int
     role: UserRole
     level: Optional[SwapTeamLevel] = None
     organizations: Optional[List[UserOrganization]] = None
