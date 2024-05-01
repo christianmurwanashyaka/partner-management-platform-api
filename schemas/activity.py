@@ -24,9 +24,11 @@ class ActivityCreate(BaseModel):
 
 class ActivityList(BaseModel):
     uuid: uuid.UUID
+    project_id: uuid.UUID
     name: str
-    implement: str
+    implementer: str
     fiscal_year: str
+    input_details: List[InputDetailRead]
 
     class Config:
         from_attributes = True

@@ -18,13 +18,14 @@ from db.models.pagination import PaginatedResponse
 from db.models.project import Project, OperationalZone
 from db.models.user import User
 from helpers.db import check_if_exists, get_all_items, get_first_item, get_items_by_criteria
-from schemas.activity import ActivityRead, ActivityCreate
+from schemas.activity import ActivityRead, ActivityCreate, ActivityList
 from schemas.project import ProjectRead, ProjectCreate, ProjectList
 from utils.files import handle_upload_file
 
 router = APIRouter()
 
 
+# TODO: FIX SHOWING THE INPUT DETAILS TOO
 @router.post('/', response_model=ActivityRead, dependencies=[Depends(partner_access)])
 async def create_activity(request: Request, activity: ActivityCreate, db: AsyncSession = Depends(get_db)):
     user = request.state.user.email
@@ -61,10 +62,6 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
             selectinload(Activity.input_details).selectinload(InputDetail.input_category),
             selectinload(Activity.input_details).selectinload(InputDetail.input)
         ])
-        print('******************** ACTIVITY ********************')
-        print('ACTIVITY: ', activity)
-        print('ACTIVITY INPUT DETAILS: ', activity.input_details)
-        print('******************** ACTIVITY ********************')
     except Exception as e:
         await db.rollback()
         raise HTTPException(
@@ -72,3 +69,9 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
             detail=str(e)
         )
     return activity
+
+
+@router.get('/', response_model=PaginatedResponse[ActivityList], dependencies=[Depends(admin_access)])
+async def get_activities(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
+    return await get_all_items(db, Activity, page=page, page_size=page_size)
+
