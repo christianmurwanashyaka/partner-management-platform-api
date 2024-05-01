@@ -1,20 +1,23 @@
-from typing import Optional
+from typing import Optional, List
 
 import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, File, UploadFile
 from sqlalchemy import func
 from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import partner_access, admin_access, swapteam_member_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
+from db.models import Activity
 from db.models.organization import Organization
 from db.models.pagination import PaginatedResponse
 from db.models.project import Project, OperationalZone
 from db.models.user import User
 from helpers.db import check_if_exists, get_all_items, get_first_item, get_items_by_criteria
+from schemas.activity import ActivityList
 from schemas.project import ProjectRead, ProjectCreate, ProjectList
 from utils.files import handle_upload_file
 
@@ -69,14 +72,48 @@ async def get_projects(
         current_user: User = Depends(get_current_user)
 ):
     if current_user.role in ['admin', 'swapteam_member']:
-        total_items, projects = await get_all_items(db, Project, page=page, page_size=page_size, include=['organization'])
+        paginated_response = await get_all_items(db, Project, page=page, page_size=page_size, include=['organization'])
     elif current_user.role == 'partner':
         query = select(Project).join(Organization).filter(Organization.created_by == current_user.email)
         total_items = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
         projects = await get_items_by_criteria(db, query.offset((page - 1) * page_size).limit(page_size))
+        total_pages = (total_items + page_size - 1) // page_size
+        paginated_response = PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            data=projects
+        )
     else:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
+    return paginated_response
+
+
+# TODO: SHOULD VALIDATE THAT PROJECT EXISTS FIRST
+@router.get('/{uuid}/activities/', response_model=PaginatedResponse[ActivityList], dependencies=[Depends(partner_access)])
+async def get_project_activities(
+        uuid: uuid.UUID,
+        page: int = 1,
+        page_size: int = 100,
+        db: AsyncSession = Depends(get_db)
+):
+    query = (select(Activity)
+             .where(Activity.project_id == uuid)
+             .order_by(Activity.created_at.desc())
+             .offset((page - 1) * page_size)
+             .limit(page_size))
+
+    query = query.options(selectinload(Activity.input_details))
+    activities = await db.execute(query)
+    activities_list = activities.scalars().all()
+
+    if not activities_list:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No activities found for this project")
+
+    total_items_query = select(func.count()).select_from(Activity).where(Activity.project_id == uuid)
+    total_items = (await db.execute(total_items_query)).scalar_one()
     total_pages = (total_items + page_size - 1) // page_size
 
     return PaginatedResponse(
@@ -84,5 +121,5 @@ async def get_projects(
         page_size=page_size,
         total_items=total_items,
         total_pages=total_pages,
-        data=projects
+        data=activities_list
     )
