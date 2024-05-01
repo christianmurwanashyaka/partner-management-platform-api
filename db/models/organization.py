@@ -47,3 +47,6 @@ class Organization(CommonBaseModel, table=True):
     )
 
     projects: List['Project'] = Relationship(back_populates='', sa_relationship_kwargs={'lazy': 'selectin'})
+
+    parties: List['Party'] = Relationship(back_populates='', sa_relationship_kwargs={'lazy': 'selectin'})
+
