@@ -3,7 +3,7 @@ from typing import List, Optional
 import uuid
 from sqlmodel import Field, Relationship
 
-from db.models import CommonBaseModel
+from db.models import CommonBaseModel, Document
 
 
 class MouDetail(CommonBaseModel, table=True):
@@ -13,3 +13,4 @@ class MouDetail(CommonBaseModel, table=True):
     project: 'Project' = Relationship(back_populates='mou_details', sa_relationship_kwargs={'lazy': 'selectin'})
     parties: List['Party'] = Relationship(back_populates='mou_detail', sa_relationship_kwargs={'lazy': 'selectin'})
     mou_application: Optional['MouApplication'] = Relationship(back_populates='mou_detail', sa_relationship_kwargs={'lazy': 'selectin'})
+    documents: List[Document] = Relationship(back_populates='mou_detail', sa_relationship_kwargs={'lazy': 'selectin'})
