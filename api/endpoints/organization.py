@@ -12,21 +12,27 @@ from db.database import get_db
 from db.models.organization import Organization
 from db.models.document import Document, DocumentType
 from db.models.pagination import PaginatedResponse
-from db.models.user import User
+from db.models.user import User, UserRole
+from helpers.exceptions import handle_integrity_error
 from schemas.organization import OrganizationRead
 from helpers.db import check_if_exists, get_all_items, get_first_item
 from utils.files import handle_upload_file
+from utils.security import get_password_hash
 
 router = APIRouter()
 
 
-@router.post("/", response_model=OrganizationRead, dependencies=[Depends(partner_access)])
+@router.post("/", response_model=OrganizationRead)
 async def create_organization(
-        request: Request,
-        name: str = Form(...),
-        phone_number: str = Form(...),
-        email: str = Form(...),
-        website: str = Form(...),
+        user_email: str = Form(...),
+        user_password: str = Form(...),
+        user_first_name: str = Form(...),
+        user_last_name: str = Form(...),
+        user_phone: str = Form(...),
+        organization_name: str = Form(...),
+        organization_phone_number: str = Form(...),
+        organization_email: str = Form(...),
+        organization_website: str = Form(...),
         home_country_representative: Optional[str] = Form(None),
         rwanda_representative: str = Form(...),
         home_country: Optional[str] = Form(None),
@@ -40,19 +46,42 @@ async def create_organization(
         rwanda_po_box: str = Form(...),
         organization_type_id: uuid.UUID = Form(...),
         appointment_letter: UploadFile = File(...),
-        notified_constitution_bylaws: Optional[UploadFile] = File(None),
+        notified_constitution_bylaws: UploadFile = None,
         db: AsyncSession = Depends(get_db),
 ):
-    if await check_if_exists(Organization, db, name=name):
+    if await check_if_exists(Organization, db, name=organization_name):
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Organization with this name already exists")
-    user = request.state.user.email
+
+    if await check_if_exists(User, db, email=user_email):
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="User with this email already exists")
+
+    hashed_password = get_password_hash(user_password)
+    db_user = User(
+        email=user_email,
+        password=hashed_password,
+        first_name=user_first_name,
+        last_name=user_last_name,
+        phone_number=user_phone,
+        role=UserRole.PARTNER,
+        created_by=user_email
+    )
+
+    try:
+        db.add(db_user)
+        await db.commit()
+        await db.refresh(db_user)
+    except IntegrityError as e:
+        await handle_integrity_error(e, db)
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     # Create organization instance
     new_organization = Organization(
-        name=name,
-        phone_number=phone_number,
-        email=email,
-        website=website,
+        name=organization_name,
+        phone_number=organization_phone_number,
+        email=organization_email,
+        website=organization_website,
         home_country_representative=home_country_representative,
         rwanda_representative=rwanda_representative,
         home_country=home_country,
@@ -65,7 +94,7 @@ async def create_organization(
         rwanda_avenue=rwanda_avenue,
         rwanda_po_box=rwanda_po_box,
         organization_type_id=organization_type_id,
-        created_by=user,
+        created_by=user_email,
     )
     try:
         db.add(new_organization)
@@ -80,7 +109,7 @@ async def create_organization(
             path=appointment_letter_path,
             filename=appointment_letter_filename,
             organization=new_organization,
-            created_by=user
+            created_by=user_email
         )
         db.add(appointment_letter_doc)
 
@@ -92,28 +121,13 @@ async def create_organization(
                 path=notified_path,
                 filename=notified_filename,
                 organization=new_organization,
-                created_by=user
+                created_by=user_email
             )
             db.add(notified_constitution_bylaws_doc)
 
         await db.commit()
     except IntegrityError as e:
-        await db.rollback()
-        if "duplicate key value violates unique constraint" in str(e):
-
-            # Extract the duplicate key value from the error message
-            duplicate_key = str(e).split("=")[1].split(")")[0]
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Organization with {duplicate_key}) already exists"
-            )
-        else:
-
-            # Handle other types of IntegrityError
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid data provided"
-            )
+        await handle_integrity_error(e, db)
     except Exception as e:
         await db.rollback()
         raise HTTPException(

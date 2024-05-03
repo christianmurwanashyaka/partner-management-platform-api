@@ -14,12 +14,14 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    phone_number: Optional[str] = None
     level: Optional[SwapTeamLevel] = None
 
 
 class UserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    phone_number: Optional[str] = None
     level: Optional[SwapTeamLevel] = None
 
 
@@ -59,6 +61,7 @@ class UserProfile(BaseModel):
     role: UserRole
     level: Optional[SwapTeamLevel] = None
     organizations: Optional[List[UserOrganization]] = None
+    phone_number: Optional[str] = None
 
     class Config:
         from_attributes = True

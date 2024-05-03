@@ -1,32 +1,8 @@
 from typing import Optional, List
 import uuid
-from fastapi import UploadFile
 from pydantic import BaseModel, EmailStr
-
 from schemas.document import DocumentRead
 from schemas.organization_type import OrganizationTypeRead
-
-
-class OrganizationCreate(BaseModel):
-    name: str
-    phone_number: str
-    website: str
-    email: EmailStr
-    home_country_representative: Optional[str] = None
-    rwanda_representative: str
-    organization_type_id: uuid.UUID
-
-    # Simplified address fields
-    home_country: Optional[str] = None
-    home_country_province_state: Optional[str] = None
-    home_country_district: Optional[str] = None
-    home_country_avenue: Optional[str] = None
-    home_country_po_box: Optional[str] = None
-
-    rwanda_province: str
-    rwanda_district: str
-    rwanda_avenue: str
-    rwanda_po_box: str
 
 
 class OrganizationRead(BaseModel):
