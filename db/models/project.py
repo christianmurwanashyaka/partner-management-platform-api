@@ -28,6 +28,8 @@ class Project(CommonBaseModel, table=True):
     funding_unit: 'FundingUnit' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     funding_source_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='funding_source.uuid')
     funding_source: 'FundingSource' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
+    activities: List['Activity'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
+    mou_details: List['MouDetail'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
 
 
 class OperationalZone(CommonBaseModel, table=True):

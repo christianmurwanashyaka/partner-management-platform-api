@@ -10,6 +10,11 @@ from db.models.base import CommonBaseModel
 class DocumentType(str, Enum):
     APPOINTMENT_LETTER = 'appointment_letter'
     NOTIFIED_CONSTITUTION_BYLAWS = 'notified_constitution_bylaws'
+    CAPACITY_BUILDING_TRANSFER_PLAN = 'capacity_building_transfer_plan'
+    MEMO_DESCRIBING_THE_SOURCE_OF_FUNDS = 'memo_describing_the_source_of_funds'
+    MEMO_DESCRIBING_THE_LONG_TERM_OBJECTIVES = 'memo_describing_the_long_term_objectives'
+    STRATEGIC_PLAN = 'strategic_plan'
+    ADDITIONAL_DOCUMENT = 'additional_document'
 
 
 class Document(CommonBaseModel, table=True):
@@ -23,3 +28,5 @@ class Document(CommonBaseModel, table=True):
     registration: bool = Field(default=False)
     organization_id: Optional[uuid.UUID] = Field(default=None, foreign_key='organization.uuid')
     organization: Optional['Organization'] = Relationship(back_populates='documents', sa_relationship_kwargs={'lazy': 'selectin'})
+    mou_detail_id: Optional[uuid.UUID] = Field(default=None, foreign_key='mou_detail.uuid')
+    mou_detail : Optional['MouDetail'] = Relationship(back_populates='documents', sa_relationship_kwargs={'lazy': 'selectin'})
