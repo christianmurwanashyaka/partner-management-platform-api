@@ -8,7 +8,7 @@ from sqlmodel import select
 from api.dependencies.access_control import partner_access
 from db.database import get_db
 from db.models import Party, MouDetail, DocumentType, Document
-from schemas.mou_detail import MouDetailRead, MouDetailCreate
+from schemas.mou_detail import MouDetailRead
 from utils.files import handle_upload_file
 
 router = APIRouter()
@@ -66,3 +66,17 @@ async def create_mou_detail(request: Request, project_id: uuid.UUID = Form(...),
         )
 
     return new_mou_detail
+
+
+@router.get('/', response_model=List[MouDetailRead], dependencies=[Depends(partner_access)])
+async def get_user_mou_details(request: Request, db: AsyncSession = Depends(get_db)):
+    user = request.state.user.email
+
+    try:
+        mou_details = await db.execute(select(MouDetail).where(MouDetail.created_by == user))
+        mou_details = mou_details.scalars().all()
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    return mou_details
