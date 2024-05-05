@@ -3,7 +3,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
 from api.dependencies.access_control import admin_access, partner_access
-from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models.organization_type import OrganizationType
 from db.models.pagination import PaginatedResponse

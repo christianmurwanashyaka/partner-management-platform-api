@@ -6,14 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from api.dependencies.access_control import partner_access
+from api.dependencies.auth import get_current_user
 from db.database import get_db
-from db.models import Party, MouDetail, DocumentType, Document
+from db.models import Party, MouDetail, DocumentType, Document, User
 from schemas.mou_detail import MouDetailRead
 from utils.files import handle_upload_file
 
 router = APIRouter()
 
 
+# TODO: FIX THIS TO INCLUDE THE NOTIFIED BY LAWS AND APPOINTMENT LETTER DOCUMENTS
 @router.post('/', response_model=MouDetailRead, dependencies=[Depends(partner_access)])
 async def create_mou_detail(request: Request, project_id: uuid.UUID = Form(...),
                             party_ids: List[uuid.UUID] = Form(...), db: AsyncSession = Depends(get_db),
@@ -68,15 +70,41 @@ async def create_mou_detail(request: Request, project_id: uuid.UUID = Form(...),
     return new_mou_detail
 
 
-@router.get('/', response_model=List[MouDetailRead], dependencies=[Depends(partner_access)])
-async def get_user_mou_details(request: Request, db: AsyncSession = Depends(get_db)):
-    user = request.state.user.email
-
+@router.get('/', response_model=List[MouDetailRead])
+async def get_mou_details(request: Request, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        mou_details = await db.execute(select(MouDetail).where(MouDetail.created_by == user))
+        if current_user.role in ['admin', 'swapteam_member']:
+            query = select(MouDetail)
+        elif current_user.role == 'partner':
+            query = select(MouDetail).where(MouDetail.created_by == current_user.email)
+        else:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+
+        mou_details = await db.execute(query)
         mou_details = mou_details.scalars().all()
+
+        return mou_details
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    return mou_details
+
+@router.get('/{uuid}', response_model=MouDetailRead)
+async def get_mou_detail(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        query = select(MouDetail).filter(MouDetail.uuid == uuid)
+        mou_detail = await db.execute(query)
+        mou_detail = mou_detail.scalar_one_or_none()
+
+        if not mou_detail:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU detail not found')
+
+        if current_user.role in ['admin', 'swapteam_member']:
+            return mou_detail
+        elif current_user.role == 'partner' and mou_detail.created_by == current_user.email:
+            return mou_detail
+        else:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this MOU detail')
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

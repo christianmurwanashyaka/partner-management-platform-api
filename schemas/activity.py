@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 import uuid
 from pydantic import BaseModel
@@ -10,6 +10,7 @@ from schemas.sub_domain import SubDomainRead
 
 class ActivityCreate(BaseModel):
     project_id: uuid.UUID
+    description: Optional[str] = None
     name: str
     implementer: str
     fiscal_year: str
@@ -38,6 +39,7 @@ class ActivityRead(BaseModel):
     uuid: uuid.UUID
     project_id: uuid.UUID
     name: str
+    description: Optional[str] = None
     implementer: str
     fiscal_year: str
     sub_domain: SubDomainRead

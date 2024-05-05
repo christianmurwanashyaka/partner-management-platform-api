@@ -22,6 +22,7 @@ from utils.security import get_password_hash
 router = APIRouter()
 
 
+# TODO: UPDATE TO USE A FORM INSTEAD OF PASSING ALL THE FIELDS HERE (FOR READABILITY PURPOSES)
 @router.post("/", response_model=OrganizationRead)
 async def create_organization(
         user_email: str = Form(...),
