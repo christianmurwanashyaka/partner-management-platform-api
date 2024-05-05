@@ -14,6 +14,7 @@ class Activity(CommonBaseModel, table=True):
     project: 'Project' = Relationship(back_populates='activities', sa_relationship_kwargs={'lazy': 'selectin'})
 
     name: str = Field(..., description='Name of the activity')
+    description: str | None = Field(default=None, nullable=True, description='Optional description of the activity')
     implementer: str = Field(..., description='Name of the implementer of the activity')
     fiscal_year: str = Field(..., description='Fiscal year of the activity')
 

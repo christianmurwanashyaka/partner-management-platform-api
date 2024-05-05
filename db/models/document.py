@@ -29,4 +29,7 @@ class Document(CommonBaseModel, table=True):
     organization_id: Optional[uuid.UUID] = Field(default=None, foreign_key='organization.uuid')
     organization: Optional['Organization'] = Relationship(back_populates='documents', sa_relationship_kwargs={'lazy': 'selectin'})
     mou_detail_id: Optional[uuid.UUID] = Field(default=None, foreign_key='mou_detail.uuid')
-    mou_detail : Optional['MouDetail'] = Relationship(back_populates='documents', sa_relationship_kwargs={'lazy': 'selectin'})
+    mou_detail: Optional['MouDetail'] = Relationship(back_populates='documents', sa_relationship_kwargs={'lazy': 'selectin'})
+    mou_application_id: Optional[uuid.UUID] = Field(default=None, foreign_key='mou_application.uuid')
+    mou_application: Optional['MouApplication'] = Relationship(back_populates='documents', sa_relationship_kwargs={'lazy': 'selectin'})
+
