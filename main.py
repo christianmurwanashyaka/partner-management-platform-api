@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.endpoints import auth, budget_type, organization_type, funding_source, funding_unit, domain_intervention, \
-    input_category, sub_domain, input, organization, user, project, activity, party, mou_detail
+    input_category, sub_domain, input, organization, user, project, activity, party, mou_detail, mou_application
 import uvicorn
 
 from db.database import create_db_and_tables, async_session
@@ -45,6 +45,7 @@ app.include_router(project.router, prefix='/api/v1/project', tags=["Project"])
 app.include_router(activity.router, prefix='/api/v1/activity', tags=["Activity"])
 app.include_router(party.router, prefix='/api/v1/party', tags=["Party"])
 app.include_router(mou_detail.router, prefix='/api/v1/mou_detail', tags=['MOU Detail'])
+app.include_router(mou_application.router, prefix='/api/v1/mou_application', tags=['MOU Application'])
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=7000, reload=True)
