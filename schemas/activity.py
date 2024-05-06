@@ -13,6 +13,7 @@ class ActivityCreate(BaseModel):
     description: Optional[str] = None
     name: str
     implementer: str
+    implementer_unit: str
     fiscal_year: str
     sub_domain_id: uuid.UUID
     districts: List[str]
@@ -28,6 +29,7 @@ class ActivityList(BaseModel):
     project_id: uuid.UUID
     name: str
     implementer: str
+    implementer_unit: str
     fiscal_year: str
     input_details: List[InputDetailRead]
 
@@ -41,6 +43,7 @@ class ActivityRead(BaseModel):
     name: str
     description: Optional[str] = None
     implementer: str
+    implementer_unit: str
     fiscal_year: str
     sub_domain: SubDomainRead
     districts: List[str]

@@ -33,35 +33,37 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
         project_id=activity.project_id,
         name=activity.name,
         implementer=activity.implementer,
+        implementer_unit=activity.implementer_unit,
         fiscal_year=activity.fiscal_year,
         sub_domain_id=activity.sub_domain_id,
-        districts=activity.districts,
-        provinces=activity.provinces,
         created_by=user
     )
+    db.add(new_activity)
+    await db.commit()
+    await db.refresh(new_activity)
+
+    input_details = []
+    for input_detail_data in activity.input_details:
+        new_input_detail = InputDetail(
+            activity_id=new_activity.uuid,
+            input_category_id=input_detail_data.input_category_id,
+            input_id=input_detail_data.input_id,
+            budget=input_detail_data.budget,
+            districts=input_detail_data.districts,
+            provinces=input_detail_data.provinces,
+            created_by=user
+        )
+        input_details.append(new_input_detail)
+
+    db.add_all(input_details)
     try:
-        db.add(new_activity)
-        await db.commit()
-        await db.refresh(new_activity)
-
-        input_details = []
-        for input_detail_data in activity.input_details:
-            input_detail = InputDetail(
-                activity_id=new_activity.uuid,
-                input_category_id=input_detail_data.input_category_id,
-                input_id=input_detail_data.input_id,
-                budget=input_detail_data.budget,
-                created_by=user
-            )
-            input_details.append(input_detail)
-
-        db.add_all(input_details)
         await db.commit()
         activity = await db.get(Activity, new_activity.id, options=[
             selectinload(Activity.sub_domain),
             selectinload(Activity.input_details).selectinload(InputDetail.input_category),
             selectinload(Activity.input_details).selectinload(InputDetail.input)
         ])
+        await db.refresh(activity)
     except Exception as e:
         await db.rollback()
         raise HTTPException(
