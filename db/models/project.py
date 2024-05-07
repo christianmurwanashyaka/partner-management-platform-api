@@ -18,10 +18,11 @@ class Project(CommonBaseModel, table=True):
     domain_intervention: 'DomainIntervention' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     budget_type_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='budget_type.uuid')
     budget_type: 'BudgetType' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
-    planned_budget: float = Field(..., description="Planned budget of the project")
+    budget: float = Field(..., description="Planned budget of the project")
+    currency: str = Field(..., description="Currency of the budget")
     start_date: datetime.date = Field(..., description="Start date of the project")
     end_date: datetime.date = Field(..., description="End date of the project")
-    operational_zone: 'OperationalZone' = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
+    operational_zones: List['OperationalZone'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     organization_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization.uuid')
     organization: 'Organization' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     funding_unit_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='funding_unit.uuid')
@@ -30,12 +31,22 @@ class Project(CommonBaseModel, table=True):
     funding_source: 'FundingSource' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     activities: List['Activity'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     mou_details: List['MouDetail'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
+    goals: List['Goal'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'select'})
 
 
 class OperationalZone(CommonBaseModel, table=True):
     __tablename__ = 'operational_zone'
 
     project_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='project.uuid')
-    project: Project = Relationship(back_populates='operational_zone', sa_relationship_kwargs={'lazy': 'selectin'})
-    provinces: List[str] = Field(sa_column=Column(ARRAY(String)), description="List of provinces in the operational zone")
+    project: Project = Relationship(back_populates='operational_zones', sa_relationship_kwargs={'lazy': 'selectin'})
+    province: str = Field(..., description="Province in the operational zone")
     districts: List[str] = Field(sa_column=Column(ARRAY(String)), description="List of districts in the operational zone")
+
+
+class Goal(CommonBaseModel, table=True):
+    __tablename__ = 'goal'
+
+    name: str = Field(..., description="Name of the goal")
+    description: str | None = Field(default=None, nullable=True, description="Optional description of the goal")
+    project_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='project.uuid')
+    project: Project = Relationship(back_populates='goals', sa_relationship_kwargs={'lazy': 'selectin'})
