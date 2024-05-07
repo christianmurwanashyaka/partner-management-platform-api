@@ -16,8 +16,6 @@ class ActivityCreate(BaseModel):
     implementer_unit: str
     fiscal_year: str
     sub_domain_id: uuid.UUID
-    districts: List[str]
-    provinces: List[str]
     input_details: List[InputDetailCreate]
 
     class Config:
@@ -46,9 +44,6 @@ class ActivityRead(BaseModel):
     implementer_unit: str
     fiscal_year: str
     sub_domain: SubDomainRead
-    districts: List[str]
-    provinces: List[str]
-    input_details: List[InputDetailRead]
     created_at: datetime
     created_by: str
 
