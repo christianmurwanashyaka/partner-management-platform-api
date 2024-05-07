@@ -27,7 +27,7 @@ async def create_organization_type(request: Request, organization_type: Organiza
     return new_organization_type
 
 
-@router.get('/', response_model=PaginatedResponse[OrganizationType], dependencies=[Depends(partner_access)])
+@router.get('/', response_model=PaginatedResponse[OrganizationType])
 async def get_organization_types(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, OrganizationType, page=page, page_size=page_size)
 

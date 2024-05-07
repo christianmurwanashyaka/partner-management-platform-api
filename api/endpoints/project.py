@@ -14,7 +14,7 @@ from db.database import get_db
 from db.models import Activity
 from db.models.organization import Organization
 from db.models.pagination import PaginatedResponse
-from db.models.project import Project, OperationalZone
+from db.models.project import Project, OperationalZone, Goal
 from db.models.user import User
 from helpers.db import check_if_exists, get_all_items, get_first_item, get_items_by_criteria
 from schemas.activity import ActivityList
@@ -40,21 +40,30 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
         funding_source_id=project.funding_source_id,
         created_by=user
     )
-    try:
-        db.add(new_project)
-        await db.commit()
-        await db.refresh(new_project)
+    db.add(new_project)
 
-        new_operational_zone = OperationalZone(
+    for zone_data in project.operational_zones:
+        new_zone = OperationalZone(
             project_id=new_project.uuid,
-            provinces=project.operational_zone.provinces,
-            districts=project.operational_zone.districts,
+            province=zone_data.province,
+            districts=zone_data.districts,
             created_by=user
         )
+        db.add(new_zone)
 
-        db.add(new_operational_zone)
+    for goal_data in project.goals:
+        new_goal = Goal(
+            name=goal_data.name,
+            description=goal_data.description,
+            project_id=new_project.uuid,
+            created_by=user
+        )
+        db.add(new_goal)
+
+    try:
         await db.commit()
         await db.refresh(new_project)
+
     except Exception as e:
         await db.rollback()
         raise HTTPException(

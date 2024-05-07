@@ -30,10 +30,10 @@ async def create_organization(
         user_first_name: str = Form(...),
         user_last_name: str = Form(...),
         user_phone: str = Form(...),
-        organization_name: str = Form(...),
-        organization_phone_number: str = Form(...),
-        organization_email: str = Form(...),
-        organization_website: str = Form(...),
+        name: str = Form(...),
+        phone_number: str = Form(...),
+        email: str = Form(...),
+        website: str = Form(...),
         home_country_representative: Optional[str] = Form(None),
         rwanda_representative: str = Form(...),
         home_country: Optional[str] = Form(None),
@@ -50,7 +50,7 @@ async def create_organization(
         notified_constitution_bylaws: UploadFile = None,
         db: AsyncSession = Depends(get_db),
 ):
-    if await check_if_exists(Organization, db, name=organization_name):
+    if await check_if_exists(Organization, db, name=name):
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Organization with this name already exists")
 
     if await check_if_exists(User, db, email=user_email):
@@ -79,10 +79,10 @@ async def create_organization(
 
     # Create organization instance
     new_organization = Organization(
-        name=organization_name,
-        phone_number=organization_phone_number,
-        email=organization_email,
-        website=organization_website,
+        name=name,
+        phone_number=phone_number,
+        email=email,
+        website=website,
         home_country_representative=home_country_representative,
         rwanda_representative=rwanda_representative,
         home_country=home_country,
