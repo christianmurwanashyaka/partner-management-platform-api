@@ -16,12 +16,10 @@ class Activity(CommonBaseModel, table=True):
     name: str = Field(..., description='Name of the activity')
     description: str | None = Field(default=None, nullable=True, description='Optional description of the activity')
     implementer: str = Field(..., description='Name of the implementer of the activity')
+    implementer_unit: str = Field(..., description='Unit or group within the implementer organization')
     fiscal_year: str = Field(..., description='Fiscal year of the activity')
 
     sub_domain_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='sub_domain.uuid')
     sub_domain: 'SubDomain' = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
-
-    districts: List[str] = Field(sa_column=Column(ARRAY(String)), description='List of districts for the activity')
-    provinces: List[str] = Field(sa_column=Column(ARRAY(String)), description='List of provinces for the activity')
 
     input_details: List['InputDetail'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'selectin'})

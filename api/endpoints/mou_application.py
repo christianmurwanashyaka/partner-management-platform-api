@@ -4,12 +4,14 @@ from fastapi import APIRouter, Request, Depends, status, HTTPException
 from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from api.dependencies.access_control import partner_access
+from api.dependencies.access_control import partner_access, swapteam_member_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
-from db.models import User, MouDetail, MouApplication, Document, DocumentType
+from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, SwapTeamLevel, \
+    MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment
 from helpers.db import get_first_item
 from schemas.mou_application import MouApplicationRead, MouApplicationCreate
+from schemas.mou_approval import MouApprovalRead, MouApprovalCreate
 from utils.files import generate_mou_action_plan
 
 router = APIRouter()
@@ -88,6 +90,60 @@ async def get_mou_application(uuid: str, db: AsyncSession = Depends(get_db), cur
             return mou_application
         else:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this MOU application')
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post('/{uuid}/decision', response_model=MouApprovalRead, dependencies=[Depends(swapteam_member_access)])
+async def add_approval_decision(uuid: str, request: Request, approval_data: MouApprovalCreate, db: AsyncSession = Depends(get_db)):
+    user = request.state.user
+
+    if user.role != UserRole.SWAPTEAM_MEMBER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only swap team members are allowed to make approval decisions')
+
+    try:
+        query = select(MouApplication).filter(MouApplication.uuid == uuid)
+        mou_application = await db.execute(query)
+        mou_application = mou_application.scalar_one_or_none()
+
+        if not mou_application:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+
+        if user.level == SwapTeamLevel.PARTNER_COORDINATOR:
+            if approval_data.decision not in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION]:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid decision for Partner Coordinator')
+        elif user.level == SwapTeamLevel.TECHNICAL_DEPARTMENT:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Technical Department cannot make approval decisions')
+        elif user.level in [SwapTeamLevel.LEGAL_ADVISOR, SwapTeamLevel.HOD, SwapTeamLevel.PS]:
+            if approval_data.decision not in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION, MouApprovalDecision.REQUEST_MODIFICATION]:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'{user.level} can only recommend for approval, recommend for rejection, or request modification')
+        elif user.level in [SwapTeamLevel.MINISTER_OF_STATE, SwapTeamLevel.MINISTER]:
+            if approval_data.decision not in [MouApprovalDecision.APPROVE, MouApprovalDecision.REJECT]:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'{user.level} can only approve or reject')
+        new_approval = MouApproval(decision=approval_data.decision, approver_id=user.uuid, approver=user, mou_application_id=uuid, created_by=user.email)
+
+        db.add(new_approval)
+        await db.commit()
+        await db.refresh(new_approval)
+
+        if approval_data.comment:
+            new_comment = MouComment(content=approval_data.comment, user_id=user.uuid, mou_application_id=uuid, mou_approval_id=new_approval.uuid, created_by=user.email)
+            db.add(new_comment)
+            await db.commit()
+            await db.refresh(new_comment)
+
+        if approval_data.decision == MouApprovalDecision.APPROVE:
+            mou_application.status = MouApplicationStatus.APPROVED
+        elif approval_data.decision == MouApprovalDecision.REJECT:
+            mou_application.status = MouApplicationStatus.REJECTED
+        elif approval_data.decision in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION, MouApprovalDecision.REQUEST_MODIFICATION]:
+            mou_application.status = MouApplicationStatus.UNDER_REVIEW
+
+        await db.commit()
+        await db.refresh(mou_application)
+
+        return new_approval
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
