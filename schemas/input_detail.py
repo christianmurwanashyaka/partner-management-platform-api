@@ -5,7 +5,7 @@ import uuid
 from pydantic import BaseModel
 
 from schemas.input import InputRead
-from schemas.input_category import InputCategoryRead
+from schemas.input_category import InputCategoryRead, InputCategoryList
 
 
 class InputDetailCreate(BaseModel):
@@ -23,8 +23,8 @@ class InputDetailRead(BaseModel):
     uuid: uuid.UUID
     input_category: InputCategoryRead
     input: InputRead
-    districts: List[str]
     provinces: List[str]
+    districts: List[str]
     budget: float
     created_at: datetime
     created_by: str

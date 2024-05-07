@@ -1,18 +1,20 @@
+from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, Request, Depends, status, HTTPException
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import partner_access, swapteam_member_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, SwapTeamLevel, \
-    MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment
+    MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou
 from helpers.db import get_first_item
 from schemas.mou_application import MouApplicationRead, MouApplicationCreate
 from schemas.mou_approval import MouApprovalRead, MouApprovalCreate
-from utils.files import generate_mou_action_plan
+from utils.files import generate_mou_action_plan, generate_mou_doc, save_mou_doc_to_disk
 
 router = APIRouter()
 
@@ -103,7 +105,7 @@ async def add_approval_decision(uuid: str, request: Request, approval_data: MouA
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only swap team members are allowed to make approval decisions')
 
     try:
-        query = select(MouApplication).filter(MouApplication.uuid == uuid)
+        query = select(MouApplication).options(joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization)).filter(MouApplication.uuid == uuid)
         mou_application = await db.execute(query)
         mou_application = mou_application.scalar_one_or_none()
 
@@ -135,10 +137,42 @@ async def add_approval_decision(uuid: str, request: Request, approval_data: MouA
 
         if approval_data.decision == MouApprovalDecision.APPROVE:
             mou_application.status = MouApplicationStatus.APPROVED
+            organization = mou_application.mou_detail.project.organization
+            template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+            document_buffer = await generate_mou_doc(mou_application, template_path)
+            filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+            filepath, filename = await save_mou_doc_to_disk(document_buffer, filename)
+            new_document = Document(
+                name=f"MOU Application - {mou_application.id}",
+                description="Memorandum of understanding document",
+                document_type=DocumentType.MOU,
+                path=filepath,
+                filename=filename,
+                mou_application_id=uuid,
+                created_by=user.email
+            )
+
+            db.add(new_document)
+            await db.commit()
+            await db.refresh(new_document)
+
+            new_mou = Mou(
+                mou_application_id=uuid,
+                mou_detail_id=mou_application.mou_detail_id,
+                document_id=new_document.uuid,
+                created_by=user.email
+            )
+
+            db.add(new_mou)
+            await db.commit()
+            await db.refresh(new_mou)
+
         elif approval_data.decision == MouApprovalDecision.REJECT:
             mou_application.status = MouApplicationStatus.REJECTED
         elif approval_data.decision in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION, MouApprovalDecision.REQUEST_MODIFICATION]:
             mou_application.status = MouApplicationStatus.UNDER_REVIEW
+
+            mou_application.status = MouApplicationStatus.APPROVED
 
         await db.commit()
         await db.refresh(mou_application)

@@ -53,7 +53,8 @@ class ProjectCreate(BaseModel):
     description: Optional[str] = None
     domain_intervention_id: uuid.UUID
     budget_type_id: uuid.UUID
-    planned_budget: float
+    budget: float
+    currency: str
     start_date: date
     end_date: date
     operational_zones: List[OperationalZoneCreate]
@@ -70,7 +71,8 @@ class ProjectList(BaseModel):
     uuid: uuid.UUID
     name: str
     description: Optional[str] = None
-    planned_budget: float
+    budget: float
+    currency: str
     start_date: date
     end_date: date
 
@@ -86,7 +88,8 @@ class ProjectRead(BaseModel):
     budget_type: BudgetTypeRead
     funding_unit: FundingUnitRead
     funding_source: FundingSourceRead
-    planned_budget: float
+    budget: float
+    currency: str
     start_date: date
     end_date: date
     operational_zones: List[OperationalZoneRead]
