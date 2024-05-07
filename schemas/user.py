@@ -36,6 +36,8 @@ class UserInDB(UserBase):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    first_name: str
+    last_name: str
 
 
 class TokenData(BaseModel):

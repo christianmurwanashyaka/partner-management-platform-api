@@ -10,8 +10,27 @@ from schemas.funding_source import FundingSourceRead
 from schemas.funding_unit import FundingUnitRead
 
 
+class GoalCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class GoalRead(BaseModel):
+    uuid: uuid.UUID
+    name: str
+    description: Optional[str] = None
+    created_at: datetime
+    created_by: str
+
+    class Config:
+        from_attributes = True
+
+
 class OperationalZoneCreate(BaseModel):
-    provinces: List[str]
+    province: str
     districts: List[str]
 
     class Config:
@@ -20,7 +39,7 @@ class OperationalZoneCreate(BaseModel):
 
 class OperationalZoneRead(BaseModel):
     uuid: uuid.UUID
-    provinces: List[str]
+    province: str
     districts: List[str]
     created_at: datetime
     created_by: str
@@ -37,10 +56,11 @@ class ProjectCreate(BaseModel):
     planned_budget: float
     start_date: date
     end_date: date
-    operational_zone: OperationalZoneCreate
+    operational_zones: List[OperationalZoneCreate]
     organization_id: uuid.UUID
     funding_unit_id: uuid.UUID
     funding_source_id: uuid.UUID
+    goals: List[GoalCreate]
 
     class Config:
         from_attributes = True
@@ -69,9 +89,10 @@ class ProjectRead(BaseModel):
     planned_budget: float
     start_date: date
     end_date: date
-    operational_zone: OperationalZoneRead
+    operational_zones: List[OperationalZoneRead]
     created_at: datetime
     created_by: str
+    goals: List[GoalRead]
 
     class Config:
         from_attributes = True
