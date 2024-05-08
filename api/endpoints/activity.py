@@ -53,8 +53,8 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
             input_category_id=input_detail_data.input_category_id,
             input_id=input_detail_data.input_id,
             budget=input_detail_data.budget,
-            districts=input_detail_data.districts,
-            provinces=input_detail_data.provinces,
+            district=input_detail_data.district,
+            province=input_detail_data.province,
             created_by=user
         )
         input_details.append(new_input_detail)
