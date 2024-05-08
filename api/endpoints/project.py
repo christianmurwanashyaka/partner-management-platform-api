@@ -47,7 +47,7 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
         new_zone = OperationalZone(
             project_id=new_project.uuid,
             province=zone_data.province,
-            districts=zone_data.districts,
+            district=zone_data.district,
             created_by=user
         )
         db.add(new_zone)

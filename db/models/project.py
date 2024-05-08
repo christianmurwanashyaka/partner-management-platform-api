@@ -40,7 +40,7 @@ class OperationalZone(CommonBaseModel, table=True):
     project_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='project.uuid')
     project: Project = Relationship(back_populates='operational_zones', sa_relationship_kwargs={'lazy': 'selectin'})
     province: str = Field(..., description="Province in the operational zone")
-    districts: List[str] = Field(sa_column=Column(ARRAY(String)), description="List of districts in the operational zone")
+    district: str = Field(..., description="District in the operational zone")
 
 
 class Goal(CommonBaseModel, table=True):

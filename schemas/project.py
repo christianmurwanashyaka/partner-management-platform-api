@@ -31,7 +31,7 @@ class GoalRead(BaseModel):
 
 class OperationalZoneCreate(BaseModel):
     province: str
-    districts: List[str]
+    district: str
 
     class Config:
         from_attributes = True
@@ -40,7 +40,7 @@ class OperationalZoneCreate(BaseModel):
 class OperationalZoneRead(BaseModel):
     uuid: uuid.UUID
     province: str
-    districts: List[str]
+    district: List[str]
     created_at: datetime
     created_by: str
 

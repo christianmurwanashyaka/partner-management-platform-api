@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import List
 
 import uuid
 from pydantic import BaseModel
@@ -12,8 +11,8 @@ class InputDetailCreate(BaseModel):
     input_category_id: uuid.UUID
     input_id: uuid.UUID
     budget: float
-    districts: List[str]
-    provinces: List[str]
+    district: str
+    province: str
 
     class Config:
         from_attributes = True
@@ -23,8 +22,8 @@ class InputDetailRead(BaseModel):
     uuid: uuid.UUID
     input_category: InputCategoryRead
     input: InputRead
-    provinces: List[str]
-    districts: List[str]
+    province: str
+    district: str
     budget: float
     created_at: datetime
     created_by: str
