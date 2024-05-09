@@ -40,6 +40,8 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
         implementer_unit=activity.implementer_unit,
         fiscal_year=activity.fiscal_year,
         sub_domain_id=activity.sub_domain_id,
+        start_date=activity.start_date,
+        end_date=activity.end_date,
         created_by=user
     )
     db.add(new_activity)

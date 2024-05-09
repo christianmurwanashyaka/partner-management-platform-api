@@ -34,8 +34,6 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
         budget_type_id=project.budget_type_id,
         budget=project.budget,
         currency=project.currency,
-        start_date=project.start_date,
-        end_date=project.end_date,
         organization_id=project.organization_id,
         funding_unit_id=project.funding_unit_id,
         funding_source_id=project.funding_source_id,

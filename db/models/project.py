@@ -1,12 +1,9 @@
-import datetime
 from typing import List
 
 import uuid
-from sqlalchemy import String, ARRAY, Column
 
 from db.models.base import CommonBaseModel
 from sqlmodel import Field, Relationship
-import sqlalchemy as sa
 
 
 class Project(CommonBaseModel, table=True):
@@ -20,8 +17,6 @@ class Project(CommonBaseModel, table=True):
     budget_type: 'BudgetType' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     budget: float = Field(..., description="Planned budget of the project")
     currency: str = Field(..., description="Currency of the budget")
-    start_date: datetime.date = Field(..., description="Start date of the project")
-    end_date: datetime.date = Field(..., description="End date of the project")
     operational_zones: List['OperationalZone'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     organization_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization.uuid')
     organization: 'Organization' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})

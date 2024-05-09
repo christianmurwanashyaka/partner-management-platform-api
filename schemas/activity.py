@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Optional
 
 import uuid
@@ -12,6 +12,8 @@ class ActivityCreate(BaseModel):
     project_id: uuid.UUID
     description: Optional[str] = None
     name: str
+    start_date: date
+    end_date: date
     implementer: str
     implementer_unit: str
     fiscal_year: str
@@ -43,6 +45,8 @@ class ActivityRead(BaseModel):
     implementer: str
     implementer_unit: str
     fiscal_year: str
+    start_date: date
+    end_date: date
     sub_domain: SubDomainRead
     created_at: datetime
     created_by: str
