@@ -6,7 +6,7 @@ from uuid import UUID
 
 class PartyBase(BaseModel):
     name: str = Field(..., description="Name of the party")
-    type: str = Field(..., description="Type of the party, e.g., 'organization' or 'ministry'")
+    # type: str = Field(..., description="Type of the party, e.g., 'organization' or 'ministry'")
     responsibilities: List[str] = Field(..., description="List of responsibilities for the party")
     signatory: str = Field(..., description="Signatory of the party")
 

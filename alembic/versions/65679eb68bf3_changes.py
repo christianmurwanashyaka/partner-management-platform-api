@@ -1,19 +1,19 @@
-"""made a lot of changes
+"""changes
 
-Revision ID: 8edff809f40e
+Revision ID: 65679eb68bf3
 Revises: 
-Create Date: 2024-05-07 01:04:35.590511
+Create Date: 2024-05-09 17:36:48.854840
 
 """
+import sqlmodel
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-import sqlmodel
 
 
 # revision identifiers, used by Alembic.
-revision: str = '8edff809f40e'
+revision: str = '65679eb68bf3'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
