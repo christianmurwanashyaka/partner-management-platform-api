@@ -40,7 +40,7 @@ class OperationalZoneCreate(BaseModel):
 class OperationalZoneRead(BaseModel):
     uuid: uuid.UUID
     province: str
-    district: List[str]
+    district: str
     created_at: datetime
     created_by: str
 
@@ -55,8 +55,6 @@ class ProjectCreate(BaseModel):
     budget_type_id: uuid.UUID
     budget: float
     currency: str
-    start_date: date
-    end_date: date
     operational_zones: List[OperationalZoneCreate]
     organization_id: uuid.UUID
     funding_unit_id: uuid.UUID
@@ -90,8 +88,6 @@ class ProjectRead(BaseModel):
     funding_source: FundingSourceRead
     budget: float
     currency: str
-    start_date: date
-    end_date: date
     operational_zones: List[OperationalZoneRead]
     created_at: datetime
     created_by: str
