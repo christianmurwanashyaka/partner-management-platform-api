@@ -11,19 +11,24 @@ from db.database import get_db
 from db.models import Party, MouDetail, DocumentType, Document, User
 from schemas.mou_detail import MouDetailRead
 from utils.files import handle_upload_file
+from utils.functions import parse_uuids
 
 router = APIRouter()
 
 
-# TODO: FIX THIS TO INCLUDE THE NOTIFIED BY LAWS AND APPOINTMENT LETTER DOCUMENTS
 @router.post('/', response_model=MouDetailRead, dependencies=[Depends(partner_access)])
-async def create_mou_detail(request: Request, project_id: uuid.UUID = Form(...),
-                            party_ids: List[uuid.UUID] = Form(...), db: AsyncSession = Depends(get_db),
-                            memo_describing_the_source_of_funds: UploadFile = File(...),
-                            capacity_building_transfer_plan: UploadFile = File(...),
-                            memo_describing_the_long_term_objective: UploadFile = File(...),
-                            strategic_plan: UploadFile = File(...)):
+async def create_mou_detail(
+        request: Request,
+        project_id: uuid.UUID = Form(...),
+        party_ids: str = Form(...),
+        db: AsyncSession = Depends(get_db),
+        memo_describing_the_source_of_funds: UploadFile = File(...),
+        capacity_building_transfer_plan: UploadFile = File(...),
+        memo_describing_the_long_term_objective: UploadFile = File(...),
+        strategic_plan: UploadFile = File(...)
+):
     user = request.state.user.email
+    party_ids = parse_uuids(party_ids)
 
     try:
         parties = await db.execute(select(Party).where(Party.uuid.in_(party_ids)))

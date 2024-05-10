@@ -32,9 +32,8 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
         description=project.description,
         domain_intervention_id=project.domain_intervention_id,
         budget_type_id=project.budget_type_id,
-        planned_budget=project.planned_budget,
-        start_date=project.start_date,
-        end_date=project.end_date,
+        budget=project.budget,
+        currency=project.currency,
         organization_id=project.organization_id,
         funding_unit_id=project.funding_unit_id,
         funding_source_id=project.funding_source_id,
@@ -46,7 +45,7 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
         new_zone = OperationalZone(
             project_id=new_project.uuid,
             province=zone_data.province,
-            districts=zone_data.districts,
+            district=zone_data.district,
             created_by=user
         )
         db.add(new_zone)

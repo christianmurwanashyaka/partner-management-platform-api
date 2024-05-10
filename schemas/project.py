@@ -31,7 +31,7 @@ class GoalRead(BaseModel):
 
 class OperationalZoneCreate(BaseModel):
     province: str
-    districts: List[str]
+    district: str
 
     class Config:
         from_attributes = True
@@ -40,7 +40,7 @@ class OperationalZoneCreate(BaseModel):
 class OperationalZoneRead(BaseModel):
     uuid: uuid.UUID
     province: str
-    districts: List[str]
+    district: str
     created_at: datetime
     created_by: str
 
@@ -53,9 +53,8 @@ class ProjectCreate(BaseModel):
     description: Optional[str] = None
     domain_intervention_id: uuid.UUID
     budget_type_id: uuid.UUID
-    planned_budget: float
-    start_date: date
-    end_date: date
+    budget: float
+    currency: str
     operational_zones: List[OperationalZoneCreate]
     organization_id: uuid.UUID
     funding_unit_id: uuid.UUID
@@ -70,7 +69,8 @@ class ProjectList(BaseModel):
     uuid: uuid.UUID
     name: str
     description: Optional[str] = None
-    planned_budget: float
+    budget: float
+    currency: str
     start_date: date
     end_date: date
 
@@ -86,9 +86,8 @@ class ProjectRead(BaseModel):
     budget_type: BudgetTypeRead
     funding_unit: FundingUnitRead
     funding_source: FundingSourceRead
-    planned_budget: float
-    start_date: date
-    end_date: date
+    budget: float
+    currency: str
     operational_zones: List[OperationalZoneRead]
     created_at: datetime
     created_by: str
