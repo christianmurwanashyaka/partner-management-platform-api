@@ -33,9 +33,12 @@ class UserInDB(UserBase):
         from_attributes = True
 
 
-class Token(BaseModel):
+class BaseToken(BaseModel):
     access_token: str
     token_type: str
+
+
+class Token(BaseToken):
     first_name: str
     last_name: str
 
@@ -71,4 +74,4 @@ class UserProfile(BaseModel):
 
 class SignupResponse(BaseModel):
     user: UserProfile
-    token: Token
+    token: BaseToken

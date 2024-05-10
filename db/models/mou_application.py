@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 import uuid
 from sqlmodel import Field, Relationship
@@ -24,3 +24,4 @@ class MouApplication(CommonBaseModel, table=True):
     reviews: List['MouReview'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
     comments: List['MouComment'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
     documents: List['Document'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
+    mou: Optional['Mou'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})

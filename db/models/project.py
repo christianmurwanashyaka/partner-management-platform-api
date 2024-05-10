@@ -1,12 +1,9 @@
-import datetime
 from typing import List
 
 import uuid
-from sqlalchemy import String, ARRAY, Column
 
 from db.models.base import CommonBaseModel
 from sqlmodel import Field, Relationship
-import sqlalchemy as sa
 
 
 class Project(CommonBaseModel, table=True):
@@ -20,8 +17,6 @@ class Project(CommonBaseModel, table=True):
     budget_type: 'BudgetType' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     budget: float = Field(..., description="Planned budget of the project")
     currency: str = Field(..., description="Currency of the budget")
-    start_date: datetime.date = Field(..., description="Start date of the project")
-    end_date: datetime.date = Field(..., description="End date of the project")
     operational_zones: List['OperationalZone'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     organization_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization.uuid')
     organization: 'Organization' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
@@ -31,7 +26,7 @@ class Project(CommonBaseModel, table=True):
     funding_source: 'FundingSource' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     activities: List['Activity'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     mou_details: List['MouDetail'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
-    goals: List['Goal'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'select'})
+    goals: List['Goal'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
 
 
 class OperationalZone(CommonBaseModel, table=True):
@@ -40,7 +35,7 @@ class OperationalZone(CommonBaseModel, table=True):
     project_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='project.uuid')
     project: Project = Relationship(back_populates='operational_zones', sa_relationship_kwargs={'lazy': 'selectin'})
     province: str = Field(..., description="Province in the operational zone")
-    districts: List[str] = Field(sa_column=Column(ARRAY(String)), description="List of districts in the operational zone")
+    district: str = Field(..., description="District in the operational zone")
 
 
 class Goal(CommonBaseModel, table=True):
