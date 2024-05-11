@@ -41,6 +41,8 @@ class BaseToken(BaseModel):
 class Token(BaseToken):
     first_name: str
     last_name: str
+    role: str
+    level: Optional[SwapTeamLevel] = None
 
 
 class TokenData(BaseModel):
