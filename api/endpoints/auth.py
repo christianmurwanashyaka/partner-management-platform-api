@@ -58,7 +58,14 @@ async def login_for_access_token(
         )
 
     access_token = create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer", "first_name": user.first_name, "last_name": user.last_name}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "role": user.role,
+        "level": user.level
+    }
 
 
 @router.get("/users/me", response_model=UserProfile)
