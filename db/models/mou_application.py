@@ -10,6 +10,7 @@ from db.models import CommonBaseModel
 class MouApplicationStatus(str, Enum):
     PENDING = 'pending'
     UNDER_REVIEW = 'under_review'
+    UNDER_APPROVAL = 'under_approval'
     APPROVED = 'approved'
     REJECTED = 'rejected'
 
