@@ -172,12 +172,32 @@ async def add_approval_decision(uuid: str, request: Request, approval_data: MouA
         elif approval_data.decision in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION, MouApprovalDecision.REQUEST_MODIFICATION]:
             mou_application.status = MouApplicationStatus.UNDER_REVIEW
 
-            mou_application.status = MouApplicationStatus.APPROVED
-
         await db.commit()
         await db.refresh(mou_application)
 
         return new_approval
 
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.patch('/{uuid}/start_review', response_model=MouApplicationRead, dependencies=[Depends(swapteam_member_access)])
+async def start_review(uuid: str, request: Request, db: AsyncSession = Depends(get_db)):
+    user = request.state.user
+    if user.role != UserRole.SWAPTEAM_MEMBER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+
+    try:
+        query = select(MouApplication).filter(MouApplication.uuid == uuid)
+        mou_application = await get_first_item(db, query)
+
+        if not mou_application:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+
+        mou_application.status = MouApplicationStatus.UNDER_REVIEW
+        await db.commit()
+        await db.refresh(mou_application)
+
+        return mou_application
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
