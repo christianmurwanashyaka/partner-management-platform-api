@@ -21,6 +21,7 @@ async def create_mou_detail(
         request: Request,
         project_id: uuid.UUID = Form(...),
         party_ids: str = Form(...),
+        duration: int = Form(...),
         db: AsyncSession = Depends(get_db),
         memo_describing_the_source_of_funds: UploadFile = File(...),
         capacity_building_transfer_plan: UploadFile = File(...),
@@ -36,6 +37,7 @@ async def create_mou_detail(
 
         new_mou_detail = MouDetail(
             project_id=project_id,
+            duration=duration,
             created_by=user
         )
         db.add(new_mou_detail)
