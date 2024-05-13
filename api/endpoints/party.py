@@ -18,7 +18,6 @@ async def create_party(request: Request, party_data: PartyCreate, db: AsyncSessi
     user = request.state.user.email
     new_party = Party(
         name=party_data.name,
-        # type=party_data.type,
         responsibilities=party_data.responsibilities,
         signatory=party_data.signatory,
         organization_id=party_data.organization_id,

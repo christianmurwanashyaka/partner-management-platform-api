@@ -2,7 +2,7 @@ from .base import BaseFields, CommonBaseModel
 from .organization_type import OrganizationType
 from .document import Document, DocumentType
 from .organization import Organization
-from .party import Party, PartyType
+from .party import Party
 from .funding_unit import FundingUnit
 from .funding_source import FundingSource
 from .budget_type import BudgetType
