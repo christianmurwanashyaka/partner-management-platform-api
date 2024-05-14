@@ -1,7 +1,7 @@
 from typing import List
 
 import uuid
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 from db.models import MouApplicationStatus
 from schemas.document import DocumentRead
@@ -21,6 +21,27 @@ class MouApplicationRead(BaseModel):
     status: MouApplicationStatus
     mou_detail: MouDetailRead
     documents: List[DocumentRead] = []
+
+    class Config:
+        from_attributes = True
+
+
+class SimpleOrganizationRead(BaseModel):
+    uuid: uuid.UUID
+    name: str
+    email: EmailStr
+    website: str
+
+    class Config:
+        from_attributes = True
+
+
+class MouApplicationOrganizationRead(BaseModel):
+    uuid: uuid.UUID
+    status: MouApplicationStatus
+    mou_detail: MouDetailRead
+    documents: List[DocumentRead] = []
+    organization: SimpleOrganizationRead
 
     class Config:
         from_attributes = True
