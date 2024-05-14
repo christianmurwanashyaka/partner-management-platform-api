@@ -61,6 +61,7 @@ async def create_mou_application(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+# TODO: UPDATE TO ADD PAGINATION
 @router.get('/', response_model=List[MouApplicationRead])
 async def get_mou_applications(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role in ['admin', 'swapteam_member']:
