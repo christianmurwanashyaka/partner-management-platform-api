@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, File, UploadFile
@@ -9,11 +9,13 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.access_control import partner_access, admin_access, swapteam_member_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
+from db.models import Project, MouApplication, MouDetail
 from db.models.organization import Organization
 from db.models.document import Document, DocumentType
 from db.models.pagination import PaginatedResponse
 from db.models.user import User, UserRole
 from helpers.exceptions import handle_integrity_error
+from schemas.mou_application import MouApplicationRead
 from schemas.organization import OrganizationRead
 from helpers.db import check_if_exists, get_all_items, get_first_item
 from utils.files import handle_upload_file
@@ -157,3 +159,40 @@ async def get_organization(uuid: str, db: AsyncSession = Depends(get_db), curren
         return organization
     else:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+
+
+@router.get('/{uuid}/mou_applications', response_model=List[MouApplicationRead])
+async def get_organization_mou_applications(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        query = select(Organization).filter(Organization.uuid == uuid)
+        organization = await get_first_item(db, query)
+        print('ORGANIZATION ::::::::::::::::::::', organization)
+
+        if not organization:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
+
+        query = select(Project).filter(Project.organization_id == organization.uuid)
+        projects = await db.execute(query)
+        projects = projects.scalars().all()
+
+        if not projects:
+            return []
+
+        project_ids = [project.uuid for project in projects]
+        query = select(MouApplication).join(MouApplication.mou_detail).filter(MouApplication.mou_detail.has(MouDetail.project_id.in_(project_ids)))
+        mou_applications = await db.execute(query)
+        mou_applications = mou_applications.scalars().all()
+
+        print('MOU APPLICATIONS', mou_applications)
+
+        if current_user.role in ['admin', 'swapteam_member']:
+            return mou_applications
+
+        elif current_user.role == 'partner':
+            partner_applications = [app for app in mou_applications if app.created_by == current_user.email]
+            return partner_applications
+        else:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
