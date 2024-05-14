@@ -15,7 +15,7 @@ from db.models.document import Document, DocumentType
 from db.models.pagination import PaginatedResponse
 from db.models.user import User, UserRole
 from helpers.exceptions import handle_integrity_error
-from schemas.mou_application import MouApplicationRead
+from schemas.mou_application import MouApplicationRead, MouApplicationOrganizationRead, SimpleOrganizationRead
 from schemas.organization import OrganizationRead
 from helpers.db import check_if_exists, get_all_items, get_first_item
 from utils.files import handle_upload_file
@@ -161,38 +161,63 @@ async def get_organization(uuid: str, db: AsyncSession = Depends(get_db), curren
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
 
-@router.get('/{uuid}/mou_applications', response_model=List[MouApplicationRead])
-async def get_organization_mou_applications(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get('/{organization_id}/mou_applications', response_model=List[MouApplicationOrganizationRead])
+async def get_organization_mou_applications(organization_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        query = select(Organization).filter(Organization.uuid == uuid)
-        organization = await get_first_item(db, query)
-        print('ORGANIZATION ::::::::::::::::::::', organization)
+        # Ensure the organization_id is a valid UUID
+        try:
+            organization_uuid = uuid.UUID(organization_id)
+        except ValueError:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Invalid organization ID')
+
+        # Fetch the organization
+        query = select(Organization).filter(Organization.uuid == organization_uuid)
+        organization = await db.execute(query)
+        organization = organization.scalar_one_or_none()
 
         if not organization:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
 
-        query = select(Project).filter(Project.organization_id == organization.uuid)
+        # Fetch projects for the organization
+        query = select(Project).filter(Project.organization_id == organization_uuid)
         projects = await db.execute(query)
         projects = projects.scalars().all()
 
         if not projects:
             return []
 
+        # Fetch MOU applications for these projects
         project_ids = [project.uuid for project in projects]
-        query = select(MouApplication).join(MouApplication.mou_detail).filter(MouApplication.mou_detail.has(MouDetail.project_id.in_(project_ids)))
+        query = select(MouApplication).join(MouDetail).filter(MouDetail.project_id.in_(project_ids))
         mou_applications = await db.execute(query)
         mou_applications = mou_applications.scalars().all()
 
-        print('MOU APPLICATIONS', mou_applications)
-
-        if current_user.role in ['admin', 'swapteam_member']:
-            return mou_applications
-
+        # Filter MOU applications based on the user's role
+        if current_user.role == 'admin' or current_user.role == 'swapteam_member':
+            filtered_mou_applications = mou_applications
         elif current_user.role == 'partner':
-            partner_applications = [app for app in mou_applications if app.created_by == current_user.email]
-            return partner_applications
+            filtered_mou_applications = [app for app in mou_applications if app.created_by == current_user.email]
         else:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these MOU applications')
+
+        # Prepare the response
+        response = []
+        for app in filtered_mou_applications:
+            app_with_org = MouApplicationOrganizationRead(
+                uuid=app.uuid,
+                status=app.status,
+                mou_detail=app.mou_detail,
+                documents=app.documents,
+                organization=SimpleOrganizationRead(
+                    uuid=organization.uuid,
+                    name=organization.name,
+                    email=organization.email,
+                    website=organization.website
+                )
+            )
+            response.append(app_with_org)
+
+        return response
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

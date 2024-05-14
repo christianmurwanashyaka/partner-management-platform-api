@@ -12,7 +12,8 @@ from db.database import get_db
 from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, SwapTeamLevel, \
     MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou
 from helpers.db import get_first_item
-from schemas.mou_application import MouApplicationRead, MouApplicationCreate
+from schemas.mou_application import MouApplicationRead, MouApplicationCreate, SimpleOrganizationRead, \
+    MouApplicationOrganizationRead
 from schemas.mou_approval import MouApprovalRead, MouApprovalCreate
 from utils.files import generate_mou_action_plan, generate_mou_doc, save_mou_doc_to_disk
 
@@ -62,19 +63,40 @@ async def create_mou_application(
 
 
 # TODO: UPDATE TO ADD PAGINATION
-@router.get('/', response_model=List[MouApplicationRead])
+@router.get('/', response_model=List[MouApplicationOrganizationRead])
 async def get_mou_applications(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role in ['admin', 'swapteam_member']:
-        query = select(MouApplication)
-    elif current_user.role == 'partner':
-        query = select(MouApplication).filter(MouApplication.created_by == current_user.email)
-    else:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+    try:
+        if current_user.role in ['admin', 'swapteam_member']:
+            query = select(MouApplication)
+        elif current_user.role == 'partner':
+            query = select(MouApplication).filter(MouApplication.created_by == current_user.email)
+        else:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
-    mou_applications = await db.execute(query)
-    mou_applications = mou_applications.scalars().all()
+        mou_applications = await db.execute(query)
+        mou_applications = mou_applications.scalars().all()
 
-    return mou_applications
+        response = []
+        for app in mou_applications:
+            organization = app.mou_detail.project.organization
+            app_with_org = MouApplicationOrganizationRead(
+                uuid=app.uuid,
+                status=app.status,
+                mou_detail=app.mou_detail,
+                documents=app.documents,
+                organization=SimpleOrganizationRead(
+                    uuid=organization.uuid,
+                    name=organization.name,
+                    email=organization.email,
+                    website=organization.website
+                )
+            )
+            response.append(app_with_org)
+
+        return response
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get('/{uuid}', response_model=MouApplicationRead)
