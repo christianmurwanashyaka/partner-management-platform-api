@@ -11,13 +11,10 @@ class Project(CommonBaseModel, table=True):
 
     name: str = Field(..., description="Name of the project")
     description: str | None = Field(default=None, nullable=True, description="Optional description of the project")
-    domain_intervention_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='domain_intervention.uuid')
-    domain_intervention: 'DomainIntervention' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     budget_type_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='budget_type.uuid')
     budget_type: 'BudgetType' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     budget: float = Field(..., description="Planned budget of the project")
     currency: str = Field(..., description="Currency of the budget")
-    operational_zones: List['OperationalZone'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     organization_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization.uuid')
     organization: 'Organization' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     funding_unit_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='funding_unit.uuid')
@@ -27,15 +24,6 @@ class Project(CommonBaseModel, table=True):
     activities: List['Activity'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     mou_details: List['MouDetail'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     goals: List['Goal'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
-
-
-class OperationalZone(CommonBaseModel, table=True):
-    __tablename__ = 'operational_zone'
-
-    project_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='project.uuid')
-    project: Project = Relationship(back_populates='operational_zones', sa_relationship_kwargs={'lazy': 'selectin'})
-    province: str = Field(..., description="Province in the operational zone")
-    district: str = Field(..., description="District in the operational zone")
 
 
 class Goal(CommonBaseModel, table=True):

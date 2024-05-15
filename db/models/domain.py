@@ -1,7 +1,6 @@
 import uuid
-from sqlmodel import Relationship, Field
+from sqlmodel import Field, Relationship
 from typing import List
-
 from db.models.base import CommonBaseModel
 
 
@@ -13,6 +12,8 @@ class SubDomain(CommonBaseModel, table=True):
     domain_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='domain_intervention.uuid')
     domain: 'DomainIntervention' = Relationship(back_populates='subdomains', sa_relationship_kwargs={'lazy': 'selectin'})
 
+    activities: List['ActivityDomain'] = Relationship(back_populates='sub_domain', sa_relationship_kwargs={'lazy': 'selectin'})
+
 
 class DomainIntervention(CommonBaseModel, table=True):
     __tablename__ = 'domain_intervention'
@@ -20,4 +21,5 @@ class DomainIntervention(CommonBaseModel, table=True):
     name: str = Field(..., description="Name of the domain intervention")
     description: str | None = Field(default=None, nullable=True, description="Optional description of the domain intervention")
     subdomains: List[SubDomain] = Relationship(back_populates='domain', sa_relationship_kwargs={'lazy': 'selectin'})
-    projects: List['Project'] = Relationship(back_populates='domain_intervention', sa_relationship_kwargs={'lazy': 'selectin'})
+
+    activities: List['ActivityDomain'] = Relationship(back_populates='domain_intervention', sa_relationship_kwargs={'lazy': 'selectin'})

@@ -1,25 +1,21 @@
-from typing import Optional, List
-
 import uuid
-from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, File, UploadFile
+from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.future import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from api.dependencies.access_control import partner_access, admin_access, swapteam_member_access
+from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import Activity
 from db.models.organization import Organization
 from db.models.pagination import PaginatedResponse
-from db.models.project import Project, OperationalZone, Goal
+from db.models.project import Project, Goal
 from db.models.user import User
-from helpers.db import check_if_exists, get_all_items, get_first_item, get_items_by_criteria
+from helpers.db import get_all_items, get_items_by_criteria
 from schemas.activity import ActivityList
-from schemas.project import ProjectRead, ProjectCreate, ProjectList
-from utils.files import handle_upload_file
+from schemas.project import ProjectRead, ProjectCreate
 
 router = APIRouter()
 
@@ -30,7 +26,6 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
     new_project = Project(
         name=project.name,
         description=project.description,
-        domain_intervention_id=project.domain_intervention_id,
         budget_type_id=project.budget_type_id,
         budget=project.budget,
         currency=project.currency,
@@ -40,15 +35,6 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
         created_by=user
     )
     db.add(new_project)
-
-    for zone_data in project.operational_zones:
-        new_zone = OperationalZone(
-            project_id=new_project.uuid,
-            province=zone_data.province,
-            district=zone_data.district,
-            created_by=user
-        )
-        db.add(new_zone)
 
     for goal_data in project.goals:
         new_goal = Goal(

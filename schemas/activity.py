@@ -4,8 +4,41 @@ from typing import List, Optional
 import uuid
 from pydantic import BaseModel
 
+from schemas.domain_intervention import DomainInterventionList
 from schemas.input_detail import InputDetailCreate, InputDetailRead
 from schemas.sub_domain import SubDomainRead
+
+
+class ActivityDomain(BaseModel):
+    domain_intervention_id: uuid.UUID
+    sub_domain_id: uuid.UUID
+
+    class Config:
+        from_attributes = True
+
+
+class ActivityDomainDetail(BaseModel):
+    domain_intervention: DomainInterventionList
+    sub_domain: SubDomainRead
+
+
+class OperationalZoneCreate(BaseModel):
+    province: str
+    district: str
+
+    class Config:
+        from_attributes = True
+
+
+class OperationalZoneRead(BaseModel):
+    uuid: uuid.UUID
+    province: str
+    district: str
+    created_at: datetime
+    created_by: str
+
+    class Config:
+        from_attributes = True
 
 
 class ActivityCreate(BaseModel):
@@ -17,7 +50,8 @@ class ActivityCreate(BaseModel):
     implementer: str
     implementer_unit: str
     fiscal_year: str
-    sub_domain_id: uuid.UUID
+    operational_zones: List[OperationalZoneCreate]
+    domains: List[ActivityDomain]
     input_details: List[InputDetailCreate]
 
     class Config:
@@ -32,6 +66,10 @@ class ActivityList(BaseModel):
     implementer_unit: str
     fiscal_year: str
     input_details: List[InputDetailRead]
+    start_date: date
+    end_date: date
+    operational_zones: List[OperationalZoneRead]
+    domains: List[ActivityDomainDetail]
 
     class Config:
         from_attributes = True
@@ -47,7 +85,9 @@ class ActivityRead(BaseModel):
     fiscal_year: str
     start_date: date
     end_date: date
-    sub_domain: SubDomainRead
+    operational_zones: List[OperationalZoneRead]
+    domains: List[ActivityDomainDetail]
+    input_details: List[InputDetailRead]
     created_at: datetime
     created_by: str
 
