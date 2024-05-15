@@ -1,9 +1,7 @@
 import datetime
 from typing import List
-
 import uuid
 from sqlmodel import Field, Relationship
-
 from db.models.base import CommonBaseModel
 
 
@@ -21,7 +19,6 @@ class Activity(CommonBaseModel, table=True):
     implementer_unit: str = Field(..., description='Unit or group within the implementer organization')
     fiscal_year: str = Field(..., description='Fiscal year of the activity')
 
-    sub_domain_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='sub_domain.uuid')
-    sub_domain: 'SubDomain' = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
-
+    domains: List['ActivityDomain'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'selectin'})
     input_details: List['InputDetail'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'selectin'})
+    operational_zones: List['OperationalZone'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'selectin'})
