@@ -1,4 +1,6 @@
 from datetime import datetime
+
+import uuid
 from fastapi import APIRouter, Request, Depends, status, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.orm import joinedload
@@ -93,6 +95,9 @@ async def get_mou_applications(
         mou_applications_result = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
         mou_applications = mou_applications_result.unique().scalars().all()
 
+        print('::::::::::::::::::::: MOU APPLICATIONS FROM DB :::::::::::::::::::::')
+        print(mou_applications)
+
         response = []
         for app in mou_applications:
             organization = app.mou_detail.project.organization
@@ -129,7 +134,7 @@ async def get_mou_applications(
 
 @router.get('/{uuid}', response_model=MouApplicationRead)
 async def get_mou_application(
-        uuid: str,
+        uuid: uuid.UUID,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
@@ -329,6 +334,86 @@ async def add_review_decision(uuid: str, request: Request, review_data: MouRevie
         await db.refresh(mou_application)
 
         return new_review
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get('/{uuid}/approvals', response_model=PaginatedResponse[MouApprovalRead])
+async def get_mou_application_approvals(
+        uuid: str,
+        page: int = 1,
+        page_size: int = 100,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Check if the MOU application exists
+        query = select(MouApplication).filter(MouApplication.uuid == uuid)
+        mou_application_result = await db.execute(query)
+        mou_application = mou_application_result.scalar_one_or_none()
+
+        if not mou_application:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+
+        # Query to get approvals
+        approval_query = select(MouApproval).filter(MouApproval.mou_application_id == uuid).order_by(MouApproval.created_at.desc())
+        total_items_query = select(func.count()).select_from(approval_query.subquery())
+        total_items = (await db.execute(total_items_query)).scalar_one()
+
+        approvals_result = await db.execute(approval_query.offset((page - 1) * page_size).limit(page_size))
+        approvals = approvals_result.scalars().all()
+
+        total_pages = (total_items + page_size - 1) // page_size
+        paginated_response = PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            data=approvals
+        )
+
+        return paginated_response
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get('/{uuid}/reviews', response_model=PaginatedResponse[MouReviewRead])
+async def get_mou_application_reviews(
+        uuid: uuid.UUID,
+        page: int = 1,
+        page_size: int = 100,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Check if the MOU application exists
+        query = select(MouApplication).filter(MouApplication.uuid == uuid)
+        mou_application_result = await db.execute(query)
+        mou_application = mou_application_result.scalar_one_or_none()
+
+        if not mou_application:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+
+        # Query to get reviews
+        review_query = select(MouReview).filter(MouReview.mou_application_id == uuid).order_by(MouReview.created_at.desc())
+        total_items_query = select(func.count()).select_from(review_query.subquery())
+        total_items = (await db.execute(total_items_query)).scalar_one()
+
+        reviews_result = await db.execute(review_query.offset((page - 1) * page_size).limit(page_size))
+        reviews = reviews_result.scalars().all()
+
+        total_pages = (total_items + page_size - 1) // page_size
+        paginated_response = PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            data=reviews
+        )
+
+        return paginated_response
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

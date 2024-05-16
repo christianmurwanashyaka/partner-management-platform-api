@@ -4,7 +4,7 @@ import uuid
 from pydantic import BaseModel
 
 from schemas.party import PartyRead
-from schemas.project import ProjectRead
+from schemas.project import ProjectRead, ProjectList
 
 
 class MouDetailCreate(BaseModel):
@@ -19,6 +19,16 @@ class MouDetailCreate(BaseModel):
 class MouDetailRead(BaseModel):
     uuid: uuid.UUID
     project: ProjectRead
+    parties: List[PartyRead]
+    duration: Optional[int]
+
+    class Config:
+        from_attributes = True
+
+
+class ApplicationMouDetailRead(BaseModel):
+    uuid: uuid.UUID
+    project: ProjectList
     parties: List[PartyRead]
     duration: Optional[int]
 
