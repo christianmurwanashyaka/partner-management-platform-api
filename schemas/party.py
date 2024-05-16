@@ -24,3 +24,6 @@ class PartyUpdate(PartyBase):
 class PartyRead(PartyBase):
     uuid: UUID
     organization_id: Optional[UUID] = Field(default=None, description="ID of the organization this party belongs to")
+
+    class Config:
+        from_attributes = True
