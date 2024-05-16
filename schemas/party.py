@@ -1,5 +1,4 @@
 from typing import List, Optional
-
 from pydantic import BaseModel, Field
 from uuid import UUID
 
@@ -17,8 +16,13 @@ class PartyCreate(PartyBase):
     organization_id: Optional[UUID] = Field(default=None, description="ID of the organization this party belongs to")
 
 
-class PartyUpdate(PartyBase):
-    name: Optional[str] = Field(None, description="Name of the party")
+class PartyUpdate(BaseModel):
+    name: Optional[str] = None
+    responsibilities: Optional[List[str]] = None
+    signatory: Optional[str] = None
+
+    class Config:
+        from_attributes: True
 
 
 class PartyRead(PartyBase):

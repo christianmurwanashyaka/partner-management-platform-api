@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import uuid
 from fastapi import APIRouter, Depends, Request, HTTPException, status, UploadFile, File, Form
@@ -77,6 +77,82 @@ async def create_mou_detail(
     return new_mou_detail
 
 
+@router.patch('/{uuid}', response_model=MouDetailRead, dependencies=[Depends(partner_access)])
+async def update_mou_detail(
+        uuid: uuid.UUID,
+        project_id: Optional[uuid.UUID] = Form(None),
+        party_ids: Optional[str] = Form(None),
+        duration: Optional[int] = Form(None),
+        memo_describing_the_source_of_funds: UploadFile = None,
+        capacity_building_transfer_plan: UploadFile = None,
+        memo_describing_the_long_term_objective: UploadFile = None,
+        strategic_plan: UploadFile = None,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(MouDetail).where(MouDetail.uuid == uuid)
+        result = await db.execute(query)
+        mou_detail = result.scalar_one_or_none()
+
+        if not mou_detail:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MouDetail not found')
+
+        if mou_detail.created_by != current_user.email and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Not authorized to update this MouDetail')
+
+        # Update the MouDetail fields
+        if project_id is not None:
+            mou_detail.project_id = project_id
+        if duration is not None:
+            mou_detail.duration = duration
+
+        # Update parties if provided
+        if party_ids is not None:
+            party_ids_list = parse_uuids(party_ids)
+            parties = await db.execute(select(Party).where(Party.uuid.in_(party_ids_list)))
+            parties = parties.scalars().all()
+            for party in parties:
+                party.mou_detail_id = mou_detail.uuid
+
+        async def upload_document(upload_file: Optional[UploadFile], document_type: DocumentType):
+            if upload_file:
+                # Check if a document of the same type exists
+                existing_doc_query = select(Document).where(
+                    Document.mou_detail_id == mou_detail.uuid,
+                    Document.document_type == document_type
+                )
+                existing_doc_result = await db.execute(existing_doc_query)
+                existing_document = existing_doc_result.scalar_one_or_none()
+
+                if existing_document:
+                    await db.delete(existing_document)
+
+                file_path, filename = await handle_upload_file(upload_file)
+                document = Document(
+                    name=filename,
+                    document_type=document_type,
+                    path=file_path,
+                    filename=filename,
+                    mou_detail=mou_detail,
+                    created_by=current_user.email
+                )
+                db.add(document)
+
+        await upload_document(memo_describing_the_source_of_funds, DocumentType.MEMO_DESCRIBING_THE_SOURCE_OF_FUNDS)
+        await upload_document(capacity_building_transfer_plan, DocumentType.CAPACITY_BUILDING_TRANSFER_PLAN)
+        await upload_document(memo_describing_the_long_term_objective, DocumentType.MEMO_DESCRIBING_THE_LONG_TERM_OBJECTIVES)
+        await upload_document(strategic_plan, DocumentType.STRATEGIC_PLAN)
+
+        await db.commit()
+        await db.refresh(mou_detail)
+
+        return mou_detail
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.get('/', response_model=List[MouDetailRead])
 async def get_mou_details(request: Request, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -97,7 +173,7 @@ async def get_mou_details(request: Request, db: AsyncSession = Depends(get_db), 
 
 
 @router.get('/{uuid}', response_model=MouDetailRead)
-async def get_mou_detail(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_mou_detail(uuid: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         query = select(MouDetail).filter(MouDetail.uuid == uuid)
         mou_detail = await db.execute(query)

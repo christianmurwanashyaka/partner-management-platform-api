@@ -144,6 +144,101 @@ async def create_organization(
     return new_organization
 
 
+@router.patch('/{uuid}', response_model=OrganizationRead, dependencies=[Depends(partner_access)])
+async def update_organization(
+        uuid: uuid.UUID,
+        name: Optional[str] = Form(None),
+        phone_number: Optional[str] = Form(None),
+        email: Optional[str] = Form(None),
+        website: Optional[str] = Form(None),
+        home_country_representative: Optional[str] = Form(None),
+        rwanda_representative: Optional[str] = Form(None),
+        home_country: Optional[str] = Form(None),
+        home_country_province_state: Optional[str] = Form(None),
+        home_country_district: Optional[str] = Form(None),
+        home_country_avenue: Optional[str] = Form(None),
+        home_country_po_box: Optional[str] = Form(None),
+        rwanda_province: Optional[str] = Form(None),
+        rwanda_district: Optional[str] = Form(None),
+        rwanda_avenue: Optional[str] = Form(None),
+        rwanda_po_box: Optional[str] = Form(None),
+        organization_type_id: Optional[uuid.UUID] = Form(None),
+        appointment_letter: UploadFile = None,
+        notified_constitution_bylaws: UploadFile = None,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(Organization).where(Organization.uuid == uuid)
+        result = await db.execute(query)
+        organization = result.scalar_one_or_none()
+
+        if not organization:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
+
+        if organization.created_by != current_user.email and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Not authorized to update this organization')
+
+        # Update the Organization fields
+        organization_data = {
+            "name": name,
+            "phone_number": phone_number,
+            "email": email,
+            "website": website,
+            "home_country_representative": home_country_representative,
+            "rwanda_representative": rwanda_representative,
+            "home_country": home_country,
+            "home_country_province_state": home_country_province_state,
+            "home_country_district": home_country_district,
+            "home_country_avenue": home_country_avenue,
+            "home_country_po_box": home_country_po_box,
+            "rwanda_province": rwanda_province,
+            "rwanda_district": rwanda_district,
+            "rwanda_avenue": rwanda_avenue,
+            "rwanda_po_box": rwanda_po_box,
+            "organization_type_id": organization_type_id
+        }
+
+        for key, value in organization_data.items():
+            if value is not None:
+                setattr(organization, key, value)
+
+        async def upload_document(upload_file: Optional[UploadFile], document_type: DocumentType):
+            if upload_file:
+                # Check if a document of the same type exists
+                existing_doc_query = select(Document).where(
+                    Document.organization_id == organization.uuid,
+                    Document.document_type == document_type
+                )
+                existing_doc_result = await db.execute(existing_doc_query)
+                existing_document = existing_doc_result.scalar_one_or_none()
+
+                if existing_document:
+                    await db.delete(existing_document)
+
+                file_path, filename = await handle_upload_file(upload_file)
+                document = Document(
+                    name=filename,
+                    document_type=document_type,
+                    path=file_path,
+                    filename=filename,
+                    organization=organization,
+                    created_by=current_user.email
+                )
+                db.add(document)
+
+        await upload_document(appointment_letter, DocumentType.APPOINTMENT_LETTER)
+        await upload_document(notified_constitution_bylaws, DocumentType.NOTIFIED_CONSTITUTION_BYLAWS)
+
+        await db.commit()
+        await db.refresh(organization)
+
+        return organization
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.get('/', response_model=PaginatedResponse[OrganizationRead], dependencies=[Depends(swapteam_member_access)])
 async def get_organizations(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, Organization, page=page, page_size=page_size)
