@@ -1,11 +1,8 @@
 from datetime import datetime
-from typing import List
-
 from fastapi import APIRouter, Request, Depends, status, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
-
 from api.dependencies.access_control import partner_access, swapteam_member_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db

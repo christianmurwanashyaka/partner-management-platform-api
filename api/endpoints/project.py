@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import partner_access
@@ -117,3 +117,33 @@ async def get_project_activities(
         total_pages=total_pages,
         data=activities_list
     )
+
+
+@router.get('/{uuid}', response_model=ProjectRead)
+async def get_project(
+        uuid: str,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(Project).filter(Project.uuid == uuid).options(
+            joinedload(Project.organization),
+            joinedload(Project.activities)  # Add any other related models as needed
+        )
+
+        project_result = await db.execute(query)
+        project = project_result.unique().scalar_one_or_none()
+
+        if not project:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Project not found')
+
+        # Access control based on user role
+        if current_user.role in ['admin', 'swapteam_member']:
+            return project
+        elif current_user.role == 'partner' and project.organization.created_by == current_user.email:
+            return project
+        else:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this project')
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
