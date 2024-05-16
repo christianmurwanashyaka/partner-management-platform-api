@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, Request, Depends, status, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -10,11 +10,14 @@ from api.dependencies.access_control import partner_access, swapteam_member_acce
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, SwapTeamLevel, \
-    MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou
+    MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou, MouReview, PaginatedResponse, \
+    Organization
+from db.models.mou_review import MouReviewDecision
 from helpers.db import get_first_item
 from schemas.mou_application import MouApplicationRead, MouApplicationCreate, SimpleOrganizationRead, \
     MouApplicationOrganizationRead
 from schemas.mou_approval import MouApprovalRead, MouApprovalCreate
+from schemas.mou_review import MouReviewRead, MouReviewCreate
 from utils.files import generate_mou_action_plan, generate_mou_doc, save_mou_doc_to_disk
 
 router = APIRouter()
@@ -62,28 +65,49 @@ async def create_mou_application(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-# TODO: UPDATE TO ADD PAGINATION
-@router.get('/', response_model=List[MouApplicationOrganizationRead])
-async def get_mou_applications(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get('/', response_model=PaginatedResponse[MouApplicationOrganizationRead])
+async def get_mou_applications(
+        page: int = 1,
+        page_size: int = 100,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
     try:
         if current_user.role in ['admin', 'swapteam_member']:
-            query = select(MouApplication)
+            query = select(MouApplication).options(
+                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
+                joinedload(MouApplication.documents),
+                joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
+                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents)
+            )
         elif current_user.role == 'partner':
-            query = select(MouApplication).filter(MouApplication.created_by == current_user.email)
+            query = select(MouApplication).filter(MouApplication.created_by == current_user.email).options(
+                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
+                joinedload(MouApplication.documents),
+                joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
+                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents)
+            )
         else:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
-        mou_applications = await db.execute(query)
-        mou_applications = mou_applications.scalars().all()
+        total_items_query = select(func.count()).select_from(query.subquery())
+        total_items = (await db.execute(total_items_query)).scalar_one()
+
+        mou_applications_result = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+        mou_applications = mou_applications_result.unique().scalars().all()
 
         response = []
         for app in mou_applications:
             organization = app.mou_detail.project.organization
+
+            # Collecting all related documents
+            all_documents = app.documents + app.mou_detail.documents + organization.documents
+
             app_with_org = MouApplicationOrganizationRead(
                 uuid=app.uuid,
                 status=app.status,
                 mou_detail=app.mou_detail,
-                documents=app.documents,
+                documents=all_documents,  # Adding all related documents
                 organization=SimpleOrganizationRead(
                     uuid=organization.uuid,
                     name=organization.name,
@@ -93,26 +117,58 @@ async def get_mou_applications(db: AsyncSession = Depends(get_db), current_user:
             )
             response.append(app_with_org)
 
-        return response
+        total_pages = (total_items + page_size - 1) // page_size
+        return PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            data=response
+        )
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get('/{uuid}', response_model=MouApplicationRead)
-async def get_mou_application(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_mou_application(
+        uuid: str,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
     try:
-        query = select(MouApplication).filter(MouApplication.uuid == uuid)
-        mou_application = await db.execute(query)
-        mou_application = mou_application.scalar_one_or_none()
+        query = select(MouApplication).filter(MouApplication.uuid == uuid).options(
+            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
+            joinedload(MouApplication.documents),
+            joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
+            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents)
+        )
+        mou_application_result = await db.execute(query)
+        mou_application = mou_application_result.unique().scalar_one_or_none()
 
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
-        if current_user.role in ['admin', 'swapteam_member']:
-            return mou_application
-        elif current_user.role == 'partner' and mou_application.created_by == current_user.email:
-            return mou_application
+        if current_user.role in ['admin', 'swapteam_member'] or (current_user.role == 'partner' and mou_application.created_by == current_user.email):
+            organization = mou_application.mou_detail.project.organization
+
+            # Collecting all related documents
+            all_documents = mou_application.documents + mou_application.mou_detail.documents + organization.documents
+
+            mou_application_with_documents = MouApplicationRead(
+                uuid=mou_application.uuid,
+                status=mou_application.status,
+                mou_detail=mou_application.mou_detail,
+                documents=all_documents,  # Adding all related documents
+                organization=SimpleOrganizationRead(
+                    uuid=organization.uuid,
+                    name=organization.name,
+                    email=organization.email,
+                    website=organization.website
+                )
+            )
+
+            return mou_application_with_documents
         else:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this MOU application')
 
@@ -222,5 +278,60 @@ async def start_review(uuid: str, request: Request, db: AsyncSession = Depends(g
         await db.refresh(mou_application)
 
         return mou_application
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post('{uuid}/review', response_model=MouReviewRead, dependencies=[Depends(swapteam_member_access)])
+async def add_review_decision(uuid: str, request: Request, review_data: MouReviewCreate, db: AsyncSession = Depends(get_db)):
+    user = request.state.user
+
+    if user.role != UserRole.SWAPTEAM_MEMBER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only swap team members are allowed to make review decisions')
+    if user.level not in [SwapTeamLevel.PARTNER_COORDINATOR, SwapTeamLevel.LEGAL_ADVISOR]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only Partner Coordinator and Legal Advisor are allowed to make review decisions')
+
+    try:
+        query = select(MouApplication).options(joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization)).filter(MouApplication.uuid == uuid)
+        mou_application = await db.execute(query)
+        mou_application = mou_application.scalar_one_or_none()
+
+        if not mou_application:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+
+        new_review = MouReview(
+            decision=review_data.decision,
+            user_id=user.uuid,
+            user=user,
+            mou_application_id=uuid,
+            created_by=user.email
+        )
+
+        db.add(new_review)
+        await db.commit()
+        await db.refresh(new_review)
+
+        if review_data.comment:
+            new_comment = MouComment(
+                content=review_data.comment,
+                user_id=user.uuid,
+                mou_application_id=uuid,
+                mou_review_id=new_review.uuid,
+                created_by=user.email
+            )
+            db.add(new_comment)
+            await db.commit()
+            await db.refresh(new_comment)
+
+        if review_data.decision == MouReviewDecision.VERIFIED:
+            mou_application.status = MouApplicationStatus.UNDER_APPROVAL
+        elif review_data.decision == MouReviewDecision.NOT_YET_VERIFIED:
+            mou_application.status = MouApplicationStatus.UNDER_REVIEW
+
+        await db.commit()
+        await db.refresh(mou_application)
+
+        return new_review
+
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
