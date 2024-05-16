@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr
 
 from db.models import MouApplicationStatus
 from schemas.document import DocumentRead
-from schemas.mou_detail import MouDetailRead
+from schemas.mou_detail import MouDetailRead, ApplicationMouDetailRead
 
 
 class MouApplicationCreate(BaseModel):
@@ -39,7 +39,7 @@ class SimpleOrganizationRead(BaseModel):
 class MouApplicationOrganizationRead(BaseModel):
     uuid: uuid.UUID
     status: MouApplicationStatus
-    mou_detail: MouDetailRead
+    mou_detail: ApplicationMouDetailRead
     documents: List[DocumentRead] = []
     organization: SimpleOrganizationRead
 

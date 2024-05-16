@@ -50,8 +50,6 @@ class ProjectList(BaseModel):
     description: Optional[str] = None
     budget: float
     currency: str
-    start_date: date
-    end_date: date
 
     class Config:
         from_attributes = True
