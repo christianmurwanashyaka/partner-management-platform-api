@@ -7,6 +7,10 @@ from docx import Document
 from fastapi import UploadFile, HTTPException
 from openpyxl import Workbook
 from openpyxl.styles import Font
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+
+from db.models import Activity, ActivityDomain, OperationalZone, InputDetail
 
 
 async def handle_upload_file(file: UploadFile):
@@ -53,7 +57,82 @@ async def generate_mou_doc(mou_application, template_path):
     return buffer
 
 
-async def generate_mou_action_plan(mou_application):
+# async def generate_mou_action_plan(mou_application):
+#     wb = Workbook()
+#     ws = wb.active
+#     ws.title = 'Action Plan'
+#
+#     headers = [
+#         'Organization',
+#         'Organization type',
+#         'Project name',
+#         'Funding source',
+#         'Funding unit',
+#         'Activity',
+#         'Description of activity',
+#         'On/Off Budget/IGR',
+#         'Domain of intervention',
+#         'Sub domain of intervention',
+#         'Implementer',
+#         'Location',
+#         'Input category',
+#         'Inputs',
+#         'Planned budget',
+#         'Currency',
+#         'Fiscal Year'
+#     ]
+#     ws.append(headers)
+#
+#     bold_font = Font(bold=True)
+#     for cell in ws[1]:
+#         cell.font = bold_font
+#
+#     project = mou_application.mou_detail.project
+#     organization = project.organization
+#
+#     for activity in project.activities:
+#         for input_detail in activity.input_details:
+#             input_name = f"{input_detail.input.name} - {input_detail.budget}"
+#             input_categories = ', '.join(set(input_detail.input_category.name for input_detail in activity.input_details))
+#             total_budget = sum(input_detail.budget for input_detail in activity.input_details)
+#             # Flatten and deduplicate all districts and provinces
+#             locations = set(input_detail.district + ', ' + input_detail.province for input_detail in activity.input_details)
+#
+#             data = [
+#                 organization.name,
+#                 organization.organization_type.name,
+#                 project.name,
+#                 project.funding_source.name,
+#                 project.funding_unit.name,
+#                 activity.name,
+#                 activity.description,
+#                 project.budget_type.name,
+#                 project.domain_intervention.name,
+#                 activity.sub_domain.name,
+#                 activity.implementer,
+#                 ', '.join(locations),
+#                 input_categories,
+#                 input_name,
+#                 total_budget,
+#                 project.currency,
+#                 activity.fiscal_year
+#             ]
+#             ws.append(data)
+#
+#     action_plans_directory = 'action_plans'
+#     os.makedirs(action_plans_directory, exist_ok=True)
+#     try:
+#         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+#         filename = f'{timestamp}_action_plan_{mou_application.created_by}.xlsx'
+#         file_path = os.path.join(action_plans_directory, filename)
+#
+#         wb.save(file_path)
+#         return file_path, filename
+#     except Exception as e:
+#         raise Exception(f"Failed to save file: {str(e)}")
+
+
+async def generate_mou_action_plan(mou_application, db: AsyncSession):
     wb = Workbook()
     ws = wb.active
     ws.title = 'Action Plan'
@@ -86,34 +165,46 @@ async def generate_mou_action_plan(mou_application):
     project = mou_application.mou_detail.project
     organization = project.organization
 
-    for activity in project.activities:
-        for input_detail in activity.input_details:
-            input_name = f"{input_detail.input.name} - {input_detail.budget}"
-            input_categories = ', '.join(set(input_detail.input_category.name for input_detail in activity.input_details))
-            total_budget = sum(input_detail.budget for input_detail in activity.input_details)
-            # Flatten and deduplicate all districts and provinces
-            locations = set(input_detail.district + ', ' + input_detail.province for input_detail in activity.input_details)
+    # Fetching activities and their related data
+    project_activities_query = select(Activity).where(Activity.project_id == project.uuid)
+    activities = (await db.execute(project_activities_query)).scalars().all()
 
-            data = [
-                organization.name,
-                organization.organization_type.name,
-                project.name,
-                project.funding_source.name,
-                project.funding_unit.name,
-                activity.name,
-                activity.description,
-                project.budget_type.name,
-                project.domain_intervention.name,
-                activity.sub_domain.name,
-                activity.implementer,
-                ', '.join(locations),
-                input_categories,
-                input_name,
-                total_budget,
-                project.currency,
-                activity.fiscal_year
-            ]
-            ws.append(data)
+    for activity in activities:
+        activity_domains_query = select(ActivityDomain).where(ActivityDomain.activity_id == activity.uuid)
+        activity_domains = (await db.execute(activity_domains_query)).scalars().all()
+        domain_names = ', '.join(set(domain.domain_intervention.name for domain in activity_domains))
+        sub_domain_names = ', '.join(set(domain.sub_domain.name for domain in activity_domains))
+
+        operational_zones_query = select(OperationalZone).where(OperationalZone.activity_id == activity.uuid)
+        operational_zones = (await db.execute(operational_zones_query)).scalars().all()
+        locations = set(zone.district + ', ' + zone.province for zone in operational_zones)
+
+        input_details_query = select(InputDetail).where(InputDetail.activity_id == activity.uuid)
+        input_details = (await db.execute(input_details_query)).scalars().all()
+        input_categories = ', '.join(set(input_detail.input_category.name for input_detail in input_details))
+        total_budget = sum(input_detail.budget for input_detail in input_details)
+        input_names = ', '.join(f"{input_detail.input.name} - {input_detail.budget}" for input_detail in input_details)
+
+        data = [
+            organization.name,
+            organization.organization_type.name,
+            project.name,
+            project.funding_source.name,
+            project.funding_unit.name,
+            activity.name,
+            activity.description,
+            project.budget_type.name,
+            domain_names,
+            sub_domain_names,
+            activity.implementer,
+            ', '.join(locations),
+            input_categories,
+            input_names,
+            total_budget,
+            project.currency,
+            activity.fiscal_year
+        ]
+        ws.append(data)
 
     action_plans_directory = 'action_plans'
     os.makedirs(action_plans_directory, exist_ok=True)
