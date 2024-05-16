@@ -4,6 +4,7 @@ from typing import List, Optional
 import uuid
 from pydantic import BaseModel
 
+from schemas.activity import ActivityList
 from schemas.budget_type import BudgetTypeRead
 from schemas.funding_source import FundingSourceRead
 from schemas.funding_unit import FundingUnitRead
@@ -68,6 +69,7 @@ class ProjectRead(BaseModel):
     created_at: datetime
     created_by: str
     goals: List[GoalRead]
+    activities: List[ActivityList] = []
 
     class Config:
         from_attributes = True

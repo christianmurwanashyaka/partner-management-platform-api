@@ -2,6 +2,7 @@ import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.future import select
+from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
@@ -124,6 +125,35 @@ async def get_activities(
     )
 
     return paginated_response
+
+
+@router.get('/{uuid}', response_model=ActivityRead)
+async def get_activity(
+        uuid: str,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(Activity).filter(Activity.uuid == uuid).options(
+            joinedload(Activity.project),  # Add any other related models as needed
+        )
+
+        activity_result = await db.execute(query)
+        activity = activity_result.unique().scalar_one_or_none()
+
+        if not activity:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Activity not found')
+
+        # Access control based on user role
+        if current_user.role in ['admin', 'swapteam_member']:
+            return activity
+        elif current_user.role == 'partner' and activity.created_by == current_user.email:
+            return activity
+        else:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this activity')
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get('/{uuid}/input_details', response_model=PaginatedResponse[InputDetailRead])
