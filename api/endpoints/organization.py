@@ -4,6 +4,7 @@ import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, File, UploadFile
 from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import partner_access, admin_access, swapteam_member_access
@@ -15,9 +16,12 @@ from db.models.document import Document, DocumentType
 from db.models.pagination import PaginatedResponse
 from db.models.user import User, UserRole
 from helpers.exceptions import handle_integrity_error
+from schemas.activity import ActivityRead
 from schemas.mou_application import MouApplicationRead, MouApplicationOrganizationRead, SimpleOrganizationRead
+from schemas.mou_detail import MouDetailRead
 from schemas.organization import OrganizationRead
 from helpers.db import check_if_exists, get_all_items, get_first_item
+from schemas.project import ProjectRead
 from utils.files import handle_upload_file
 from utils.security import get_password_hash
 
@@ -161,12 +165,12 @@ async def get_organization(uuid: str, db: AsyncSession = Depends(get_db), curren
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
 
-@router.get('/{organization_id}/mou_applications', response_model=List[MouApplicationOrganizationRead])
-async def get_organization_mou_applications(organization_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get('/{uuid}/mou_applications', response_model=List[MouApplicationOrganizationRead])
+async def get_organization_mou_applications(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         # Ensure the organization_id is a valid UUID
         try:
-            organization_uuid = uuid.UUID(organization_id)
+            organization_uuid = uuid.UUID(uuid)
         except ValueError:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Invalid organization ID')
 
@@ -218,6 +222,154 @@ async def get_organization_mou_applications(organization_id: str, db: AsyncSessi
             response.append(app_with_org)
 
         return response
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get('/{organization_uuid}/projects', response_model=PaginatedResponse[ProjectRead])
+async def get_organization_projects(
+        organization_uuid: str,
+        page: int = 1,
+        page_size: int = 100,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(Organization).filter(Organization.uuid == organization_uuid).options(
+            joinedload(Organization.projects)
+        )
+
+        organization_result = await db.execute(query)
+        organization = organization_result.unique().scalar_one_or_none()
+
+        if not organization:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
+
+        # Access control based on user role
+        if current_user.role not in ['admin', 'swapteam_member']:
+            if current_user.role == 'partner' and organization.created_by != current_user.email:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these projects')
+            elif current_user.role != 'partner':
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these projects')
+
+        # Order projects by most recent
+        projects = sorted(organization.projects, key=lambda x: x.created_at, reverse=True)
+        total_items = len(projects)
+        projects_paginated = projects[(page - 1) * page_size:page * page_size]
+
+        total_pages = (total_items + page_size - 1) // page_size
+        paginated_response = PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            data=projects_paginated
+        )
+
+        return paginated_response
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get('/{uuid}/activities', response_model=PaginatedResponse[ActivityRead])
+async def get_organization_activities(
+        uuid: str,
+        page: int = 1,
+        page_size: int = 100,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Check if the organization exists and get its activities
+        organization_query = select(Organization).filter(Organization.uuid == uuid).options(
+            joinedload(Organization.projects).joinedload(Project.activities)
+        )
+
+        organization_result = await db.execute(organization_query)
+        organization = organization_result.unique().scalar_one_or_none()
+
+        if not organization:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
+
+        # Access control based on user role
+        if current_user.role not in ['admin', 'swapteam_member']:
+            if current_user.role == 'partner' and organization.created_by != current_user.email:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these activities')
+            elif current_user.role != 'partner':
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these activities')
+
+        # Gather all activities from the organization's projects and order by most recent
+        activities = []
+        for project in organization.projects:
+            activities.extend(project.activities)
+        activities = sorted(activities, key=lambda x: x.created_at, reverse=True)
+
+        total_items = len(activities)
+        activities_paginated = activities[(page - 1) * page_size:page * page_size]
+
+        total_pages = (total_items + page_size - 1) // page_size
+        paginated_response = PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            data=activities_paginated
+        )
+
+        return paginated_response
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get('/{uuid}/mou_details', response_model=PaginatedResponse[MouDetailRead])
+async def get_organization_mou_details(
+        uuid: str,
+        page: int = 1,
+        page_size: int = 100,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Check if the organization exists and get its MOU details
+        organization_query = select(Organization).filter(Organization.uuid == uuid).options(
+            joinedload(Organization.projects).joinedload(Project.mou_details)
+        )
+
+        organization_result = await db.execute(organization_query)
+        organization = organization_result.unique().scalar_one_or_none()
+
+        if not organization:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
+
+        # Access control based on user role
+        if current_user.role not in ['admin', 'swapteam_member']:
+            if current_user.role == 'partner' and organization.created_by != current_user.email:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these MOU details')
+            elif current_user.role != 'partner':
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these MOU details')
+
+        # Gather all MOU details from the organization's projects and order by most recent
+        mou_details = []
+        for project in organization.projects:
+            mou_details.extend(project.mou_details)
+        mou_details = sorted(mou_details, key=lambda x: x.created_at, reverse=True)
+
+        total_items = len(mou_details)
+        mou_details_paginated = mou_details[(page - 1) * page_size:page * page_size]
+
+        total_pages = (total_items + page_size - 1) // page_size
+        paginated_response = PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            data=mou_details_paginated
+        )
+
+        return paginated_response
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
