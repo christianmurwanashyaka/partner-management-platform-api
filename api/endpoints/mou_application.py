@@ -40,7 +40,7 @@ async def create_mou_application(
         await db.commit()
         await db.refresh(new_mou_application)
 
-        file_path, filename = await generate_mou_action_plan(new_mou_application)
+        file_path, filename = await generate_mou_action_plan(new_mou_application, db)
 
         excel_document = Document(
             name=f"MOU Application Action Plan - {new_mou_application.id}",
