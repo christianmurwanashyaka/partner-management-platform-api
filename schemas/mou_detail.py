@@ -3,6 +3,7 @@ from typing import List, Optional
 import uuid
 from pydantic import BaseModel
 
+from schemas.document import DocumentRead
 from schemas.party import PartyRead
 from schemas.project import ProjectRead, ProjectList
 
@@ -21,6 +22,7 @@ class MouDetailRead(BaseModel):
     project: ProjectRead
     parties: List[PartyRead]
     duration: Optional[int]
+    documents: List[DocumentRead] = []
 
     class Config:
         from_attributes = True
