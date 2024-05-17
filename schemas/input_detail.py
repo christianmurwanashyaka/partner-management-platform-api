@@ -18,6 +18,12 @@ class InputDetailCreate(BaseModel):
         from_attributes = True
 
 
+class InputDetailUpdate(InputDetailCreate):
+
+    class Config:
+        from_attributes = True
+
+
 class InputDetailRead(BaseModel):
     uuid: uuid.UUID
     input_category: InputCategoryRead

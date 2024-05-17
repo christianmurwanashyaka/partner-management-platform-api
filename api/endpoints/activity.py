@@ -1,6 +1,8 @@
+from typing import List
+
 import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, delete
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -11,9 +13,10 @@ from db.models import OperationalZone, ActivityDomain
 from db.models.activity import Activity
 from db.models.input_detail import InputDetail
 from db.models.pagination import PaginatedResponse
-from db.models.user import User
-from schemas.activity import ActivityRead, ActivityCreate, ActivityList, OperationalZoneRead, ActivityDomainDetail
-from schemas.input_detail import InputDetailRead
+from db.models.user import User, UserRole
+from schemas.activity import ActivityRead, ActivityCreate, ActivityList, OperationalZoneRead, ActivityDomainDetail, \
+    ActivityUpdate, OperationalZoneUpdate, ActivityDomainUpdate
+from schemas.input_detail import InputDetailRead, InputDetailUpdate
 
 router = APIRouter()
 
@@ -97,6 +100,40 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
     return new_activity
 
 
+@router.patch('/{uuid}', response_model=ActivityRead, dependencies=[Depends(partner_access)])
+async def update_activity(
+        uuid: uuid.UUID,
+        activity_update: ActivityUpdate,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(Activity).where(Activity.uuid == uuid)
+        result = await db.execute(query)
+        activity = result.scalar_one_or_none()
+
+        if not activity:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Activity not found')
+
+        if activity.created_by != current_user.email and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+
+        for key, value in activity_update.dict(exclude_unset=True).items():
+            setattr(activity, key, value)
+
+        await db.commit()
+        await db.refresh(activity)
+
+        return activity
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update activity: {str(e)}"
+        )
+
+
 @router.get('/', response_model=PaginatedResponse[ActivityList])
 async def get_activities(
         page: int = 1,
@@ -125,6 +162,127 @@ async def get_activities(
     )
 
     return paginated_response
+
+
+@router.patch('/{uuid}/operational_zones', response_model=ActivityRead, dependencies=[Depends(partner_access)])
+async def update_activity_operational_zones(
+        uuid: uuid.UUID,
+        operational_zones: List[OperationalZoneUpdate],
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(Activity).where(Activity.uuid == uuid)
+        result = await db.execute(query)
+        activity = result.scalar_one_or_none()
+
+        if not activity:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Activity not found')
+
+        if activity.created_by != current_user.email and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+
+        await db.execute(delete(OperationalZone).where(OperationalZone.activity_id == uuid))
+
+        for zone_data in operational_zones:
+            new_zone = OperationalZone(
+                activity_id=uuid,
+                province=zone_data.province,
+                district=zone_data.district,
+                created_by=current_user.email
+            )
+            db.add(new_zone)
+
+        await db.commit()
+        await db.refresh(activity)
+
+        return activity
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.patch('/{uuid}/domains', response_model=ActivityRead, dependencies=[Depends(partner_access)])
+async def update_activity_domains(
+        uuid: uuid.UUID,
+        domains: List[ActivityDomainUpdate],
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(Activity).where(Activity.uuid == uuid)
+        result = await db.execute(query)
+        activity = result.scalar_one_or_none()
+
+        if not activity:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Activity not found')
+
+        if activity.created_by != current_user.email and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+
+        await db.execute(delete(ActivityDomain).where(ActivityDomain.activity_id == uuid))
+
+        for domain_data in domains:
+            new_domain = ActivityDomain(
+                activity_id=uuid,
+                domain_intervention_id=domain_data.domain_intervention_id,
+                sub_domain_id=domain_data.sub_domain_id,
+                created_by=current_user.email
+            )
+            db.add(new_domain)
+
+        await db.commit()
+        await db.refresh(activity)
+
+        return activity
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.patch('/{uuid}/input_details', response_model=ActivityRead, dependencies=[Depends(partner_access)])
+async def update_activity_input_details(
+        uuid: uuid.UUID,
+        input_details: List[InputDetailUpdate],
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(Activity).where(Activity.uuid == uuid)
+        result = await db.execute(query)
+        activity = result.scalar_one_or_none()
+
+        if not activity:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Activity not found')
+
+        if activity.created_by != current_user.email and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Not authorized to update this activity')
+
+        # Delete existing input details
+        await db.execute(delete(InputDetail).where(InputDetail.activity_id == uuid))
+
+        # Add new input details
+        for input_data in input_details:
+            new_input_detail = InputDetail(
+                activity_id=uuid,
+                input_category_id=input_data.input_category_id,
+                input_id=input_data.input_id,
+                budget=input_data.budget,
+                district=input_data.district,
+                province=input_data.province,
+                created_by=current_user.email
+            )
+            db.add(new_input_detail)
+
+        await db.commit()
+        await db.refresh(activity)
+
+        return activity
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get('/{uuid}', response_model=ActivityRead)
@@ -250,3 +408,93 @@ async def get_activity_operational_zones(
         total_pages=total_pages,
         data=operational_zones_list
     )
+
+
+@router.patch('/operational_zone/{uuid}', response_model=OperationalZoneRead, dependencies=[Depends(partner_access)])
+async def update_specific_operational_zone(
+        uuid: uuid.UUID,
+        zone_update: OperationalZoneUpdate,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(OperationalZone).where(OperationalZone.uuid == uuid)
+        result = await db.execute(query)
+        operational_zone = result.scalar_one_or_none()
+
+        if not operational_zone:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Operational zone not found')
+
+        if operational_zone.created_by != current_user.email and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Not authorized to update this operational zone')
+
+        for key, value in zone_update.dict(exclude_unset=True).items():
+            setattr(operational_zone, key, value)
+
+        await db.commit()
+        await db.refresh(operational_zone)
+
+        return operational_zone
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.patch('/domain/{uuid}', response_model=ActivityDomainDetail, dependencies=[Depends(partner_access)])
+async def update_specific_domain(
+        uuid: uuid.UUID,
+        domain_update: ActivityDomainUpdate,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(ActivityDomain).where(ActivityDomain.uuid == uuid)
+        result = await db.execute(query)
+        domain = result.scalar_one_or_none()
+
+        if not domain:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Domain not found')
+
+        if domain.created_by != current_user.email and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Not authorized to update this domain')
+
+        for key, value in domain_update.dict(exclude_unset=True).items():
+            setattr(domain, key, value)
+
+        await db.commit()
+        await db.refresh(domain)
+
+        return domain
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.patch('/input_detail/{uuid}', response_model=InputDetailRead, dependencies=[Depends(partner_access)])
+async def update_specific_input_detail(
+        uuid: uuid.UUID,
+        input_detail_update: InputDetailUpdate,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        query = select(InputDetail).where(InputDetail.uuid == uuid)
+        result = await db.execute(query)
+        input_detail = result.scalar_one_or_none()
+
+        if not input_detail:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Input detail not found')
+
+        if input_detail.created_by != current_user.email and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Not authorized to update this input detail')
+
+        for key, value in input_detail_update.dict(exclude_unset=True).items():
+            setattr(input_detail, key, value)
+
+        await db.commit()
+        await db.refresh(input_detail)
+
+        return input_detail
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

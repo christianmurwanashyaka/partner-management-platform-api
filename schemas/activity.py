@@ -17,6 +17,11 @@ class ActivityDomain(BaseModel):
         from_attributes = True
 
 
+class ActivityDomainUpdate(ActivityDomain):
+    class Config:
+        from_attributes = True
+
+
 class ActivityDomainDetail(BaseModel):
     domain_intervention: DomainInterventionList
     sub_domain: SubDomainRead
@@ -90,6 +95,25 @@ class ActivityRead(BaseModel):
     input_details: List[InputDetailRead]
     created_at: datetime
     created_by: str
+
+    class Config:
+        from_attributes = True
+
+
+class ActivityUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    implementer: Optional[str] = None
+    implementer_unit: Optional[str] = None
+    fiscal_year: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+    class Config:
+        from_attributes = True
+
+
+class OperationalZoneUpdate(OperationalZoneCreate):
 
     class Config:
         from_attributes = True
