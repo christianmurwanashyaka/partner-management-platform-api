@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import List
 
 import uuid
 from fastapi import APIRouter, Request, Depends, status, HTTPException
@@ -13,6 +14,7 @@ from db.models import User, MouDetail, MouApplication, Document, DocumentType, U
     Organization
 from db.models.mou_review import MouReviewDecision
 from helpers.db import get_first_item
+from schemas.comment import MouCommentRead
 from schemas.mou_application import MouApplicationRead, MouApplicationCreate, SimpleOrganizationRead, \
     MouApplicationOrganizationRead
 from schemas.mou_approval import MouApprovalRead, MouApprovalCreate
@@ -415,5 +417,33 @@ async def get_mou_application_reviews(
 
         return paginated_response
 
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get('/{uuid}/comments', response_model=List[MouCommentRead])
+async def get_application_comments(
+        uuid: uuid.UUID,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Fetch the MOU application to ensure it exists and the user has access
+        query = select(MouApplication).where(MouApplication.uuid == uuid)
+        result = await db.execute(query)
+        mou_application = result.scalar_one_or_none()
+
+        if not mou_application:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+
+        if current_user.role not in ['admin', 'swapteam_member'] and mou_application.created_by != current_user.email:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this MOU application')
+
+        # Fetch the comments related to the MOU application
+        comments_query = select(MouComment).where(MouComment.mou_application_id == uuid)
+        comments_result = await db.execute(comments_query)
+        comments = comments_result.scalars().all()
+
+        return comments
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
