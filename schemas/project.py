@@ -71,3 +71,17 @@ class ProjectRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    budget_type_id: Optional[uuid.UUID] = None
+    budget: Optional[float] = None
+    currency: Optional[str] = None
+    funding_unit_id: Optional[uuid.UUID] = None
+    funding_source_id: Optional[uuid.UUID] = None
+    goals: Optional[List[GoalCreate]] = None
+
+    class Config:
+        from_attributes = True

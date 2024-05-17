@@ -12,10 +12,10 @@ from db.models import Activity
 from db.models.organization import Organization
 from db.models.pagination import PaginatedResponse
 from db.models.project import Project, Goal
-from db.models.user import User
+from db.models.user import User, UserRole
 from helpers.db import get_all_items, get_items_by_criteria
 from schemas.activity import ActivityList
-from schemas.project import ProjectRead, ProjectCreate
+from schemas.project import ProjectRead, ProjectCreate, ProjectUpdate
 
 router = APIRouter()
 
@@ -56,6 +56,64 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
             detail=str(e)
         )
     return new_project
+
+
+@router.patch('/{uuid}', response_model=ProjectRead, dependencies=[Depends(partner_access)])
+async def update_project(
+        uuid: uuid.UUID,
+        project_update: ProjectUpdate,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Fetch the existing project
+        query = select(Project).where(Project.uuid == uuid)
+        result = await db.execute(query)
+        project = result.scalar_one_or_none()
+
+        if not project:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Project not found')
+
+        if project.created_by != current_user.email and current_user.role != UserRole.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Not authorized to update this project')
+
+        # Update the project fields
+        for key, value in project_update.dict(exclude_unset=True).items():
+            if key != 'goals':
+                setattr(project, key, value)
+
+        # Handle goal updates separately
+        if project_update.goals is not None:
+            existing_goals = {goal.uuid: goal for goal in project.goals}
+            updated_goals = {goal_data.uuid: goal_data for goal_data in project_update.goals if goal_data.uuid}
+
+            # Update existing goals or add new ones
+            for goal_data in project_update.goals:
+                if goal_data.uuid in existing_goals:
+                    goal = existing_goals[goal_data.uuid]
+                    for goal_key, goal_value in goal_data.dict(exclude_unset=True).items():
+                        setattr(goal, goal_key, goal_value)
+                else:
+                    new_goal = Goal(
+                        name=goal_data.name,
+                        description=goal_data.description,
+                        project_id=project.uuid,
+                        created_by=current_user.email
+                    )
+                    db.add(new_goal)
+
+            # Remove goals that are not in the updated list
+            for goal_uuid in set(existing_goals) - set(updated_goals):
+                goal = existing_goals[goal_uuid]
+                await db.delete(goal)
+
+        await db.commit()
+        await db.refresh(project)
+
+        return project
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get('/', response_model=PaginatedResponse[ProjectRead])
