@@ -2,6 +2,7 @@ from typing import Optional, List
 
 import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, File, UploadFile
+from sqlalchemy import func
 from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
@@ -10,13 +11,14 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.access_control import partner_access, admin_access, swapteam_member_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
-from db.models import Project, MouApplication, MouDetail
+from db.models import Project, MouApplication, MouDetail, Mou
 from db.models.organization import Organization
 from db.models.document import Document, DocumentType
 from db.models.pagination import PaginatedResponse
 from db.models.user import User, UserRole
 from helpers.exceptions import handle_integrity_error
 from schemas.activity import ActivityRead
+from schemas.mou import MouRead
 from schemas.mou_application import MouApplicationRead, MouApplicationOrganizationRead, SimpleOrganizationRead
 from schemas.mou_detail import MouDetailRead
 from schemas.organization import OrganizationRead
@@ -466,5 +468,51 @@ async def get_organization_mou_details(
 
         return paginated_response
 
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get('/{organization_uuid}/mous', response_model=PaginatedResponse[MouRead])
+async def get_organization_mous(
+        organization_uuid: uuid.UUID,
+        page: int = 1,
+        page_size: int = 10,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Check if the organization exists
+        organization_query = select(Organization).where(Organization.uuid == organization_uuid)
+        organization_result = await db.execute(organization_query)
+        organization = organization_result.scalar_one_or_none()
+
+        if not organization:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
+
+        # Authorization check
+        if current_user.role != 'partner' or organization.created_by != current_user.email:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this resource')
+
+        # Fetch the total number of MOUs related to the organization
+        total_items_query = select(func.count(Mou.uuid)).join(MouApplication).join(MouDetail).where(
+            MouDetail.project.has(Project.organization_id == organization_uuid)
+        )
+        total_items = (await db.execute(total_items_query)).scalar_one()
+
+        # Fetch the paginated MOUs related to the organization
+        query = select(Mou).join(MouApplication).join(MouDetail).where(
+            MouDetail.project.has(Project.organization_id == organization_uuid)
+        ).options(joinedload(Mou.documents)).offset((page - 1) * page_size).limit(page_size)
+        result = await db.execute(query)
+        mous = result.scalars().all()
+
+        total_pages = (total_items + page_size - 1) // page_size
+        return PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            data=mous
+        )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
