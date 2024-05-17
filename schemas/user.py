@@ -23,6 +23,8 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = None
     phone_number: Optional[str] = None
     level: Optional[SwapTeamLevel] = None
+    password: Optional[str] = None
+    email: Optional[EmailStr] = None
 
 
 class UserInDB(UserBase):
