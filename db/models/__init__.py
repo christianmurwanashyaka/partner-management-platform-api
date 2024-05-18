@@ -19,5 +19,5 @@ from .mou_comment import MouComment
 from .mou_review import MouReview
 from .mou import Mou
 from .activity import Activity
-from .user import User, UserRole, SwapTeamLevel
+from .user import User, UserRole, MOHStaffLevel
 from .pagination import PaginatedResponse

@@ -123,7 +123,7 @@ async def get_projects(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    if current_user.role in ['admin', 'swapteam_member']:
+    if current_user.role in ['admin', 'moh_staff']:
         paginated_response = await get_all_items(db, Project, page=page, page_size=page_size, include=['organization'])
     elif current_user.role == 'partner':
         query = select(Project).join(Organization).filter(Organization.created_by == current_user.email)
@@ -144,12 +144,13 @@ async def get_projects(
 
 
 # TODO: SHOULD VALIDATE THAT PROJECT EXISTS FIRST
-@router.get('/{uuid}/activities/', response_model=PaginatedResponse[ActivityList], dependencies=[Depends(partner_access)])
+@router.get('/{uuid}/activities/', response_model=PaginatedResponse[ActivityList])
 async def get_project_activities(
         uuid: uuid.UUID,
         page: int = 1,
         page_size: int = 100,
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     query = (select(Activity)
              .where(Activity.project_id == uuid)
@@ -196,7 +197,7 @@ async def get_project(
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Project not found')
 
         # Access control based on user role
-        if current_user.role in ['admin', 'swapteam_member']:
+        if current_user.role in ['admin', 'moh_staff']:
             return project
         elif current_user.role == 'partner' and project.organization.created_by == current_user.email:
             return project

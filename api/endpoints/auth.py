@@ -5,7 +5,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models.organization import Organization
-from db.models.user import User, UserRole, SwapTeamLevel
+from db.models.user import User, UserRole, MOHStaffLevel
 from helpers.db import get_first_item, check_if_exists, get_items_by_criteria
 from schemas.user import UserCreate, Token, LoginRequest, UserProfile, SignupResponse, UserOrganization
 from utils.security import get_password_hash, verify_password, create_access_token
@@ -18,11 +18,11 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
     if await check_if_exists(User, db, email=user.email):
         raise HTTPException(status.HTTP_409_CONFLICT, detail='User with this email already exists')
 
-    if user.role == UserRole.SWAPTEAM_MEMBER:
+    if user.role == UserRole.MOH_STAFF:
         if user.level is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Level is required for Swap Team members')
-        if user.level not in SwapTeamLevel:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Invalid level for Swap Team members')
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Level is required for MOH Staff')
+        if user.level not in MOHStaffLevel:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Invalid level for MOH Staff')
 
     hashed_password = get_password_hash(user.password)
     db_user = User(

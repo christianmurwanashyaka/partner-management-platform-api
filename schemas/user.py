@@ -2,7 +2,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from uuid import UUID
 
-from db.models.user import UserRole, SwapTeamLevel
+from db.models.user import UserRole, MOHStaffLevel
 
 
 class UserBase(BaseModel):
@@ -15,14 +15,14 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
     phone_number: Optional[str] = None
-    level: Optional[SwapTeamLevel] = None
+    level: Optional[MOHStaffLevel] = None
 
 
 class UserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone_number: Optional[str] = None
-    level: Optional[SwapTeamLevel] = None
+    level: Optional[MOHStaffLevel] = None
     password: Optional[str] = None
     email: Optional[EmailStr] = None
 
@@ -44,7 +44,7 @@ class Token(BaseToken):
     first_name: str
     last_name: str
     role: str
-    level: Optional[SwapTeamLevel] = None
+    level: Optional[MOHStaffLevel] = None
 
 
 class TokenData(BaseModel):
@@ -68,7 +68,7 @@ class UserProfile(BaseModel):
     last_name: str
     email: EmailStr
     role: UserRole
-    level: Optional[SwapTeamLevel] = None
+    level: Optional[MOHStaffLevel] = None
     organizations: Optional[List[UserOrganization]] = None
     phone_number: Optional[str] = None
 

@@ -156,7 +156,7 @@ async def update_mou_detail(
 @router.get('/', response_model=List[MouDetailRead])
 async def get_mou_details(request: Request, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        if current_user.role in ['admin', 'swapteam_member']:
+        if current_user.role in ['admin', 'moh_staff']:
             query = select(MouDetail)
         elif current_user.role == 'partner':
             query = select(MouDetail).where(MouDetail.created_by == current_user.email)
@@ -182,7 +182,7 @@ async def get_mou_detail(uuid: uuid.UUID, db: AsyncSession = Depends(get_db), cu
         if not mou_detail:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU detail not found')
 
-        if current_user.role in ['admin', 'swapteam_member']:
+        if current_user.role in ['admin', 'moh_staff']:
             return mou_detail
         elif current_user.role == 'partner' and mou_detail.created_by == current_user.email:
             return mou_detail

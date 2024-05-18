@@ -141,7 +141,7 @@ async def get_activities(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    if current_user.role in ['admin', 'swapteam_member']:
+    if current_user.role in ['admin', 'moh_staff']:
         query = select(Activity).order_by(Activity.created_at.desc())
         total_items = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
         activities = (await db.execute(query.offset((page - 1) * page_size).limit(page_size))).scalars().all()
@@ -303,7 +303,7 @@ async def get_activity(
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Activity not found')
 
         # Access control based on user role
-        if current_user.role in ['admin', 'swapteam_member']:
+        if current_user.role in ['admin', 'moh_staff']:
             return activity
         elif current_user.role == 'partner' and activity.created_by == current_user.email:
             return activity
