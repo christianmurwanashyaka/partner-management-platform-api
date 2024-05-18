@@ -30,6 +30,6 @@ class MouReview(CommonBaseModel, table=True):
         self.validate_decision()
 
     def validate_decision(self):
-        from db.models.user import SwapTeamLevel
-        if self.user.level not in [SwapTeamLevel.PARTNER_COORDINATOR, SwapTeamLevel.LEGAL_ADVISOR]:
+        from db.models.user import MOHStaffLevel
+        if self.user.level not in [MOHStaffLevel.PARTNER_COORDINATOR, MOHStaffLevel.LEGAL_ADVISOR]:
             raise ValueError('Only Partner Coordinator or Legal Advisor can make review decisions')
