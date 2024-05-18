@@ -11,10 +11,10 @@ from db.models.base import CommonBaseModel
 class UserRole(str, Enum):
     PARTNER = "partner"
     ADMIN = "admin"
-    SWAPTEAM_MEMBER = "swapteam_member"
+    MOH_STAFF = "moh_staff"
 
 
-class SwapTeamLevel(str, Enum):
+class MOHStaffLevel(str, Enum):
     PARTNER_COORDINATOR = "partner_coordinator"
     TECHNICAL_DEPARTMENT = "technical_department"
     LEGAL_ADVISOR = "legal_advisor"
@@ -31,5 +31,5 @@ class User(CommonBaseModel, table=True):
     first_name: str
     last_name: str
     role: UserRole
-    level: Optional[SwapTeamLevel] = None
+    level: Optional[MOHStaffLevel] = None
     phone_number: Optional[str] = None

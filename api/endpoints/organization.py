@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from api.dependencies.access_control import partner_access, admin_access, swapteam_member_access
+from api.dependencies.access_control import partner_access, admin_access, moh_staff_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import Project, MouApplication, MouDetail, Mou
@@ -241,7 +241,7 @@ async def update_organization(
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get('/', response_model=PaginatedResponse[OrganizationRead], dependencies=[Depends(swapteam_member_access)])
+@router.get('/', response_model=PaginatedResponse[OrganizationRead], dependencies=[Depends(moh_staff_access)])
 async def get_organizations(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, Organization, page=page, page_size=page_size)
 
@@ -254,7 +254,7 @@ async def get_organization(uuid: str, db: AsyncSession = Depends(get_db), curren
     if not organization:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
 
-    if current_user.role in ['admin', 'swapteam_member']:
+    if current_user.role in ['admin', 'moh_staff']:
         return organization
     elif current_user.role == 'partner' and organization.created_by == current_user.email:
         return organization
@@ -288,7 +288,7 @@ async def get_organization_mou_applications(uuid: uuid.UUID, db: AsyncSession = 
         mou_applications = mou_applications.scalars().all()
 
         # Filter MOU applications based on the user's role
-        if current_user.role == 'admin' or current_user.role == 'swapteam_member':
+        if current_user.role == 'admin' or current_user.role == 'moh_staff':
             filtered_mou_applications = mou_applications
         elif current_user.role == 'partner':
             filtered_mou_applications = [app for app in mou_applications if app.created_by == current_user.email]
@@ -338,7 +338,7 @@ async def get_organization_projects(
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
 
         # Access control based on user role
-        if current_user.role not in ['admin', 'swapteam_member']:
+        if current_user.role not in ['admin', 'moh_staff']:
             if current_user.role == 'partner' and organization.created_by != current_user.email:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these projects')
             elif current_user.role != 'partner':
@@ -385,7 +385,7 @@ async def get_organization_activities(
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
 
         # Access control based on user role
-        if current_user.role not in ['admin', 'swapteam_member']:
+        if current_user.role not in ['admin', 'moh_staff']:
             if current_user.role == 'partner' and organization.created_by != current_user.email:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these activities')
             elif current_user.role != 'partner':
@@ -436,7 +436,7 @@ async def get_organization_mou_details(
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
 
         # Access control based on user role
-        if current_user.role not in ['admin', 'swapteam_member']:
+        if current_user.role not in ['admin', 'moh_staff']:
             if current_user.role == 'partner' and organization.created_by != current_user.email:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these MOU details')
             elif current_user.role != 'partner':

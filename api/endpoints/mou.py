@@ -18,7 +18,7 @@ async def get_mous(
         current_user: User = Depends(get_current_user)
 ):
     try:
-        if current_user.role not in ['admin', 'swapteam_member']:
+        if current_user.role not in ['admin', 'moh_staff']:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this resource')
 
         mous = await get_all_items(db, Mou, page=page, page_size=page_size)

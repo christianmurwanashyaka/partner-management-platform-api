@@ -6,10 +6,10 @@ from fastapi import APIRouter, Request, Depends, status, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
-from api.dependencies.access_control import partner_access, swapteam_member_access
+from api.dependencies.access_control import partner_access, moh_staff_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
-from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, SwapTeamLevel, \
+from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, MOHStaffLevel, \
     MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou, MouReview, PaginatedResponse, \
     Organization, Activity, ActivityDomain
 from db.models.mou_review import MouReviewDecision
@@ -75,7 +75,7 @@ async def get_mou_applications(
         current_user: User = Depends(get_current_user)
 ):
     try:
-        if current_user.role in ['admin', 'swapteam_member']:
+        if current_user.role in ['admin', 'moh_staff']:
             query = select(MouApplication).options(
                 joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
                 joinedload(MouApplication.documents),
@@ -154,7 +154,7 @@ async def get_mou_application(
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
-        if current_user.role in ['admin', 'swapteam_member'] or (current_user.role == 'partner' and mou_application.created_by == current_user.email):
+        if current_user.role in ['admin', 'moh_staff'] or (current_user.role == 'partner' and mou_application.created_by == current_user.email):
             organization = mou_application.mou_detail.project.organization
 
             # Collecting all related documents
@@ -180,11 +180,11 @@ async def get_mou_application(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-@router.post('/{uuid}/decision', response_model=MouApprovalRead, dependencies=[Depends(swapteam_member_access)])
+@router.post('/{uuid}/decision', response_model=MouApprovalRead, dependencies=[Depends(moh_staff_access)])
 async def add_approval_decision(uuid: str, request: Request, approval_data: MouApprovalCreate, db: AsyncSession = Depends(get_db)):
     user = request.state.user
 
-    if user.role != UserRole.SWAPTEAM_MEMBER:
+    if user.role != UserRole.MOH_STAFF:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only swap team members are allowed to make approval decisions')
 
     try:
@@ -195,15 +195,15 @@ async def add_approval_decision(uuid: str, request: Request, approval_data: MouA
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
-        if user.level == SwapTeamLevel.PARTNER_COORDINATOR:
+        if user.level == MOHStaffLevel.PARTNER_COORDINATOR:
             if approval_data.decision not in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION]:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid decision for Partner Coordinator')
-        elif user.level == SwapTeamLevel.TECHNICAL_DEPARTMENT:
+        elif user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Technical Department cannot make approval decisions')
-        elif user.level in [SwapTeamLevel.LEGAL_ADVISOR, SwapTeamLevel.HOD, SwapTeamLevel.PS]:
+        elif user.level in [MOHStaffLevel.LEGAL_ADVISOR, MOHStaffLevel.HOD, MOHStaffLevel.PS]:
             if approval_data.decision not in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION, MouApprovalDecision.REQUEST_MODIFICATION]:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'{user.level} can only recommend for approval, recommend for rejection, or request modification')
-        elif user.level in [SwapTeamLevel.MINISTER_OF_STATE, SwapTeamLevel.MINISTER]:
+        elif user.level in [MOHStaffLevel.MINISTER_OF_STATE, MOHStaffLevel.MINISTER]:
             if approval_data.decision not in [MouApprovalDecision.APPROVE, MouApprovalDecision.REJECT]:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'{user.level} can only approve or reject')
         new_approval = MouApproval(decision=approval_data.decision, approver_id=user.uuid, approver=user, mou_application_id=uuid, created_by=user.email)
@@ -264,10 +264,10 @@ async def add_approval_decision(uuid: str, request: Request, approval_data: MouA
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.patch('/{uuid}/start_review', response_model=MouApplicationRead, dependencies=[Depends(swapteam_member_access)])
+@router.patch('/{uuid}/start_review', response_model=MouApplicationRead, dependencies=[Depends(moh_staff_access)])
 async def start_review(uuid: str, request: Request, db: AsyncSession = Depends(get_db)):
     user = request.state.user
-    if user.role != UserRole.SWAPTEAM_MEMBER:
+    if user.role != UserRole.MOH_STAFF:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
     try:
@@ -286,13 +286,13 @@ async def start_review(uuid: str, request: Request, db: AsyncSession = Depends(g
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post('{uuid}/review', response_model=MouReviewRead, dependencies=[Depends(swapteam_member_access)])
+@router.post('{uuid}/review', response_model=MouReviewRead, dependencies=[Depends(moh_staff_access)])
 async def add_review_decision(uuid: str, request: Request, review_data: MouReviewCreate, db: AsyncSession = Depends(get_db)):
     user = request.state.user
 
-    if user.role != UserRole.SWAPTEAM_MEMBER:
+    if user.role != UserRole.MOH_STAFF:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only swap team members are allowed to make review decisions')
-    if user.level not in [SwapTeamLevel.PARTNER_COORDINATOR, SwapTeamLevel.LEGAL_ADVISOR]:
+    if user.level not in [MOHStaffLevel.PARTNER_COORDINATOR, MOHStaffLevel.LEGAL_ADVISOR]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only Partner Coordinator and Legal Advisor are allowed to make review decisions')
 
     try:
@@ -436,7 +436,7 @@ async def get_application_comments(
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
-        if current_user.role not in ['admin', 'swapteam_member'] and mou_application.created_by != current_user.email:
+        if current_user.role not in ['admin', 'moh_staff'] and mou_application.created_by != current_user.email:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this MOU application')
 
         # Fetch the comments related to the MOU application
