@@ -26,6 +26,9 @@ class ActivityDomainDetail(BaseModel):
     domain_intervention: DomainInterventionList
     sub_domain: SubDomainRead
 
+    class Config:
+        from_attributes = True
+
 
 class OperationalZoneCreate(BaseModel):
     province: str
