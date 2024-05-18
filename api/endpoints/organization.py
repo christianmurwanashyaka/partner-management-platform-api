@@ -263,16 +263,10 @@ async def get_organization(uuid: str, db: AsyncSession = Depends(get_db), curren
 
 
 @router.get('/{uuid}/mou_applications', response_model=List[MouApplicationOrganizationRead])
-async def get_organization_mou_applications(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_organization_mou_applications(uuid: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        # Ensure the organization_id is a valid UUID
-        try:
-            organization_uuid = uuid.UUID(uuid)
-        except ValueError:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Invalid organization ID')
-
         # Fetch the organization
-        query = select(Organization).filter(Organization.uuid == organization_uuid)
+        query = select(Organization).filter(Organization.uuid == uuid)
         organization = await db.execute(query)
         organization = organization.scalar_one_or_none()
 
@@ -280,7 +274,7 @@ async def get_organization_mou_applications(uuid: str, db: AsyncSession = Depend
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
 
         # Fetch projects for the organization
-        query = select(Project).filter(Project.organization_id == organization_uuid)
+        query = select(Project).filter(Project.organization_id == uuid)
         projects = await db.execute(query)
         projects = projects.scalars().all()
 

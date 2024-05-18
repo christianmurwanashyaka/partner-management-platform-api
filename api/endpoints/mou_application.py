@@ -11,9 +11,10 @@ from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, SwapTeamLevel, \
     MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou, MouReview, PaginatedResponse, \
-    Organization
+    Organization, Activity, ActivityDomain
 from db.models.mou_review import MouReviewDecision
 from helpers.db import get_first_item
+from schemas.activity import ActivityDomainDetail
 from schemas.comment import MouCommentRead
 from schemas.mou_application import MouApplicationRead, MouApplicationCreate, SimpleOrganizationRead, \
     MouApplicationOrganizationRead
@@ -178,7 +179,6 @@ async def get_mou_application(
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
 
 @router.post('/{uuid}/decision', response_model=MouApprovalRead, dependencies=[Depends(swapteam_member_access)])
 async def add_approval_decision(uuid: str, request: Request, approval_data: MouApprovalCreate, db: AsyncSession = Depends(get_db)):
