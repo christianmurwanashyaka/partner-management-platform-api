@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 
 import uuid
@@ -6,6 +7,7 @@ from pydantic import BaseModel, EmailStr
 from db.models import MouApplicationStatus
 from schemas.document import DocumentRead
 from schemas.mou_detail import MouDetailRead, ApplicationMouDetailRead
+from schemas.user import UserProfile
 
 
 class MouApplicationCreate(BaseModel):
@@ -15,12 +17,23 @@ class MouApplicationCreate(BaseModel):
         from_attributes = True
 
 
-# TODO: ADD APPROVALS, COMMENTS AND REVIEWS FIELDS
+class MouApplicationBasicCommentRead(BaseModel):
+    uuid: uuid.UUID
+    content: str
+    user: UserProfile
+    created_at: datetime
+    created_by: str
+
+    class Config:
+        from_attributes = True
+
+
 class MouApplicationRead(BaseModel):
     uuid: uuid.UUID
     status: MouApplicationStatus
     mou_detail: MouDetailRead
     documents: List[DocumentRead] = []
+    comments: List[MouApplicationBasicCommentRead] = []
 
     class Config:
         from_attributes = True

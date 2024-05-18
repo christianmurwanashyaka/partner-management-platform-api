@@ -21,3 +21,6 @@ class MouComment(CommonBaseModel, table=True):
 
     mou_review_id: Optional[uuid.UUID] = Field(foreign_key='mou_review.uuid', nullable=True)
     mou_review: Optional['MouReview'] = Relationship(back_populates='comments', sa_relationship_kwargs={'lazy': 'selectin'})
+
+    mou_approval_or_review_id: Optional[uuid.UUID] = Field(foreign_key='mou_approval_or_review.uuid', nullable=True)
+    mou_approval_or_review: Optional['MouApprovalOrReview'] = Relationship(back_populates='comments', sa_relationship_kwargs={'lazy': 'selectin'})
