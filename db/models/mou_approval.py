@@ -5,7 +5,7 @@ import uuid
 from sqlmodel import Field, Relationship
 
 from .base import CommonBaseModel
-from .user import SwapTeamLevel
+from .user import MOHStaffLevel
 
 
 class MouApprovalDecision(str, Enum):
@@ -30,14 +30,14 @@ class MouApproval(CommonBaseModel, table=True):
         self.validate_decision()
 
     def validate_decision(self):
-        if self.approver.role == SwapTeamLevel.PARTNER_COORDINATOR:
+        if self.approver.role == MOHStaffLevel.PARTNER_COORDINATOR:
             if self.decision not in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION]:
                 raise ValueError('The decision must be either RECOMMEND_APPROVAL or RECOMMEND_REJECTION')
-        elif self.approver.role == SwapTeamLevel.TECHNICAL_DEPARTMENT:
+        elif self.approver.role == MOHStaffLevel.TECHNICAL_DEPARTMENT:
             raise ValueError(f'Technical department cannot make approval decisions')
-        elif self.approver.role in [SwapTeamLevel.LEGAL_ADVISOR, SwapTeamLevel.HOD, SwapTeamLevel.PS]:
+        elif self.approver.role in [MOHStaffLevel.LEGAL_ADVISOR, MOHStaffLevel.HOD, MOHStaffLevel.PS]:
             if self.decision not in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION, MouApprovalDecision.REQUEST_MODIFICATION]:
                 raise ValueError(f"{self.approver.role} can only recommend for approval, recommend for rejection, or request modification.")
-        elif self.approver.role in [SwapTeamLevel.MINISTER_OF_STATE, SwapTeamLevel.MINISTER]:
+        elif self.approver.role in [MOHStaffLevel.MINISTER_OF_STATE, MOHStaffLevel.MINISTER]:
             if self.decision not in [MouApprovalDecision.APPROVE, MouApprovalDecision.REJECT]:
                 raise ValueError(f"{self.approver.role} can only approve or reject.")
