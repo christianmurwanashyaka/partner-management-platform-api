@@ -37,6 +37,25 @@ async def create_party(request: Request, party_data: PartyCreate, db: AsyncSessi
     return new_party
 
 
+@router.get('/{uuid}', response_model=PartyRead)
+async def get_party(uuid: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        query = select(Party).where(Party.uuid == uuid)
+        result = await db.execute(query)
+        party = result.scalar_one_or_none()
+
+        if not party:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Party not found')
+
+        return party
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
 @router.get('/', response_model=List[PartyRead], dependencies=[Depends(partner_access)])
 async def get_user_parties(request: Request, db: AsyncSession = Depends(get_db)):
     user = request.state.user.email
