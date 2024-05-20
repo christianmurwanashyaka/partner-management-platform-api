@@ -21,4 +21,5 @@ from .mou_review import MouReview, MouReviewDecision
 from .mou import Mou
 from .activity import Activity
 from .user import User, UserRole, MOHStaffLevel
+from .notification import Notification
 from .pagination import PaginatedResponse

@@ -1,8 +1,8 @@
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import EmailStr
-from sqlmodel import Field
+from sqlmodel import Field, Relationship
 import sqlalchemy as sa
 
 from db.models.base import CommonBaseModel
@@ -33,3 +33,4 @@ class User(CommonBaseModel, table=True):
     role: UserRole
     level: Optional[MOHStaffLevel] = None
     phone_number: Optional[str] = None
+    notifications: Optional[List['Notification']] = Relationship(back_populates='recipient', sa_relationship_kwargs={'lazy': 'selectin'})
