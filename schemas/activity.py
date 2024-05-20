@@ -58,9 +58,9 @@ class ActivityCreate(BaseModel):
     implementer: str
     implementer_unit: str
     fiscal_year: str
-    operational_zones: List[OperationalZoneCreate]
     domains: List[ActivityDomain]
     input_details: List[InputDetailCreate]
+    # operational_zones: List[OperationalZoneCreate]
 
     class Config:
         from_attributes = True
@@ -76,8 +76,8 @@ class ActivityList(BaseModel):
     input_details: List[InputDetailRead]
     start_date: date
     end_date: date
-    operational_zones: List[OperationalZoneRead]
     domains: List[ActivityDomainDetail]
+    # operational_zones: List[OperationalZoneRead]
 
     class Config:
         from_attributes = True
@@ -93,11 +93,11 @@ class ActivityRead(BaseModel):
     fiscal_year: str
     start_date: date
     end_date: date
-    operational_zones: List[OperationalZoneRead]
     domains: List[ActivityDomainDetail]
     input_details: List[InputDetailRead]
     created_at: datetime
     created_by: str
+    # operational_zones: List[OperationalZoneRead]
 
     class Config:
         from_attributes = True

@@ -55,17 +55,17 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
         db.add_all(activity_domains)
 
         # Handle operational zones
-        operational_zones = []
-        for zone_data in activity.operational_zones:
-            new_zone = OperationalZone(
-                activity_id=new_activity.uuid,
-                province=zone_data.province,
-                district=zone_data.district,
-                created_by=user
-            )
-            print(f"Creating operational zone with UUID: {new_zone.uuid}, activity_id: {new_zone.activity_id}")
-            operational_zones.append(new_zone)
-        db.add_all(operational_zones)
+        # operational_zones = []
+        # for zone_data in activity.operational_zones:
+        #     new_zone = OperationalZone(
+        #         activity_id=new_activity.uuid,
+        #         province=zone_data.province,
+        #         district=zone_data.district,
+        #         created_by=user
+        #     )
+        #     print(f"Creating operational zone with UUID: {new_zone.uuid}, activity_id: {new_zone.activity_id}")
+        #     operational_zones.append(new_zone)
+        # db.add_all(operational_zones)
 
         # Handle input details
         input_details = []
@@ -87,8 +87,8 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
 
         # Additional logging to verify related entities
         print(f"Activity domains added: {activity_domains}")
-        print(f"Operational zones added: {operational_zones}")
         print(f"Input details added: {input_details}")
+        # print(f"Operational zones added: {operational_zones}")
 
     except Exception as e:
         await db.rollback()
@@ -103,23 +103,65 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
 @router.patch('/{uuid}', response_model=ActivityRead, dependencies=[Depends(partner_access)])
 async def update_activity(
         uuid: uuid.UUID,
-        activity_update: ActivityUpdate,
+        activity_update: ActivityCreate,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
     try:
-        query = select(Activity).where(Activity.uuid == uuid)
-        result = await db.execute(query)
-        activity = result.scalar_one_or_none()
+        query = select(Activity).options(
+            joinedload(Activity.domains),
+            joinedload(Activity.input_details)
+        ).where(Activity.uuid == uuid)
 
-        if not activity:
+        result = await db.execute(query)
+        activity_list = result.scalars().unique().all()
+
+        if not activity_list:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Activity not found')
+
+        activity = activity_list[0]
 
         if activity.created_by != current_user.email and current_user.role != UserRole.ADMIN:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
         for key, value in activity_update.dict(exclude_unset=True).items():
-            setattr(activity, key, value)
+            if key not in ["domains", "input_details"]:
+                setattr(activity, key, value)
+
+        # Update domains
+        if activity_update.domains is not None:
+            # Delete existing domains
+            await db.execute(delete(ActivityDomain).where(ActivityDomain.activity_id == activity.uuid))
+            # Add new domains
+            new_domains = [
+                ActivityDomain(
+                    activity_id=activity.uuid,
+                    domain_intervention_id=domain.domain_intervention_id,
+                    sub_domain_id=domain.sub_domain_id,
+                    created_by=current_user.email
+                )
+                for domain in activity_update.domains
+            ]
+            db.add_all(new_domains)
+
+        # Update input details
+        if activity_update.input_details is not None:
+            # Delete existing input details
+            await db.execute(delete(InputDetail).where(InputDetail.activity_id == activity.uuid))
+            # Add new input details
+            new_input_details = [
+                InputDetail(
+                    activity_id=activity.uuid,
+                    input_category_id=input_detail.input_category_id,
+                    input_id=input_detail.input_id,
+                    budget=input_detail.budget,
+                    district=input_detail.district,
+                    province=input_detail.province,
+                    created_by=current_user.email
+                )
+                for input_detail in activity_update.input_details
+            ]
+            db.add_all(new_input_details)
 
         await db.commit()
         await db.refresh(activity)
