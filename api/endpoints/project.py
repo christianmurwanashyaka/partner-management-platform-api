@@ -1,6 +1,6 @@
 import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status
-from sqlalchemy import func
+from sqlalchemy import func, delete
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload, joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -66,13 +66,18 @@ async def update_project(
         current_user: User = Depends(get_current_user)
 ):
     try:
-        # Fetch the existing project
-        query = select(Project).where(Project.uuid == uuid)
-        result = await db.execute(query)
-        project = result.scalar_one_or_none()
+        # Fetch the existing project with eager loading for goals
+        query = select(Project).options(
+            joinedload(Project.goals)
+        ).where(Project.uuid == uuid)
 
-        if not project:
+        result = await db.execute(query)
+        project_list = result.scalars().unique().all()
+
+        if not project_list:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Project not found')
+
+        project = project_list[0]
 
         if project.created_by != current_user.email and current_user.role != UserRole.ADMIN:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Not authorized to update this project')
@@ -82,30 +87,21 @@ async def update_project(
             if key != 'goals':
                 setattr(project, key, value)
 
-        # Handle goal updates separately
+        # Update goals
         if project_update.goals is not None:
-            existing_goals = {goal.uuid: goal for goal in project.goals}
-            updated_goals = {goal_data.uuid: goal_data for goal_data in project_update.goals if goal_data.uuid}
-
-            # Update existing goals or add new ones
-            for goal_data in project_update.goals:
-                if goal_data.uuid in existing_goals:
-                    goal = existing_goals[goal_data.uuid]
-                    for goal_key, goal_value in goal_data.dict(exclude_unset=True).items():
-                        setattr(goal, goal_key, goal_value)
-                else:
-                    new_goal = Goal(
-                        name=goal_data.name,
-                        description=goal_data.description,
-                        project_id=project.uuid,
-                        created_by=current_user.email
-                    )
-                    db.add(new_goal)
-
-            # Remove goals that are not in the updated list
-            for goal_uuid in set(existing_goals) - set(updated_goals):
-                goal = existing_goals[goal_uuid]
-                await db.delete(goal)
+            # Delete existing goals
+            await db.execute(delete(Goal).where(Goal.project_id == project.uuid))
+            # Add new goals
+            new_goals = [
+                Goal(
+                    project_id=project.uuid,
+                    name=goal.name,
+                    description=goal.description,
+                    created_by=current_user.email
+                )
+                for goal in project_update.goals
+            ]
+            db.add_all(new_goals)
 
         await db.commit()
         await db.refresh(project)
