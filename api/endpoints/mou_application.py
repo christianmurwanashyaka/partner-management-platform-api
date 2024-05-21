@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 import uuid
 from fastapi import APIRouter, Request, Depends, status, HTTPException
@@ -12,7 +12,7 @@ from db.database import get_db
 from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, MOHStaffLevel, \
     MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou, MouReview, PaginatedResponse, \
     Organization, Activity, ActivityDomain
-from db.models.mou_approval_or_review import MouApprovalOrReview
+from db.models.mou_approval_or_review import MouApprovalOrReview, MouApprovalOrReviewDecision
 from db.models.mou_review import MouReviewDecision
 from helpers.db import get_first_item
 from schemas.activity import ActivityDomainDetail
@@ -198,94 +198,94 @@ async def get_mou_application(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post('/{uuid}/decision', response_model=MouApprovalRead, dependencies=[Depends(moh_staff_access)])
-async def add_approval_decision(uuid: str, request: Request, approval_data: MouApprovalCreate, db: AsyncSession = Depends(get_db)):
-    user = request.state.user
-
-    if user.role != UserRole.MOH_STAFF:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only swap team members are allowed to make approval decisions')
-
-    try:
-        query = select(MouApplication).options(joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization)).filter(MouApplication.uuid == uuid)
-        mou_application = await db.execute(query)
-        mou_application = mou_application.scalar_one_or_none()
-
-        if not mou_application:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
-
-        if user.level == MOHStaffLevel.PARTNER_COORDINATOR:
-            if approval_data.decision not in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION]:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid decision for Partner Coordinator')
-        elif user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Technical Department cannot make approval decisions')
-        elif user.level in [MOHStaffLevel.LEGAL_ADVISOR, MOHStaffLevel.HOD, MOHStaffLevel.PS]:
-            if approval_data.decision not in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION, MouApprovalDecision.REQUEST_MODIFICATION]:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'{user.level} can only recommend for approval, recommend for rejection, or request modification')
-        elif user.level in [MOHStaffLevel.MINISTER_OF_STATE, MOHStaffLevel.MINISTER]:
-            if approval_data.decision not in [MouApprovalDecision.APPROVE, MouApprovalDecision.REJECT]:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'{user.level} can only approve or reject')
-        new_approval = MouApproval(decision=approval_data.decision, approver_id=user.uuid, approver=user, mou_application_id=uuid, created_by=user.email)
-
-        db.add(new_approval)
-        await db.commit()
-        await db.refresh(new_approval)
-
-        if approval_data.comment:
-            new_comment = MouComment(content=approval_data.comment, user_id=user.uuid, mou_application_id=uuid, mou_approval_id=new_approval.uuid, created_by=user.email)
-            db.add(new_comment)
-            await db.commit()
-            await db.refresh(new_comment)
-
-        if approval_data.decision == MouApprovalDecision.APPROVE:
-            mou_application.status = MouApplicationStatus.APPROVED
-            organization = mou_application.mou_detail.project.organization
-            template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
-            document_buffer = await generate_mou_doc(mou_application, template_path)
-            filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-            filepath, filename = await save_mou_doc_to_disk(document_buffer, filename)
-            new_document = Document(
-                name=f"MOU Application - {mou_application.id}",
-                description="Memorandum of understanding document",
-                document_type=DocumentType.MOU,
-                path=filepath,
-                filename=filename,
-                mou_application_id=uuid,
-                created_by=user.email
-            )
-
-            db.add(new_document)
-            await db.commit()
-            await db.refresh(new_document)
-
-            new_mou = Mou(
-                mou_application_id=uuid,
-                mou_detail_id=mou_application.mou_detail_id,
-                document_id=new_document.uuid,
-                created_by=user.email
-            )
-
-            db.add(new_mou)
-            await db.commit()
-            await db.refresh(new_mou)
-
-        elif approval_data.decision == MouApprovalDecision.REJECT:
-            mou_application.status = MouApplicationStatus.REJECTED
-        elif approval_data.decision in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION, MouApprovalDecision.REQUEST_MODIFICATION]:
-            mou_application.status = MouApplicationStatus.UNDER_REVIEW
-
-        await db.commit()
-        await db.refresh(mou_application)
-
-        return new_approval
-
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+# @router.post('/{uuid}/decision', response_model=MouApprovalRead, dependencies=[Depends(moh_staff_access)])
+# async def add_approval_decision(uuid: str, request: Request, approval_data: MouApprovalCreate, db: AsyncSession = Depends(get_db)):
+#     user = request.state.user
+#
+#     if user.role != UserRole.MOH_STAFF:
+#         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only swap team members are allowed to make approval decisions')
+#
+#     try:
+#         query = select(MouApplication).options(joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization)).filter(MouApplication.uuid == uuid)
+#         mou_application = await db.execute(query)
+#         mou_application = mou_application.scalar_one_or_none()
+#
+#         if not mou_application:
+#             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+#
+#         if user.level == MOHStaffLevel.PARTNER_COORDINATOR:
+#             if approval_data.decision not in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION]:
+#                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid decision for Partner Coordinator')
+#         elif user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT:
+#             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Technical Department cannot make approval decisions')
+#         elif user.level in [MOHStaffLevel.LEGAL_ADVISOR, MOHStaffLevel.HOD, MOHStaffLevel.PS]:
+#             if approval_data.decision not in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION, MouApprovalDecision.REQUEST_MODIFICATION]:
+#                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'{user.level} can only recommend for approval, recommend for rejection, or request modification')
+#         elif user.level in [MOHStaffLevel.MINISTER_OF_STATE, MOHStaffLevel.MINISTER]:
+#             if approval_data.decision not in [MouApprovalDecision.APPROVE, MouApprovalDecision.REJECT]:
+#                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'{user.level} can only approve or reject')
+#         new_approval = MouApproval(decision=approval_data.decision, approver_id=user.uuid, approver=user, mou_application_id=uuid, created_by=user.email)
+#
+#         db.add(new_approval)
+#         await db.commit()
+#         await db.refresh(new_approval)
+#
+#         if approval_data.comment:
+#             new_comment = MouComment(content=approval_data.comment, user_id=user.uuid, mou_application_id=uuid, mou_approval_id=new_approval.uuid, created_by=user.email)
+#             db.add(new_comment)
+#             await db.commit()
+#             await db.refresh(new_comment)
+#
+#         if approval_data.decision == MouApprovalDecision.APPROVE:
+#             mou_application.status = MouApplicationStatus.APPROVED
+#             organization = mou_application.mou_detail.project.organization
+#             template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+#             document_buffer = await generate_mou_doc(mou_application, template_path)
+#             filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+#             filepath, filename = await save_mou_doc_to_disk(document_buffer, filename)
+#             new_document = Document(
+#                 name=f"MOU Application - {mou_application.id}",
+#                 description="Memorandum of understanding document",
+#                 document_type=DocumentType.MOU,
+#                 path=filepath,
+#                 filename=filename,
+#                 mou_application_id=uuid,
+#                 created_by=user.email
+#             )
+#
+#             db.add(new_document)
+#             await db.commit()
+#             await db.refresh(new_document)
+#
+#             new_mou = Mou(
+#                 mou_application_id=uuid,
+#                 mou_detail_id=mou_application.mou_detail_id,
+#                 document_id=new_document.uuid,
+#                 created_by=user.email
+#             )
+#
+#             db.add(new_mou)
+#             await db.commit()
+#             await db.refresh(new_mou)
+#
+#         elif approval_data.decision == MouApprovalDecision.REJECT:
+#             mou_application.status = MouApplicationStatus.REJECTED
+#         elif approval_data.decision in [MouApprovalDecision.RECOMMEND_APPROVAL, MouApprovalDecision.RECOMMEND_REJECTION, MouApprovalDecision.REQUEST_MODIFICATION]:
+#             mou_application.status = MouApplicationStatus.UNDER_REVIEW
+#
+#         await db.commit()
+#         await db.refresh(mou_application)
+#
+#         return new_approval
+#
+#     except Exception as e:
+#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.patch('/{uuid}/start_review', response_model=MouApplicationRead, dependencies=[Depends(moh_staff_access)])
 async def start_review(uuid: str, request: Request, db: AsyncSession = Depends(get_db)):
     user = request.state.user
-    if user.role != UserRole.MOH_STAFF:
+    if user.role != UserRole.MOH_STAFF or user.level != MOHStaffLevel.PARTNER_COORDINATOR:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
     try:
@@ -294,6 +294,9 @@ async def start_review(uuid: str, request: Request, db: AsyncSession = Depends(g
 
         if not mou_application:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+
+        if mou_application.status != MouApplicationStatus.PENDING:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='MOU application is not in a pending state')
 
         mou_application.status = MouApplicationStatus.UNDER_REVIEW
         await db.commit()
@@ -304,59 +307,60 @@ async def start_review(uuid: str, request: Request, db: AsyncSession = Depends(g
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post('{uuid}/review', response_model=MouReviewRead, dependencies=[Depends(moh_staff_access)])
-async def add_review_decision(uuid: str, request: Request, review_data: MouReviewCreate, db: AsyncSession = Depends(get_db)):
-    user = request.state.user
 
-    if user.role != UserRole.MOH_STAFF:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only swap team members are allowed to make review decisions')
-    if user.level not in [MOHStaffLevel.PARTNER_COORDINATOR, MOHStaffLevel.LEGAL_ADVISOR]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only Partner Coordinator and Legal Advisor are allowed to make review decisions')
-
-    try:
-        query = select(MouApplication).options(joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization)).filter(MouApplication.uuid == uuid)
-        mou_application = await db.execute(query)
-        mou_application = mou_application.scalar_one_or_none()
-
-        if not mou_application:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
-
-        new_review = MouReview(
-            decision=review_data.decision,
-            user_id=user.uuid,
-            user=user,
-            mou_application_id=uuid,
-            created_by=user.email
-        )
-
-        db.add(new_review)
-        await db.commit()
-        await db.refresh(new_review)
-
-        if review_data.comment:
-            new_comment = MouComment(
-                content=review_data.comment,
-                user_id=user.uuid,
-                mou_application_id=uuid,
-                mou_review_id=new_review.uuid,
-                created_by=user.email
-            )
-            db.add(new_comment)
-            await db.commit()
-            await db.refresh(new_comment)
-
-        if review_data.decision == MouReviewDecision.VERIFIED:
-            mou_application.status = MouApplicationStatus.UNDER_APPROVAL
-        elif review_data.decision == MouReviewDecision.NOT_YET_VERIFIED:
-            mou_application.status = MouApplicationStatus.UNDER_REVIEW
-
-        await db.commit()
-        await db.refresh(mou_application)
-
-        return new_review
-
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+# @router.post('{uuid}/review', response_model=MouReviewRead, dependencies=[Depends(moh_staff_access)])
+# async def add_review_decision(uuid: str, request: Request, review_data: MouReviewCreate, db: AsyncSession = Depends(get_db)):
+#     user = request.state.user
+#
+#     if user.role != UserRole.MOH_STAFF:
+#         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only swap team members are allowed to make review decisions')
+#     if user.level not in [MOHStaffLevel.PARTNER_COORDINATOR, MOHStaffLevel.LEGAL_ADVISOR]:
+#         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Only Partner Coordinator and Legal Advisor are allowed to make review decisions')
+#
+#     try:
+#         query = select(MouApplication).options(joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization)).filter(MouApplication.uuid == uuid)
+#         mou_application = await db.execute(query)
+#         mou_application = mou_application.scalar_one_or_none()
+#
+#         if not mou_application:
+#             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+#
+#         new_review = MouReview(
+#             decision=review_data.decision,
+#             user_id=user.uuid,
+#             user=user,
+#             mou_application_id=uuid,
+#             created_by=user.email
+#         )
+#
+#         db.add(new_review)
+#         await db.commit()
+#         await db.refresh(new_review)
+#
+#         if review_data.comment:
+#             new_comment = MouComment(
+#                 content=review_data.comment,
+#                 user_id=user.uuid,
+#                 mou_application_id=uuid,
+#                 mou_review_id=new_review.uuid,
+#                 created_by=user.email
+#             )
+#             db.add(new_comment)
+#             await db.commit()
+#             await db.refresh(new_comment)
+#
+#         if review_data.decision == MouReviewDecision.VERIFIED:
+#             mou_application.status = MouApplicationStatus.UNDER_APPROVAL
+#         elif review_data.decision == MouReviewDecision.NOT_YET_VERIFIED:
+#             mou_application.status = MouApplicationStatus.UNDER_REVIEW
+#
+#         await db.commit()
+#         await db.refresh(mou_application)
+#
+#         return new_review
+#
+#     except Exception as e:
+#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.get('/{uuid}/approvals', response_model=PaginatedResponse[MouApprovalRead])
@@ -467,6 +471,209 @@ async def get_application_comments(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+# @router.post('/{uuid}/approval_or_review', response_model=MouApprovalOrReviewRead, dependencies=[Depends(moh_staff_access)])
+# async def add_approval_or_review(
+#         uuid: uuid.UUID,
+#         approval_or_review: MouApprovalOrReviewCreate,
+#         db: AsyncSession = Depends(get_db),
+#         current_user: User = Depends(get_current_user)
+# ):
+#     try:
+#         query = select(MouApplication).where(MouApplication.uuid == uuid)
+#         result = await db.execute(query)
+#         mou_application = result.scalar_one_or_none()
+#
+#         if not mou_application:
+#             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+#
+#         new_approval_or_review = MouApprovalOrReview(
+#             mou_application_id=uuid,
+#             decision=approval_or_review.decision,
+#             approver_or_reviewer_id=current_user.uuid,
+#             created_by=current_user.email
+#         )
+#
+#         db.add(new_approval_or_review)
+#         await db.commit()
+#         await db.refresh(new_approval_or_review)
+#
+#         print('NEW APPROVAL OR REVIEW :::::::::::::::::', new_approval_or_review)
+#
+#         comment_content = None
+#         if approval_or_review.comment:
+#             new_comment = MouComment(
+#                 content=approval_or_review.comment,
+#                 user_id=current_user.uuid,
+#                 mou_application_id=uuid,
+#                 mou_approval_or_review_id=new_approval_or_review.uuid,
+#                 created_by=current_user.email
+#             )
+#             db.add(new_comment)
+#             await db.commit()
+#             await db.refresh(new_comment)
+#             comment_content = new_comment.content
+#
+#             if approval_or_review.decision == MouApprovalDecision.APPROVE:
+#                 mou_application.status = MouApplicationStatus.APPROVED
+#                 organization = mou_application.mou_detail.project.organization
+#                 template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+#                 document_buffer = await generate_mou_doc(mou_application, template_path)
+#                 filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+#                 filepath, filename = await save_mou_doc_to_disk(document_buffer, filename)
+#
+#                 new_document = Document(
+#                     name=f"MOU Application - {mou_application.id}",
+#                     description="Memorandum of understanding document",
+#                     document_type=DocumentType.MOU,
+#                     path=filepath,
+#                     filename=filename,
+#                     mou_application_id=uuid,
+#                     created_by=current_user.email
+#                 )
+#
+#                 db.add(new_document)
+#                 await db.commit()
+#                 await db.refresh(new_document)
+#
+#                 new_mou = Mou(
+#                     mou_application_id=uuid,
+#                     mou_detail_id=mou_application.mou_detail_id,
+#                     document_id=new_document.uuid,
+#                     created_by=current_user.email
+#                 )
+#
+#                 db.add(new_mou)
+#                 await db.commit()
+#                 await db.refresh(new_mou)
+#
+#             elif approval_or_review.decision == MouApprovalOrReviewDecision.REJECT:
+#                 mou_application.status = MouApplicationStatus.REJECTED
+#             elif approval_or_review.decision in [
+#                 MouApprovalOrReviewDecision.RECOMMEND_APPROVAL,
+#                 MouApprovalOrReviewDecision.RECOMMEND_REJECTION,
+#                 MouApprovalOrReviewDecision.REQUEST_MODIFICATION
+#             ]:
+#                 mou_application.status = MouApplicationStatus.UNDER_APPROVAL
+#
+#
+#         return MouApprovalOrReviewRead(
+#             uuid=new_approval_or_review.uuid,
+#             decision=new_approval_or_review.decision,
+#             comment=comment_content,
+#             created_at=new_approval_or_review.created_at,
+#             created_by=new_approval_or_review.created_by
+#         )
+#     except Exception as e:
+#         await db.rollback()
+#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# @router.post('/{uuid}/approval_or_review', response_model=MouApprovalOrReviewRead, dependencies=[Depends(moh_staff_access)])
+# async def add_approval_or_review(
+#         uuid: uuid.UUID,
+#         approval_or_review: MouApprovalOrReviewCreate,
+#         db: AsyncSession = Depends(get_db),
+#         current_user: User = Depends(get_current_user)
+# ):
+#     try:
+#         query = select(MouApplication).where(MouApplication.uuid == uuid)
+#         result = await db.execute(query)
+#         mou_application = result.scalar_one_or_none()
+#
+#         if not mou_application:
+#             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+#         print('::::::::::::::::::::::::: PASSED HERE :::::::::::::::::::::::::')
+#
+#         # Check if the current user is allowed to make the decision
+#         if current_user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT:
+#             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Technical department user not allowed to make decisions')
+#
+#         new_approval_or_review = MouApprovalOrReview(
+#             mou_application_id=uuid,
+#             decision=approval_or_review.decision,
+#             approver_or_reviewer_id=current_user.uuid,
+#             created_by=current_user.email
+#         )
+#
+#         db.add(new_approval_or_review)
+#         await db.commit()
+#         await db.refresh(new_approval_or_review)
+#
+#         print('NEW APPROVAL OR REVIEW :::::::::::::::::', new_approval_or_review)
+#
+#         comment_content = None
+#         if approval_or_review.comment:
+#             new_comment = MouComment(
+#                 content=approval_or_review.comment,
+#                 user_id=current_user.uuid,
+#                 mou_application_id=uuid,
+#                 mou_approval_or_review_id=new_approval_or_review.uuid,
+#                 created_by=current_user.email
+#             )
+#             db.add(new_comment)
+#             await db.commit()
+#             await db.refresh(new_comment)
+#             comment_content = new_comment.content
+#
+#         if approval_or_review.decision == MouApprovalOrReviewDecision.APPROVE:
+#             mou_application.status = MouApplicationStatus.APPROVED
+#             organization = mou_application.mou_detail.project.organization
+#             template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+#             document_buffer = await generate_mou_doc(mou_application, template_path)
+#             filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+#             filepath, filename = await save_mou_doc_to_disk(document_buffer, filename)
+#
+#             new_document = Document(
+#                 name=f"MOU Application - {mou_application.id}",
+#                 description="Memorandum of understanding document",
+#                 document_type=DocumentType.MOU,
+#                 path=filepath,
+#                 filename=filename,
+#                 mou_application_id=uuid,
+#                 created_by=current_user.email
+#             )
+#
+#             db.add(new_document)
+#             await db.commit()
+#             await db.refresh(new_document)
+#
+#             new_mou = Mou(
+#                 mou_application_id=uuid,
+#                 mou_detail_id=mou_application.mou_detail_id,
+#                 document_id=new_document.uuid,
+#                 created_by=current_user.email
+#             )
+#
+#             db.add(new_mou)
+#             await db.commit()
+#             await db.refresh(new_mou)
+#
+#         elif approval_or_review.decision == MouApprovalOrReviewDecision.REJECT:
+#             mou_application.status = MouApplicationStatus.REJECTED
+#         elif approval_or_review.decision in [
+#             MouApprovalOrReviewDecision.RECOMMEND_APPROVAL,
+#             MouApprovalOrReviewDecision.RECOMMEND_REJECTION,
+#             MouApprovalOrReviewDecision.REQUEST_MODIFICATION
+#         ]:
+#             mou_application.status = MouApplicationStatus.UNDER_APPROVAL
+#
+#         mou_application.current_reviewer_id = current_user.uuid
+#
+#         await db.commit()
+#         await db.refresh(mou_application)
+#
+#         return MouApprovalOrReviewRead(
+#             uuid=new_approval_or_review.uuid,
+#             decision=new_approval_or_review.decision,
+#             comment=comment_content,
+#             created_at=new_approval_or_review.created_at,
+#             current_reviewer=new_approval_or_review.current_reviewer
+#         )
+#     except Exception as e:
+#         await db.rollback()
+#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.post('/{uuid}/approval_or_review', response_model=MouApprovalOrReviewRead, dependencies=[Depends(moh_staff_access)])
 async def add_approval_or_review(
         uuid: uuid.UUID,
@@ -481,6 +688,45 @@ async def add_approval_or_review(
 
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+
+        # Check if the current user is allowed to make the decision
+        if current_user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Technical department user not allowed to make decisions')
+
+        # Validate the decision based on the user's level
+        allowed_decisions = {
+            MOHStaffLevel.PARTNER_COORDINATOR: [
+                MouApprovalOrReviewDecision.RECOMMEND_APPROVAL,
+                MouApprovalOrReviewDecision.RECOMMEND_REJECTION,
+                MouApprovalOrReviewDecision.REQUEST_MODIFICATION
+            ],
+            MOHStaffLevel.LEGAL_ADVISOR: [
+                MouApprovalOrReviewDecision.RECOMMEND_APPROVAL,
+                MouApprovalOrReviewDecision.RECOMMEND_REJECTION,
+                MouApprovalOrReviewDecision.REQUEST_MODIFICATION
+            ],
+            MOHStaffLevel.HOD: [
+                MouApprovalOrReviewDecision.RECOMMEND_APPROVAL,
+                MouApprovalOrReviewDecision.RECOMMEND_REJECTION,
+                MouApprovalOrReviewDecision.REQUEST_MODIFICATION
+            ],
+            MOHStaffLevel.PS: [
+                MouApprovalOrReviewDecision.RECOMMEND_APPROVAL,
+                MouApprovalOrReviewDecision.RECOMMEND_REJECTION,
+                MouApprovalOrReviewDecision.REQUEST_MODIFICATION
+            ],
+            MOHStaffLevel.MINISTER_OF_STATE: [
+                MouApprovalOrReviewDecision.APPROVE,
+                MouApprovalOrReviewDecision.REJECT
+            ],
+            MOHStaffLevel.MINISTER: [
+                MouApprovalOrReviewDecision.APPROVE,
+                MouApprovalOrReviewDecision.REJECT
+            ]
+        }
+
+        if approval_or_review.decision not in allowed_decisions.get(current_user.level, []):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to make this decision')
 
         new_approval_or_review = MouApprovalOrReview(
             mou_application_id=uuid,
@@ -507,12 +753,60 @@ async def add_approval_or_review(
             await db.refresh(new_comment)
             comment_content = new_comment.content
 
+        if approval_or_review.decision == MouApprovalOrReviewDecision.APPROVE:
+            mou_application.status = MouApplicationStatus.APPROVED
+            organization = mou_application.mou_detail.project.organization
+            template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+            document_buffer = await generate_mou_doc(mou_application, template_path)
+            filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+            filepath, filename = await save_mou_doc_to_disk(document_buffer, filename)
+
+            new_document = Document(
+                name=f"MOU Application - {mou_application.id}",
+                description="Memorandum of understanding document",
+                document_type=DocumentType.MOU,
+                path=filepath,
+                filename=filename,
+                mou_application_id=uuid,
+                created_by=current_user.email
+            )
+
+            db.add(new_document)
+            await db.commit()
+            await db.refresh(new_document)
+
+            new_mou = Mou(
+                mou_application_id=uuid,
+                mou_detail_id=mou_application.mou_detail_id,
+                document_id=new_document.uuid,
+                created_by=current_user.email
+            )
+
+            db.add(new_mou)
+            await db.commit()
+            await db.refresh(new_mou)
+
+        elif approval_or_review.decision == MouApprovalOrReviewDecision.REJECT:
+            mou_application.status = MouApplicationStatus.REJECTED
+        elif approval_or_review.decision in [
+            MouApprovalOrReviewDecision.RECOMMEND_APPROVAL,
+            MouApprovalOrReviewDecision.RECOMMEND_REJECTION,
+            MouApprovalOrReviewDecision.REQUEST_MODIFICATION
+        ]:
+            mou_application.status = MouApplicationStatus.UNDER_APPROVAL
+
+        mou_application.current_reviewer_id = current_user.uuid
+
+        await db.commit()
+        await db.refresh(mou_application)
+
         return MouApprovalOrReviewRead(
             uuid=new_approval_or_review.uuid,
             decision=new_approval_or_review.decision,
             comment=comment_content,
             created_at=new_approval_or_review.created_at,
-            created_by=new_approval_or_review.created_by
+            created_by=new_approval_or_review.created_by,
+            current_reviewer=current_user
         )
     except Exception as e:
         await db.rollback()
