@@ -14,7 +14,7 @@ from db.models import Activity, ActivityDomain, OperationalZone, InputDetail
 
 
 async def handle_upload_file(file: UploadFile):
-    upload_directory = 'uploads'
+    upload_directory = os.path.join(os.getcwd(), 'uploads')
     os.makedirs(upload_directory, exist_ok=True)
 
     try:
@@ -133,7 +133,7 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession):
         ]
         ws.append(data)
 
-    action_plans_directory = 'action_plans'
+    action_plans_directory = os.path.join(os.getcwd(), 'action_plans')
     os.makedirs(action_plans_directory, exist_ok=True)
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -147,7 +147,9 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession):
 
 
 async def save_mou_doc_to_disk(document_buffer, filename):
-    file_path = os.path.join('generated_mou_docs', filename)
+    directory = os.path.join(os.getcwd(), 'generated_mou_docs')
+    os.makedirs(directory, exist_ok=True)
+    file_path = os.path.join(directory, filename)
     with open(file_path, 'wb') as file:
         file.write(document_buffer.read())
     return file_path, filename
