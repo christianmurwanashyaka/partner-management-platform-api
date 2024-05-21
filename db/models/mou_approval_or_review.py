@@ -12,8 +12,6 @@ class MouApprovalOrReviewDecision(str, Enum):
     REQUEST_MODIFICATION = 'request_modification'
     APPROVE = 'approve'
     REJECT = 'reject'
-    VERIFIED = 'verified'
-    NOT_YET_VERIFIED = 'not_yet_verified'
 
 
 class MouApprovalOrReview(CommonBaseModel, table=True):
@@ -22,6 +20,6 @@ class MouApprovalOrReview(CommonBaseModel, table=True):
     mou_application_id: uuid.UUID = Field(foreign_key='mou_application.uuid')
     mou_application: 'MouApplication' = Relationship(back_populates='approval_or_review')
     decision: MouApprovalOrReviewDecision = Field(description='Decision made on the MOU Application')
-    approver_or_reviewer_id: uuid.UUID = Field(foreign_key='user.uuid')
-    approver_or_reviewer: 'User' = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
     comments: List['MouComment'] = Relationship(back_populates='mou_approval_or_review', sa_relationship_kwargs={'lazy': 'selectin'})
+    current_reviewer_id: Optional[uuid.UUID] = Field(foreign_key='user.uuid', description='Current reviewer of the MOU application')
+    current_reviewer: Optional['User'] = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})

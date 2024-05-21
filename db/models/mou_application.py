@@ -27,3 +27,7 @@ class MouApplication(CommonBaseModel, table=True):
     documents: List['Document'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
     mou: Optional['Mou'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
     approval_or_review: List['MouApprovalOrReview'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
+    current_reviewer_id: Optional[uuid.UUID] = Field(default=None, foreign_key='user.uuid',
+                                                     description='Current reviewer of the MOU application')
+    current_reviewer: Optional['User'] = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
+

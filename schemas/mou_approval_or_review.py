@@ -2,9 +2,23 @@ from datetime import datetime
 from typing import Optional
 
 import uuid
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
+from db.models import UserRole, MOHStaffLevel
 from db.models.mou_approval_or_review import MouApprovalOrReviewDecision
+
+
+class UserProfileForApprovalOrReview(BaseModel):
+    uuid: uuid.UUID
+    first_name: str
+    last_name: str
+    email: EmailStr
+    role: UserRole
+    level: Optional[MOHStaffLevel] = None
+    phone_number: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 
 class MouApprovalOrReviewBase(BaseModel):
@@ -19,4 +33,14 @@ class MouApprovalOrReviewCreate(MouApprovalOrReviewBase):
 class MouApprovalOrReviewRead(MouApprovalOrReviewBase):
     uuid: uuid.UUID
     created_at: datetime
-    created_by: str
+    current_reviewer: UserProfileForApprovalOrReview
+
+
+# class MouApprovalOrReviewReadWithUser(MouApprovalOrReviewBase):
+#     uuid: uuid.UUID
+#     created_at: datetime
+#     user: UserProfileForApprovalOrReview
+#
+#     class Config:
+#         from_attributes = True
+#
