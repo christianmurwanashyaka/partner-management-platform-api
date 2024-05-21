@@ -79,13 +79,6 @@ async def get_mou_applications(
 ):
     try:
         if current_user.role in ['admin', 'moh_staff']:
-            # query = select(MouApplication).options(
-            #     joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
-            #     joinedload(MouApplication.documents),
-            #     joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
-            #     joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents)
-            # )
-
             query = select(MouApplication).options(
                 joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
                 joinedload(MouApplication.documents),
@@ -98,13 +91,6 @@ async def get_mou_applications(
                 joinedload(MouApplication.reviews).joinedload(MouReview.comments).joinedload(MouComment.user)
             )
         elif current_user.role == 'partner':
-            # query = select(MouApplication).filter(MouApplication.created_by == current_user.email).options(
-            #     joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
-            #     joinedload(MouApplication.documents),
-            #     joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
-            #     joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents)
-            # )
-
             query = select(MouApplication).where(MouApplication.created_by == current_user.email).options(
                 joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
                 joinedload(MouApplication.documents),
@@ -125,7 +111,6 @@ async def get_mou_applications(
         mou_applications_result = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
         mou_applications = mou_applications_result.unique().scalars().all()
 
-        print('::::::::::::::::::::: MOU APPLICATIONS FROM DB :::::::::::::::::::::')
         print(mou_applications)
 
         response = []
@@ -169,13 +154,6 @@ async def get_mou_application(
         current_user: User = Depends(get_current_user)
 ):
     try:
-        # query = select(MouApplication).filter(MouApplication.uuid == uuid).options(
-        #     joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
-        #     joinedload(MouApplication.documents),
-        #     joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
-        #     joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents)
-        # )
-
         query = select(MouApplication).filter(MouApplication.uuid == uuid).options(
             joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
             joinedload(MouApplication.documents),
@@ -515,6 +493,7 @@ async def add_approval_or_review(
         await db.commit()
         await db.refresh(new_approval_or_review)
 
+        comment_content = None
         if approval_or_review.comment:
             new_comment = MouComment(
                 content=approval_or_review.comment,
@@ -526,7 +505,15 @@ async def add_approval_or_review(
             db.add(new_comment)
             await db.commit()
             await db.refresh(new_comment)
-        return new_approval_or_review
+            comment_content = new_comment.content
+
+        return MouApprovalOrReviewRead(
+            uuid=new_approval_or_review.uuid,
+            decision=new_approval_or_review.decision,
+            comment=comment_content,
+            created_at=new_approval_or_review.created_at,
+            created_by=new_approval_or_review.created_by
+        )
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
