@@ -1,7 +1,11 @@
 from contextlib import asynccontextmanager
-
+import logging
+from sqlalchemy.engine import Engine
+from sqlalchemy import event
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import time
+from uvicorn.config import LOGGING_CONFIG
 
 from api.endpoints import auth, budget_type, organization_type, funding_source, funding_unit, domain_intervention, \
     input_category, sub_domain, input, organization, user, project, activity, party, mou_detail, mou_application, mou, files
@@ -9,6 +13,41 @@ import uvicorn
 
 from db.database import create_db_and_tables, async_session
 from utils.security import create_admin
+
+
+LOGGING_CONFIG["loggers"] = {
+    "uvicorn.error": {"level": "INFO"},
+    "uvicorn.access": {"level": "INFO"},
+}
+
+# Configure logging with timestamp for FastAPI request logs
+access_logger = logging.getLogger("uvicorn.access")
+access_logger.setLevel(logging.INFO)
+
+# Remove any default handlers to prevent duplicate logging
+for handler in access_logger.handlers[:]:
+    access_logger.removeHandler(handler)
+
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+handler = logging.StreamHandler()
+handler.setFormatter(formatter)
+access_logger.addHandler(handler)
+
+logger = logging.getLogger(__name__)
+logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+
+
+@event.listens_for(Engine, "before_cursor_execute")
+def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    conn.info.setdefault('query_start_time', []).append(time.time())
+
+
+@event.listens_for(Engine, "after_cursor_execute")
+def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    total = time.time() - conn.info['query_start_time'].pop(-1)
+    if total > 0.2:
+        logger.warn("Long running query: %s" % statement)
+        logger.warn("Total time: %f", total)
 
 
 @asynccontextmanager
@@ -49,5 +88,6 @@ app.include_router(mou_application.router, prefix='/api/v1/mou_application', tag
 app.include_router(mou.router, prefix='/api/v1/mou', tags=['MOU'])
 app.include_router(files.router, prefix='/api/v1/files', tags=['Files'])
 
+
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=7000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=7000, reload=True, access_log=False, access_logger=access_logger)
