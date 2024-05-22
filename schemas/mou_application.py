@@ -4,7 +4,7 @@ from typing import List, Optional
 import uuid
 from pydantic import BaseModel, EmailStr
 
-from db.models import MouApplicationStatus
+from db.models import MouApplicationStatus, MOHStaffLevel
 from schemas.document import DocumentRead
 from schemas.mou_approval_or_review import UserProfileForApprovalOrReview
 from schemas.mou_detail import MouDetailRead, ApplicationMouDetailRead
@@ -57,6 +57,7 @@ class MouApplicationOrganizationRead(BaseModel):
     documents: List[DocumentRead] = []
     organization: SimpleOrganizationRead
     current_reviewer: Optional[UserProfileForApprovalOrReview] = None
+    next_level: MOHStaffLevel
 
     class Config:
         from_attributes = True

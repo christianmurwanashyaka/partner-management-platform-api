@@ -5,6 +5,7 @@ import uuid
 from sqlmodel import Field, Relationship
 
 from db.models import CommonBaseModel
+from .user import MOHStaffLevel
 
 
 class MouApplicationStatus(str, Enum):
@@ -13,6 +14,7 @@ class MouApplicationStatus(str, Enum):
     UNDER_APPROVAL = 'under_approval'
     APPROVED = 'approved'
     REJECTED = 'rejected'
+    REQUEST_MODIFICATION = 'request_modification'
 
 
 class MouApplication(CommonBaseModel, table=True):
@@ -30,4 +32,4 @@ class MouApplication(CommonBaseModel, table=True):
     current_reviewer_id: Optional[uuid.UUID] = Field(default=None, foreign_key='user.uuid',
                                                      description='Current reviewer of the MOU application')
     current_reviewer: Optional['User'] = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
-
+    next_level: Optional[MOHStaffLevel] = Field(default=None, description='Next level for the MOU application')
