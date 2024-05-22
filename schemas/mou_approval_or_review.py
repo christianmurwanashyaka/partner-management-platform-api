@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 import uuid
 from pydantic import BaseModel, EmailStr
@@ -28,6 +28,16 @@ class MouApprovalOrReviewBase(BaseModel):
 
 class MouApprovalOrReviewCreate(MouApprovalOrReviewBase):
     pass
+
+
+class MouApprovalOrReadCommentRead(BaseModel):
+    uuid: uuid.UUID
+    content: str
+    created_at: datetime
+    created_by: str
+
+    class Config:
+        from_attributes = True
 
 
 class MouApprovalOrReviewRead(MouApprovalOrReviewBase):
