@@ -146,7 +146,8 @@ async def get_mou_applications(
                     email=organization.email,
                     website=organization.website
                 ),
-                current_reviewer=current_reviewer_read
+                current_reviewer=current_reviewer_read,
+                next_level=app.next_level
             )
             response.append(app_with_org)
 
@@ -349,6 +350,89 @@ async def get_application_comments(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+@router.get('/{uuid}/approval_or_review', response_model=PaginatedResponse[MouApprovalOrReviewRead])
+async def get_mou_application_approvals_or_reviews(
+        uuid: uuid.UUID,
+        page: int = 1,
+        page_size: int = 100,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Check if the MOU application exists
+        query = select(MouApplication).filter(MouApplication.uuid == uuid)
+        mou_application_result = await db.execute(query)
+        mou_application = mou_application_result.scalar_one_or_none()
+
+        if not mou_application:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+
+        # Query to get approvals or reviews with eager loading of current_reviewer and comments
+        approval_or_review_query = (
+            select(MouApprovalOrReview)
+            .options(joinedload(MouApprovalOrReview.current_reviewer))
+            .options(joinedload(MouApprovalOrReview.comments).joinedload(MouComment.user))
+            .filter(MouApprovalOrReview.mou_application_id == uuid)
+            .order_by(MouApprovalOrReview.created_at.desc())
+        )
+        total_items_query = select(func.count()).select_from(approval_or_review_query.subquery())
+        total_items = (await db.execute(total_items_query)).scalar_one()
+
+        approval_or_reviews_result = await db.execute(
+            approval_or_review_query.offset((page - 1) * page_size).limit(page_size)
+        )
+        approval_or_reviews = approval_or_reviews_result.unique().scalars().all()
+
+        response_data = []
+        for approval_or_review in approval_or_reviews:
+            current_reviewer = approval_or_review.current_reviewer
+
+            comments = [
+                MouApprovalOrReadCommentRead(
+                    uuid=comment.uuid,
+                    content=comment.content,
+                    created_at=comment.created_at,
+                    created_by=comment.created_by
+                )
+                for comment in approval_or_review.comments
+            ]
+
+            current_reviewer_read = None
+            if current_reviewer:
+                print('CURRENT REVIEWER :::::::::::::::::', current_reviewer)
+                current_reviewer_read = UserProfileForApprovalOrReview(
+                    uuid=current_reviewer.uuid,
+                    first_name=current_reviewer.first_name,
+                    last_name=current_reviewer.last_name,
+                    email=current_reviewer.email,
+                    role=current_reviewer.role,
+                    level=current_reviewer.level,
+                )
+
+            approval_or_review_read = MouApprovalOrReviewRead(
+                uuid=approval_or_review.uuid,
+                decision=approval_or_review.decision,
+                comment=comments[0].content if comments else None,
+                created_at=approval_or_review.created_at,
+                current_reviewer=current_reviewer_read
+            )
+            response_data.append(approval_or_review_read)
+
+        total_pages = (total_items + page_size - 1) // page_size
+        paginated_response = PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            data=response_data
+        )
+
+        return paginated_response
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.post('/{uuid}/approval_or_review', response_model=MouApprovalOrReviewRead, dependencies=[Depends(moh_staff_access)])
 async def add_approval_or_review(
         uuid: uuid.UUID,
@@ -428,49 +512,74 @@ async def add_approval_or_review(
             await db.refresh(new_comment)
             comment_content = new_comment.content
 
-        if approval_or_review.decision == MouApprovalOrReviewDecision.APPROVE:
-            mou_application.status = MouApplicationStatus.APPROVED
-            organization = mou_application.mou_detail.project.organization
-            template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
-            document_buffer = await generate_mou_doc(mou_application, template_path)
-            filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-            filepath, filename = await save_mou_doc_to_disk(document_buffer, filename)
+        # Define the flow of levels
+        level_flow = [
+            MOHStaffLevel.PARTNER_COORDINATOR,
+            MOHStaffLevel.LEGAL_ADVISOR,
+            MOHStaffLevel.HOD,
+            MOHStaffLevel.PS,
+            MOHStaffLevel.MINISTER_OF_STATE,
+            MOHStaffLevel.MINISTER
+        ]
 
-            new_document = Document(
-                name=f"MOU Application - {mou_application.id}",
-                description="Memorandum of understanding document",
-                document_type=DocumentType.MOU,
-                path=filepath,
-                filename=filename,
-                mou_application_id=uuid,
-                created_by=current_user.email
-            )
-
-            db.add(new_document)
-            await db.commit()
-            await db.refresh(new_document)
-
-            new_mou = Mou(
-                mou_application_id=uuid,
-                mou_detail_id=mou_application.mou_detail_id,
-                document_id=new_document.uuid,
-                created_by=current_user.email
-            )
-
-            db.add(new_mou)
-            await db.commit()
-            await db.refresh(new_mou)
-
-        elif approval_or_review.decision == MouApprovalOrReviewDecision.REJECT:
-            mou_application.status = MouApplicationStatus.REJECTED
-        elif approval_or_review.decision in [
-            MouApprovalOrReviewDecision.RECOMMEND_APPROVAL,
-            MouApprovalOrReviewDecision.RECOMMEND_REJECTION,
-            MouApprovalOrReviewDecision.REQUEST_MODIFICATION
-        ]:
+        # Determine the next level based on the current level and decision
+        next_level = None
+        if approval_or_review.decision == MouApprovalOrReviewDecision.REQUEST_MODIFICATION:
+            mou_application.status = MouApplicationStatus.REQUEST_MODIFICATION
+            next_level = MOHStaffLevel.PARTNER_COORDINATOR
+        elif approval_or_review.decision == MouApprovalOrReviewDecision.RECOMMEND_REJECTION:
             mou_application.status = MouApplicationStatus.UNDER_APPROVAL
+            next_level = MOHStaffLevel.PARTNER_COORDINATOR
+        else:
+            if current_user.level in level_flow:
+                current_index = level_flow.index(current_user.level)
+                if current_index < len(level_flow) - 1:
+                    next_level = level_flow[current_index + 1]
+
+            if approval_or_review.decision == MouApprovalOrReviewDecision.APPROVE:
+                mou_application.status = MouApplicationStatus.APPROVED
+                organization = mou_application.mou_detail.project.organization
+                template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+                document_buffer = await generate_mou_doc(mou_application, template_path)
+                filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+                filepath, filename = await save_mou_doc_to_disk(document_buffer, filename)
+
+                new_document = Document(
+                    name=f"MOU Application - {mou_application.id}",
+                    description="Memorandum of understanding document",
+                    document_type=DocumentType.MOU,
+                    path=filepath,
+                    filename=filename,
+                    mou_application_id=uuid,
+                    created_by=current_user.email
+                )
+
+                db.add(new_document)
+                await db.commit()
+                await db.refresh(new_document)
+
+                new_mou = Mou(
+                    mou_application_id=uuid,
+                    mou_detail_id=mou_application.mou_detail_id,
+                    document_id=new_document.uuid,
+                    created_by=current_user.email
+                )
+
+                db.add(new_mou)
+                await db.commit()
+                await db.refresh(new_mou)
+
+            elif approval_or_review.decision == MouApprovalOrReviewDecision.REJECT:
+                mou_application.status = MouApplicationStatus.REJECTED
+            elif approval_or_review.decision in [
+                MouApprovalOrReviewDecision.RECOMMEND_APPROVAL,
+                MouApprovalOrReviewDecision.RECOMMEND_REJECTION,
+                MouApprovalOrReviewDecision.REQUEST_MODIFICATION
+            ]:
+                mou_application.status = MouApplicationStatus.UNDER_APPROVAL
 
         mou_application.current_reviewer_id = current_user.uuid
+        mou_application.next_level = next_level
 
         await db.commit()
         await db.refresh(mou_application)
@@ -481,91 +590,9 @@ async def add_approval_or_review(
             comment=comment_content,
             created_at=new_approval_or_review.created_at,
             created_by=new_approval_or_review.created_by,
-            current_reviewer=current_user
+            current_reviewer=current_user,
+            next_level=next_level
         )
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
-@router.get('/{uuid}/approval_or_review', response_model=PaginatedResponse[MouApprovalOrReviewRead])
-async def get_mou_application_approvals_or_reviews(
-        uuid: uuid.UUID,
-        page: int = 1,
-        page_size: int = 100,
-        db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
-):
-    try:
-        # Check if the MOU application exists
-        query = select(MouApplication).filter(MouApplication.uuid == uuid)
-        mou_application_result = await db.execute(query)
-        mou_application = mou_application_result.scalar_one_or_none()
-
-        if not mou_application:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
-
-        # Query to get approvals or reviews with eager loading of current_reviewer and comments
-        approval_or_review_query = (
-            select(MouApprovalOrReview)
-            .options(joinedload(MouApprovalOrReview.current_reviewer))
-            .options(joinedload(MouApprovalOrReview.comments).joinedload(MouComment.user))
-            .filter(MouApprovalOrReview.mou_application_id == uuid)
-            .order_by(MouApprovalOrReview.created_at.desc())
-        )
-        total_items_query = select(func.count()).select_from(approval_or_review_query.subquery())
-        total_items = (await db.execute(total_items_query)).scalar_one()
-
-        approval_or_reviews_result = await db.execute(
-            approval_or_review_query.offset((page - 1) * page_size).limit(page_size)
-        )
-        approval_or_reviews = approval_or_reviews_result.unique().scalars().all()
-
-        response_data = []
-        for approval_or_review in approval_or_reviews:
-            current_reviewer = approval_or_review.current_reviewer
-
-            comments = [
-                MouApprovalOrReadCommentRead(
-                    uuid=comment.uuid,
-                    content=comment.content,
-                    created_at=comment.created_at,
-                    created_by=comment.created_by
-                )
-                for comment in approval_or_review.comments
-            ]
-
-            current_reviewer_read = None
-            if current_reviewer:
-                current_reviewer_read = UserProfileForApprovalOrReview(
-                    uuid=current_reviewer.uuid,
-                    first_name=current_reviewer.first_name,
-                    last_name=current_reviewer.last_name,
-                    email=current_reviewer.email,
-                    role=current_reviewer.role,
-                    level=current_reviewer.level,
-                    phone_number=current_reviewer.phone_number
-                )
-
-            approval_or_review_read = MouApprovalOrReviewRead(
-                uuid=approval_or_review.uuid,
-                decision=approval_or_review.decision,
-                comment=comments[0].content if comments else None,
-                created_at=approval_or_review.created_at,
-                current_reviewer=current_reviewer_read
-            )
-            response_data.append(approval_or_review_read)
-
-        total_pages = (total_items + page_size - 1) // page_size
-        paginated_response = PaginatedResponse(
-            page=page,
-            page_size=page_size,
-            total_items=total_items,
-            total_pages=total_pages,
-            data=response_data
-        )
-
-        return paginated_response
-
-    except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

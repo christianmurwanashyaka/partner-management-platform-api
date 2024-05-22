@@ -15,7 +15,6 @@ class UserProfileForApprovalOrReview(BaseModel):
     email: EmailStr
     role: UserRole
     level: Optional[MOHStaffLevel] = None
-    phone_number: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -44,3 +43,4 @@ class MouApprovalOrReviewRead(MouApprovalOrReviewBase):
     uuid: uuid.UUID
     created_at: datetime
     current_reviewer: Optional[UserProfileForApprovalOrReview]
+    next_level: Optional[MOHStaffLevel] = None
