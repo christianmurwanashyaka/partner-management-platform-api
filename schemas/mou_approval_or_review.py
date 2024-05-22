@@ -33,14 +33,4 @@ class MouApprovalOrReviewCreate(MouApprovalOrReviewBase):
 class MouApprovalOrReviewRead(MouApprovalOrReviewBase):
     uuid: uuid.UUID
     created_at: datetime
-    current_reviewer: UserProfileForApprovalOrReview
-
-
-# class MouApprovalOrReviewReadWithUser(MouApprovalOrReviewBase):
-#     uuid: uuid.UUID
-#     created_at: datetime
-#     user: UserProfileForApprovalOrReview
-#
-#     class Config:
-#         from_attributes = True
-#
+    current_reviewer: Optional[UserProfileForApprovalOrReview]
