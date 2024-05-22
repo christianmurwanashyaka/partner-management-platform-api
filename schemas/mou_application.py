@@ -57,7 +57,7 @@ class MouApplicationOrganizationRead(BaseModel):
     documents: List[DocumentRead] = []
     organization: SimpleOrganizationRead
     current_reviewer: Optional[UserProfileForApprovalOrReview] = None
-    next_level: MOHStaffLevel
+    next_level: Optional[MOHStaffLevel] = None
 
     class Config:
         from_attributes = True
