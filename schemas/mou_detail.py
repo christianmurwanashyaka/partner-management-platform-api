@@ -36,3 +36,13 @@ class ApplicationMouDetailRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ApplicationMouDetailReadWithActivities(BaseModel):
+    uuid: uuid.UUID
+    project: ProjectRead
+    parties: List[PartyRead]
+    duration: Optional[int]
+
+    class Config:
+        from_attributes = True

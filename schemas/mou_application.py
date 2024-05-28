@@ -7,7 +7,7 @@ from pydantic import BaseModel, EmailStr
 from db.models import MouApplicationStatus, MOHStaffLevel
 from schemas.document import DocumentRead
 from schemas.mou_approval_or_review import UserProfileForApprovalOrReview
-from schemas.mou_detail import MouDetailRead, ApplicationMouDetailRead
+from schemas.mou_detail import MouDetailRead, ApplicationMouDetailRead, ApplicationMouDetailReadWithActivities
 from schemas.user import UserProfile
 
 
@@ -53,7 +53,7 @@ class SimpleOrganizationRead(BaseModel):
 class MouApplicationOrganizationRead(BaseModel):
     uuid: uuid.UUID
     status: MouApplicationStatus
-    mou_detail: ApplicationMouDetailRead
+    mou_detail: ApplicationMouDetailReadWithActivities
     documents: List[DocumentRead] = []
     organization: SimpleOrganizationRead
     current_reviewer: Optional[UserProfileForApprovalOrReview] = None
