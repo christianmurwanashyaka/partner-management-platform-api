@@ -1,9 +1,14 @@
 import os
+import tempfile
 from datetime import datetime
 from io import BytesIO
 from itertools import chain
 
 from docx import Document
+from docx.enum.style import WD_STYLE_TYPE
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+from docx.shared import Pt
 from fastapi import UploadFile, HTTPException
 from openpyxl import Workbook
 from openpyxl.styles import Font
@@ -36,6 +41,25 @@ async def generate_mou_doc(mou_application, template_path):
     organization = mou_application.mou_detail.project.organization
     project = mou_application.mou_detail.project
 
+    # Collect unique domains from the project's activities
+    domains = set()
+    for activity in project.activities:
+        for activity_domain in activity.domains:
+            if activity_domain.domain_intervention:
+                domains.add(activity_domain.domain_intervention.name)
+    domains_str = ', '.join(domains)
+
+    # Collect responsibilities and signatory details for the party with organization_id
+    responsibilities_str = ""
+    party_signatory = ""
+    party_position = "CEO"  # Default value
+    for party in mou_application.mou_detail.parties:
+        if party.organization_id:
+            responsibilities_str = "\n".join(
+                [f"{idx + 1}. {responsibility}" for idx, responsibility in enumerate(party.responsibilities)])
+            party_signatory = party.signatory
+            party_position = party.position
+
     mappings = {
         '{ORGANIZATION_NAME}': organization.name,
         '{PROJECT_NAME}': project.name,
@@ -43,15 +67,68 @@ async def generate_mou_doc(mou_application, template_path):
         '{ORGANIZATION_PHONE}': organization.phone_number,
         '{ORGANIZATION_EMAIL}': organization.email,
         '{ORGANIZATION_WEBSITE}': organization.website,
-        '{ORGANIZATION_ADDRESS}': organization.rwanda_avenue
+        '{ORGANIZATION_ADDRESS}': organization.rwanda_avenue,
+        '{OVERALL_GOAL}': project.goals[0].name if project.goals else '',
+        '{ACTIVITIES_DOMAINS}': domains_str,
+        '{PARTY_RESPONSIBILITIES}': responsibilities_str,
+        '{PARTY_SIGNATORY_NAME}': party_signatory,
+        '{PARTY_SIGNATORY_POSITION}': party_position
     }
 
-    for paragraph in doc.paragraphs:
-        print(f"Before: {paragraph.text}")
+    def replace_text(element, mappings):
         for key, value in mappings.items():
-            if value:
-                paragraph.text = paragraph.text.replace(key, value)
-        print(f"After: {paragraph.text}")
+            if key in element.text:
+                element.text = element.text.replace(key, str(value))
+
+    # Iterate through all elements to replace placeholders
+    for paragraph in doc.paragraphs:
+        replace_text(paragraph, mappings)
+
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    replace_text(paragraph, mappings)
+
+    for section in doc.sections:
+        header = section.header
+        footer = section.footer
+        for paragraph in header.paragraphs:
+            replace_text(paragraph, mappings)
+        for paragraph in footer.paragraphs:
+            replace_text(paragraph, mappings)
+
+    if 'List Number' not in [s.name for s in doc.styles]:
+        style = doc.styles.add_style('List Number', WD_STYLE_TYPE.PARAGRAPH)
+        style.base_style = doc.styles['Normal']
+        style.paragraph_format.left_indent = Pt(36)  # Set the left indentation
+        style.paragraph_format.space_before = Pt(0)
+        style.paragraph_format.space_after = Pt(0)
+        style.font.name = 'Times New Roman'
+        style.font.size = doc.styles['Normal'].font.size
+
+        p = style.element
+        num = OxmlElement('w:numPr')
+        ilvl = OxmlElement('w:ilvl')
+        ilvl.set(qn('w:val'), "0")
+        numId = OxmlElement('w:numId')
+        numId.set(qn('w:val'), "1")
+        num.append(ilvl)
+        num.append(numId)
+        p.append(num)
+
+    def set_font(paragraph, font_name='Times New Roman'):
+        for run in paragraph.runs:
+            run.font.name = font_name
+            run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
+
+    for paragraph in doc.paragraphs:
+        if '{PROJECT_GOALS}' in paragraph.text:
+            paragraph.text = paragraph.text.replace('{PROJECT_GOALS}', '')
+            for goal in project.goals:
+                goal_paragraph = paragraph.insert_paragraph_before(goal.name)
+                goal_paragraph.style = doc.styles['List Number']
+                set_font(goal_paragraph)
 
     buffer = BytesIO()
     doc.save(buffer)
@@ -66,21 +143,21 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession):
 
     headers = [
         'Organization',
-        'Organization type',
-        'Project name',
-        'Funding source',
-        'Funding unit',
+        'Organization Type',
+        'Project Name',
+        'Domain of Intervention',
+        'Sub Domain of Intervention',
+        'Location',
+        'Funding Source',
+        'Funding Unit',
         'Activity',
         'Description of activity',
-        'On/Off Budget/IGR',
-        'Domain of intervention',
-        'Sub domain of intervention',
-        'Implementer',
-        'Location',
-        'Input category',
+        'Input Category',
         'Inputs',
         'Planned budget',
         'Currency',
+        'On/Off Budget/IGR',
+        'Implementer',
         'Fiscal Year'
     ]
     ws.append(headers)
@@ -99,39 +176,40 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession):
     for activity in activities:
         activity_domains_query = select(ActivityDomain).where(ActivityDomain.activity_id == activity.uuid)
         activity_domains = (await db.execute(activity_domains_query)).scalars().all()
-        domain_names = ', '.join(set(domain.domain_intervention.name for domain in activity_domains))
-        sub_domain_names = ', '.join(set(domain.sub_domain.name for domain in activity_domains))
-
-        operational_zones_query = select(OperationalZone).where(OperationalZone.activity_id == activity.uuid)
-        operational_zones = (await db.execute(operational_zones_query)).scalars().all()
-        locations = set(zone.district + ', ' + zone.province for zone in operational_zones)
 
         input_details_query = select(InputDetail).where(InputDetail.activity_id == activity.uuid)
         input_details = (await db.execute(input_details_query)).scalars().all()
-        input_categories = ', '.join(set(input_detail.input_category.name for input_detail in input_details))
-        total_budget = sum(input_detail.budget for input_detail in input_details)
-        input_names = ', '.join(f"{input_detail.input.name} - {input_detail.budget}" for input_detail in input_details)
 
-        data = [
-            organization.name,
-            organization.organization_type.name,
-            project.name,
-            project.funding_source.name,
-            project.funding_unit.name,
-            activity.name,
-            activity.description,
-            project.budget_type.name,
-            domain_names,
-            sub_domain_names,
-            activity.implementer,
-            ', '.join(locations),
-            input_categories,
-            input_names,
-            total_budget,
-            project.currency,
-            activity.fiscal_year
-        ]
-        ws.append(data)
+        for input_detail in input_details:
+            location = f"{input_detail.district}, {input_detail.province}"
+            input_category = input_detail.input_category.name
+            input_name = input_detail.input.name
+            budget = input_detail.budget
+
+            for domain in activity_domains:
+                domain_name = domain.domain_intervention.name
+                sub_domain_name = domain.sub_domain.name
+
+                data = [
+                    organization.name,
+                    organization.organization_type.name,
+                    project.name,
+                    domain_name,
+                    sub_domain_name,
+                    location,
+                    project.funding_source.name,
+                    project.funding_unit.name,
+                    activity.name,
+                    activity.description,
+                    input_category,
+                    input_name,
+                    budget,
+                    project.currency,
+                    project.budget_type.name,
+                    activity.implementer,
+                    activity.fiscal_year
+                ]
+                ws.append(data)
 
     action_plans_directory = os.path.join(os.getcwd(), 'action_plans')
     os.makedirs(action_plans_directory, exist_ok=True)
