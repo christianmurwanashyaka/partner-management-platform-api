@@ -143,21 +143,21 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession):
 
     headers = [
         'Organization',
-        'Organization type',
-        'Project name',
-        'Funding source',
-        'Funding unit',
+        'Organization Type',
+        'Project Name',
+        'Domain of Intervention',
+        'Sub Domain of Intervention',
+        'Location',
+        'Funding Source',
+        'Funding Unit',
         'Activity',
         'Description of activity',
-        'On/Off Budget/IGR',
-        'Domain of intervention',
-        'Sub domain of intervention',
-        'Implementer',
-        'Location',
-        'Input category',
+        'Input Category',
         'Inputs',
         'Planned budget',
         'Currency',
+        'On/Off Budget/IGR',
+        'Implementer',
         'Fiscal Year'
     ]
     ws.append(headers)
@@ -176,39 +176,40 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession):
     for activity in activities:
         activity_domains_query = select(ActivityDomain).where(ActivityDomain.activity_id == activity.uuid)
         activity_domains = (await db.execute(activity_domains_query)).scalars().all()
-        domain_names = ', '.join(set(domain.domain_intervention.name for domain in activity_domains))
-        sub_domain_names = ', '.join(set(domain.sub_domain.name for domain in activity_domains))
-
-        operational_zones_query = select(OperationalZone).where(OperationalZone.activity_id == activity.uuid)
-        operational_zones = (await db.execute(operational_zones_query)).scalars().all()
-        locations = set(zone.district + ', ' + zone.province for zone in operational_zones)
 
         input_details_query = select(InputDetail).where(InputDetail.activity_id == activity.uuid)
         input_details = (await db.execute(input_details_query)).scalars().all()
-        input_categories = ', '.join(set(input_detail.input_category.name for input_detail in input_details))
-        total_budget = sum(input_detail.budget for input_detail in input_details)
-        input_names = ', '.join(f"{input_detail.input.name} - {input_detail.budget}" for input_detail in input_details)
 
-        data = [
-            organization.name,
-            organization.organization_type.name,
-            project.name,
-            project.funding_source.name,
-            project.funding_unit.name,
-            activity.name,
-            activity.description,
-            project.budget_type.name,
-            domain_names,
-            sub_domain_names,
-            activity.implementer,
-            ', '.join(locations),
-            input_categories,
-            input_names,
-            total_budget,
-            project.currency,
-            activity.fiscal_year
-        ]
-        ws.append(data)
+        for input_detail in input_details:
+            location = f"{input_detail.district}, {input_detail.province}"
+            input_category = input_detail.input_category.name
+            input_name = input_detail.input.name
+            budget = input_detail.budget
+
+            for domain in activity_domains:
+                domain_name = domain.domain_intervention.name
+                sub_domain_name = domain.sub_domain.name
+
+                data = [
+                    organization.name,
+                    organization.organization_type.name,
+                    project.name,
+                    domain_name,
+                    sub_domain_name,
+                    location,
+                    project.funding_source.name,
+                    project.funding_unit.name,
+                    activity.name,
+                    activity.description,
+                    input_category,
+                    input_name,
+                    budget,
+                    project.currency,
+                    project.budget_type.name,
+                    activity.implementer,
+                    activity.fiscal_year
+                ]
+                ws.append(data)
 
     action_plans_directory = os.path.join(os.getcwd(), 'action_plans')
     os.makedirs(action_plans_directory, exist_ok=True)
