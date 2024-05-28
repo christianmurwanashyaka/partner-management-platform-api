@@ -90,4 +90,4 @@ app.include_router(files.router, prefix='/api/v1/files', tags=['Files'])
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=7000, reload=True, access_log=False, access_logger=access_logger)
+    uvicorn.run("main:app", host="0.0.0.0", port=7000, reload=True)
