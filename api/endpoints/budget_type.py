@@ -2,8 +2,10 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
-from api.dependencies.access_control import admin_access, partner_access
+from api.dependencies.access_control import admin_access, partner_access, moh_staff_access
+from api.dependencies.auth import get_current_user
 from db.database import get_db
+from db.models import User
 from db.models.budget_type import BudgetType
 from db.models.pagination import PaginatedResponse
 from schemas.budget_type import BudgetTypeRead, BudgetTypeCreate
@@ -27,13 +29,13 @@ async def create_budget_type(request: Request, budget_type: BudgetTypeCreate, db
     return new_budget_type
 
 
-@router.get('/', response_model=PaginatedResponse[BudgetTypeRead], dependencies=[Depends(partner_access)])
-async def get_budget_types(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
+@router.get('/', response_model=PaginatedResponse[BudgetTypeRead])
+async def get_budget_types(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     return await get_all_items(db, BudgetType, page=page, page_size=page_size)
 
 
-@router.get('/{uuid}', response_model=BudgetTypeRead, dependencies=[Depends(partner_access)])
-async def get_budget_type(uuid: str, db: AsyncSession = Depends(get_db)):
+@router.get('/{uuid}', response_model=BudgetTypeRead)
+async def get_budget_type(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = select(BudgetType).filter(BudgetType.uuid == uuid)
     budget_type = await get_first_item(db, query)
     if not budget_type:
