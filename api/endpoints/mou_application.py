@@ -136,6 +136,8 @@ async def get_mou_applications(
                 current_reviewer_read = None
 
             app_with_org = MouApplicationOrganizationRead(
+                created_at=app.created_at,
+                created_by=app.created_by,
                 uuid=app.uuid,
                 status=app.status,
                 mou_detail=app.mou_detail,
