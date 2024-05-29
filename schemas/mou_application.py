@@ -51,6 +51,8 @@ class SimpleOrganizationRead(BaseModel):
 
 
 class MouApplicationOrganizationRead(BaseModel):
+    created_at: datetime
+    created_by: str
     uuid: uuid.UUID
     status: MouApplicationStatus
     mou_detail: ApplicationMouDetailReadWithActivities

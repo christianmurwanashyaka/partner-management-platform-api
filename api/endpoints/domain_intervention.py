@@ -3,8 +3,10 @@ from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
-from api.dependencies.access_control import admin_access, partner_access
+from api.dependencies.access_control import admin_access, partner_access, moh_staff_access
+from api.dependencies.auth import get_current_user
 from db.database import get_db
+from db.models import User
 from db.models.domain import DomainIntervention
 from db.models.pagination import PaginatedResponse
 from schemas.domain_intervention import DomainInterventionRead, DomainInterventionList, DomainInterventionCreate
@@ -31,13 +33,13 @@ async def create_domain_intervention(request: Request, domain_intervention: Doma
     return new_domain_intervention
 
 
-@router.get('/', response_model=PaginatedResponse[DomainInterventionList], dependencies=[Depends(partner_access)])
-async def get_domain_interventions(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
+@router.get('/', response_model=PaginatedResponse[DomainInterventionList])
+async def get_domain_interventions(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     return await get_all_items(db, DomainIntervention, page=page, page_size=page_size)
 
 
-@router.get('/{uuid}', response_model=DomainInterventionRead, dependencies=[Depends(partner_access)])
-async def get_domain_intervention(uuid: str, db: AsyncSession = Depends(get_db)):
+@router.get('/{uuid}', response_model=DomainInterventionRead)
+async def get_domain_intervention(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = select(DomainIntervention).options(selectinload(DomainIntervention.subdomains)).filter(DomainIntervention.uuid == uuid)
     domain_intervention = await get_first_item(db, query)
     if not domain_intervention:

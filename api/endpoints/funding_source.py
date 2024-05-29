@@ -2,8 +2,10 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
-from api.dependencies.access_control import admin_access, partner_access
+from api.dependencies.access_control import admin_access, partner_access, moh_staff_access
+from api.dependencies.auth import get_current_user
 from db.database import get_db
+from db.models import User
 from db.models.funding_source import FundingSource
 from db.models.pagination import PaginatedResponse
 from schemas.funding_source import FundingSourceRead, FundingSourceCreate
@@ -27,13 +29,13 @@ async def create_funding_source(request: Request, funding_source: FundingSourceC
     return funding_source
 
 
-@router.get('/', response_model=PaginatedResponse[FundingSource], dependencies=[Depends(partner_access)])
-async def get_funding_sources(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
+@router.get('/', response_model=PaginatedResponse[FundingSource])
+async def get_funding_sources(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     return await get_all_items(db, FundingSource, page=page, page_size=page_size)
 
 
-@router.get('/{uuid}', response_model=FundingSourceRead, dependencies=[Depends(partner_access)])
-async def get_funding_source(uuid: str, db: AsyncSession = Depends(get_db)):
+@router.get('/{uuid}', response_model=FundingSourceRead)
+async def get_funding_source(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = select(FundingSource).filter(FundingSource.uuid == uuid)
     funding_source = await get_first_item(db, query)
     if not funding_source:

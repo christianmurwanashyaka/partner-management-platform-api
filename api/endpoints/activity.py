@@ -24,6 +24,53 @@ router = APIRouter()
 @router.post('/', response_model=ActivityRead, dependencies=[Depends(partner_access)])
 async def create_activity(request: Request, activity: ActivityCreate, db: AsyncSession = Depends(get_db)):
     user = request.state.user.email
+
+    # Check for existing activity with the same basic details
+    existing_activity_query = select(Activity).where(
+        Activity.project_id == activity.project_id,
+        Activity.name == activity.name,
+        Activity.implementer == activity.implementer,
+        Activity.implementer_unit == activity.implementer_unit,
+        Activity.fiscal_year == activity.fiscal_year,
+        Activity.start_date == activity.start_date,
+        Activity.end_date == activity.end_date
+    )
+    existing_activity = (await db.execute(existing_activity_query)).scalars().first()
+
+    if existing_activity:
+        # Check if the existing activity has the same domains
+        existing_domains_query = select(ActivityDomain).where(
+            ActivityDomain.activity_id == existing_activity.uuid
+        )
+        existing_domains = (await db.execute(existing_domains_query)).scalars().all()
+        existing_domain_ids = {(domain.domain_intervention_id, domain.sub_domain_id) for domain in existing_domains}
+
+        new_domain_ids = {(domain.domain_intervention_id, domain.sub_domain_id) for domain in activity.domains}
+
+        if existing_domain_ids == new_domain_ids:
+            # Check if the existing activity has the same input details
+            existing_input_details_query = select(InputDetail).where(
+                InputDetail.activity_id == existing_activity.uuid
+            )
+            existing_input_details = (await db.execute(existing_input_details_query)).scalars().all()
+            existing_input_details_set = {
+                (input_detail.input_category_id, input_detail.input_id, input_detail.budget, input_detail.district,
+                 input_detail.province)
+                for input_detail in existing_input_details
+            }
+
+            new_input_details_set = {
+                (input_detail.input_category_id, input_detail.input_id, input_detail.budget, input_detail.district,
+                 input_detail.province)
+                for input_detail in activity.input_details
+            }
+
+            if existing_input_details_set == new_input_details_set:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="An activity with the same details already exists."
+                )
+
     new_activity = Activity(
         project_id=activity.project_id,
         name=activity.name,
@@ -50,22 +97,10 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
                 sub_domain_id=domain.sub_domain_id,
                 created_by=user
             )
-            print(f"Creating activity domain with UUID: {new_activity_domain.uuid}, activity_id: {new_activity_domain.activity_id}")
+            print(
+                f"Creating activity domain with UUID: {new_activity_domain.uuid}, activity_id: {new_activity_domain.activity_id}")
             activity_domains.append(new_activity_domain)
         db.add_all(activity_domains)
-
-        # Handle operational zones
-        # operational_zones = []
-        # for zone_data in activity.operational_zones:
-        #     new_zone = OperationalZone(
-        #         activity_id=new_activity.uuid,
-        #         province=zone_data.province,
-        #         district=zone_data.district,
-        #         created_by=user
-        #     )
-        #     print(f"Creating operational zone with UUID: {new_zone.uuid}, activity_id: {new_zone.activity_id}")
-        #     operational_zones.append(new_zone)
-        # db.add_all(operational_zones)
 
         # Handle input details
         input_details = []
@@ -79,7 +114,8 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
                 province=input_detail_data.province,
                 created_by=user
             )
-            print(f"Creating input detail with UUID: {new_input_detail.uuid}, activity_id: {new_input_detail.activity_id}")
+            print(
+                f"Creating input detail with UUID: {new_input_detail.uuid}, activity_id: {new_input_detail.activity_id}")
             input_details.append(new_input_detail)
         db.add_all(input_details)
 
@@ -88,7 +124,6 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
         # Additional logging to verify related entities
         print(f"Activity domains added: {activity_domains}")
         print(f"Input details added: {input_details}")
-        # print(f"Operational zones added: {operational_zones}")
 
     except Exception as e:
         await db.rollback()
