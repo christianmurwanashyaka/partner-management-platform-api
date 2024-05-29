@@ -2,8 +2,10 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
-from api.dependencies.access_control import admin_access, partner_access
+from api.dependencies.access_control import admin_access, partner_access, moh_staff_access
+from api.dependencies.auth import get_current_user
 from db.database import get_db
+from db.models import User
 from db.models.funding_unit import FundingUnit
 from db.models.pagination import PaginatedResponse
 from schemas.funding_unit import FundingUnitRead, FundingUnitCreate
@@ -27,13 +29,13 @@ async def create_funding_unit(request: Request, funding_unit: FundingUnitCreate,
     return new_funding_unit
 
 
-@router.get('/', response_model=PaginatedResponse[FundingUnitRead], dependencies=[Depends(partner_access)])
-async def get_funding_units(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
+@router.get('/', response_model=PaginatedResponse[FundingUnitRead])
+async def get_funding_units(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     return await get_all_items(db, FundingUnit, page=page, page_size=page_size)
 
 
-@router.get('/{uuid}', response_model=FundingUnitRead, dependencies=[Depends(partner_access)])
-async def get_funding_unit(uuid: str, db: AsyncSession = Depends(get_db)):
+@router.get('/{uuid}', response_model=FundingUnitRead)
+async def get_funding_unit(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = select(FundingUnit).filter(FundingUnit.uuid == uuid)
     funding_unit = await get_first_item(db, query)
     if not funding_unit:

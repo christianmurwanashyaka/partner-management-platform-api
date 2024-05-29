@@ -2,9 +2,10 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
-from api.dependencies.access_control import admin_access, partner_access
+from api.dependencies.access_control import admin_access, partner_access, moh_staff_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
+from db.models import User
 from db.models.input_category import Input, InputCategory
 from db.models.pagination import PaginatedResponse
 from schemas.input import InputRead, InputCreate
@@ -38,6 +39,6 @@ async def create_input(request: Request, input_form: InputCreate, db: AsyncSessi
     return new_input
 
 
-@router.get('/', response_model=PaginatedResponse[InputRead], dependencies=[Depends(partner_access)])
-async def get_inputs(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
+@router.get('/', response_model=PaginatedResponse[InputRead])
+async def get_inputs(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     return await get_all_items(db, Input, page=page, page_size=page_size)

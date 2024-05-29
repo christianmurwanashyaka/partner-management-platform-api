@@ -2,9 +2,10 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
-from api.dependencies.access_control import admin_access, partner_access
+from api.dependencies.access_control import admin_access, partner_access, moh_staff_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
+from db.models import User
 from db.models.input_category import InputCategory
 from db.models.pagination import PaginatedResponse
 from schemas.input_category import InputCategoryList, InputCategoryRead, InputCategoryCreate
@@ -31,13 +32,13 @@ async def create_input_category(request: Request, input_category: InputCategoryC
     return new_input_category
 
 
-@router.get('/', response_model=PaginatedResponse[InputCategoryList], dependencies=[Depends(partner_access)])
-async def get_input_categories(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
+@router.get('/', response_model=PaginatedResponse[InputCategoryList])
+async def get_input_categories(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     return await get_all_items(db, InputCategory, page=page, page_size=page_size)
 
 
-@router.get('/{uuid}', response_model=InputCategoryRead, dependencies=[Depends(partner_access)])
-async def get_input_category(uuid: str, db: AsyncSession = Depends(get_db)):
+@router.get('/{uuid}', response_model=InputCategoryRead)
+async def get_input_category(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = select(InputCategory).filter(InputCategory.uuid == uuid)
     input_category = await get_first_item(db, query)
     if not input_category:
