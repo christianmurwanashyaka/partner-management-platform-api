@@ -2,8 +2,10 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
-from api.dependencies.access_control import admin_access, partner_access
+from api.dependencies.access_control import admin_access, partner_access, moh_staff_access
+from api.dependencies.auth import get_current_user
 from db.database import get_db
+from db.models import User
 from db.models.domain import SubDomain, DomainIntervention
 from db.models.pagination import PaginatedResponse
 from schemas.sub_domain import SubDomainRead, SubDomainCreate
@@ -37,6 +39,6 @@ async def create_subdomain(request: Request, sub_domain_form: SubDomainCreate, d
     return new_subdomain
 
 
-@router.get('/', response_model=PaginatedResponse[SubDomainRead], dependencies=[Depends(partner_access)])
-async def get_subdomains(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
+@router.get('/', response_model=PaginatedResponse[SubDomainRead])
+async def get_subdomains(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     return await get_all_items(db, SubDomain, page=page, page_size=page_size)
