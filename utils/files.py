@@ -15,7 +15,7 @@ from openpyxl.styles import Font
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from db.models import Activity, ActivityDomain, OperationalZone, InputDetail
+from db.models import Activity, ActivityDomain, InputDetail
 
 
 async def handle_upload_file(file: UploadFile):
@@ -147,6 +147,7 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession):
         'Project Name',
         'Domain of Intervention',
         'Sub Domain of Intervention',
+        'Sub Domain Function',  # New column for Sub Domain Function
         'Location',
         'Funding Source',
         'Funding Unit',
@@ -189,6 +190,7 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession):
             for domain in activity_domains:
                 domain_name = domain.domain_intervention.name
                 sub_domain_name = domain.sub_domain.name
+                sub_domain_function_name = domain.sub_domain_function.name if domain.sub_domain_function else "N/A"  # Handle case where there might not be a sub_domain_function
 
                 data = [
                     organization.name,
@@ -196,6 +198,7 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession):
                     project.name,
                     domain_name,
                     sub_domain_name,
+                    sub_domain_function_name,  # New data for Sub Domain Function
                     location,
                     project.funding_source.name,
                     project.funding_unit.name,

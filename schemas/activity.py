@@ -6,12 +6,14 @@ from pydantic import BaseModel
 
 from schemas.domain_intervention import DomainInterventionList
 from schemas.input_detail import InputDetailCreate, InputDetailRead
-from schemas.sub_domain import SubDomainRead
+from schemas.sub_domain import SubDomainList
+from schemas.sub_domain_function import SubDomainFunctionRead
 
 
 class ActivityDomain(BaseModel):
     domain_intervention_id: uuid.UUID
     sub_domain_id: uuid.UUID
+    sub_domain_function_id: uuid.UUID
 
     class Config:
         from_attributes = True
@@ -24,7 +26,8 @@ class ActivityDomainUpdate(ActivityDomain):
 
 class ActivityDomainDetail(BaseModel):
     domain_intervention: DomainInterventionList
-    sub_domain: SubDomainRead
+    sub_domain: SubDomainList
+    sub_domain_function: SubDomainFunctionRead
 
     class Config:
         from_attributes = True
