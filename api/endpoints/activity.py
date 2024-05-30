@@ -95,6 +95,7 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
                 activity_id=new_activity.uuid,
                 domain_intervention_id=domain.domain_intervention_id,
                 sub_domain_id=domain.sub_domain_id,
+                sub_domain_function_id=domain.sub_domain_function_id,
                 created_by=user
             )
             print(
@@ -173,6 +174,7 @@ async def update_activity(
                     activity_id=activity.uuid,
                     domain_intervention_id=domain.domain_intervention_id,
                     sub_domain_id=domain.sub_domain_id,
+                    sub_domain_function_id=domain.sub_domain_function_id,
                     created_by=current_user.email
                 )
                 for domain in activity_update.domains

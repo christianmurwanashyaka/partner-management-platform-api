@@ -8,7 +8,8 @@ import time
 from uvicorn.config import LOGGING_CONFIG
 
 from api.endpoints import auth, budget_type, organization_type, funding_source, funding_unit, domain_intervention, \
-    input_category, sub_domain, input, organization, user, project, activity, party, mou_detail, mou_application, mou, files
+    input_category, sub_domain, input, organization, user, project, activity, party, mou_detail, mou_application, mou, \
+    files, sub_domain_function
 import uvicorn
 
 from db.database import create_db_and_tables, async_session
@@ -75,8 +76,9 @@ app.include_router(organization_type.router, prefix='/api/v1/organization_type',
 app.include_router(funding_source.router, prefix='/api/v1/funding_source', tags=["Funding Source"])
 app.include_router(funding_unit.router, prefix='/api/v1/funding_unit', tags=["Funding Unit"])
 app.include_router(domain_intervention.router, prefix='/api/v1/domain_intervention', tags=["Domain Intervention"])
-app.include_router(input_category.router, prefix='/api/v1/input_category', tags=["Input Category"])
 app.include_router(sub_domain.router, prefix='/api/v1/sub_domain', tags=["Sub Domain"])
+app.include_router(sub_domain_function.router, prefix='/api/v1/sub_domain_function', tags=["Sub Domain Function"])
+app.include_router(input_category.router, prefix='/api/v1/input_category', tags=["Input Category"])
 app.include_router(input.router, prefix='/api/v1/input', tags=["Input"])
 app.include_router(organization.router, prefix='/api/v1/organization', tags=["Organization"])
 app.include_router(user.router, prefix='/api/v1/user', tags=["User"])
