@@ -4,7 +4,7 @@ import uuid
 from pydantic import BaseModel
 from typing import Optional, List
 
-from schemas.sub_domain import SubDomainRead
+from schemas.sub_domain import SubDomainList
 
 
 class DomainInterventionCreate(BaseModel):
@@ -30,7 +30,7 @@ class DomainInterventionRead(BaseModel):
     uuid: uuid.UUID
     name: str
     description: Optional[str] = None
-    subdomains: List[SubDomainRead] = []
+    subdomains: List[SubDomainList] = []
     created_at: datetime
     created_by: str
 
