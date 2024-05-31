@@ -8,6 +8,7 @@ from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
+from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
 from db.models import OperationalZone, ActivityDomain
 from db.models.activity import Activity
@@ -202,7 +203,7 @@ async def update_activity(
 
         await db.commit()
         await db.refresh(activity)
-
+        await update_related_mou_application(activity, db)
         return activity
 
     except Exception as e:
