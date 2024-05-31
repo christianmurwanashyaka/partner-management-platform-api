@@ -7,8 +7,9 @@ from sqlmodel import select
 
 from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
+from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
-from db.models import Party, MouDetail, DocumentType, Document, User
+from db.models import Party, MouDetail, DocumentType, Document, User, UserRole
 from schemas.mou_detail import MouDetailRead
 from utils.files import handle_upload_file
 from utils.functions import parse_uuids
@@ -147,6 +148,7 @@ async def update_mou_detail(
         await db.commit()
         await db.refresh(mou_detail)
 
+        await update_related_mou_application(mou_detail, db)
         return mou_detail
     except Exception as e:
         await db.rollback()
