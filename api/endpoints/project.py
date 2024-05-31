@@ -7,6 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
+from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
 from db.models import Activity
 from db.models.organization import Organization
@@ -105,6 +106,8 @@ async def update_project(
 
         await db.commit()
         await db.refresh(project)
+
+        await update_related_mou_application(project, db)
 
         return project
     except Exception as e:
