@@ -3,19 +3,22 @@ import tempfile
 from datetime import datetime
 from io import BytesIO
 from itertools import chain
+from fastapi import status
 
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from docx.shared import Pt
-from fastapi import UploadFile, HTTPException
+from fastapi import UploadFile, HTTPException, Depends
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
-from db.models import Activity, ActivityDomain, InputDetail
+from db.database import get_db
+from db.models import Activity, ActivityDomain, InputDetail, MouApplication, MouDetail, Project
 
 
 async def handle_upload_file(file: UploadFile):
@@ -136,10 +139,12 @@ async def generate_mou_doc(mou_application, template_path):
     return buffer
 
 
-async def generate_mou_action_plan(mou_application, db: AsyncSession):
+async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(get_db)):
+    print('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX THIS IS IT XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
     wb = Workbook()
     ws = wb.active
     ws.title = 'Action Plan'
+    print('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX AFTER TITLE XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
 
     headers = [
         'Organization',
@@ -166,9 +171,23 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession):
     bold_font = Font(bold=True)
     for cell in ws[1]:
         cell.font = bold_font
+    print('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX BEFORE PROJECT XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
+    query = select(MouApplication).options(
+        selectinload(MouApplication.mou_detail).selectinload(MouDetail.project).selectinload(Project.organization)
+    ).where(MouApplication.uuid == mou_application.uuid)
+
+    result = await db.execute(query)
+    mou_application = result.scalar_one_or_none()
+
+    if not mou_application:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MouApplication not found')
 
     project = mou_application.mou_detail.project
     organization = project.organization
+
+    # project = await mou_application.mou_detail.project
+    print('THE PROJECT :::::::::::::::::::', project)
+    # organization = project.organization
 
     # Fetching activities and their related data
     project_activities_query = select(Activity).where(Activity.project_id == project.uuid)
