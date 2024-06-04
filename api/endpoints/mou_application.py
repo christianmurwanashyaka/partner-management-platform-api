@@ -435,6 +435,36 @@ async def get_mou_application_approvals_or_reviews(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+@router.get('/{uuid}/modification_comments', response_model=List[MouCommentRead])
+async def get_modification_comments(
+        uuid: uuid.UUID,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Fetch the MOU application to ensure it exists and the user has access
+        query = select(MouApplication).where(MouApplication.uuid == uuid)
+        result = await db.execute(query)
+        mou_application = result.scalar_one_or_none()
+
+        if not mou_application:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
+
+        # Fetch the comments related to the MOU application when the decision was 'REQUEST_MODIFICATION'
+        comments_query = select(MouComment).join(MouApprovalOrReview).where(
+            MouComment.mou_application_id == uuid,
+            MouApprovalOrReview.mou_application_id == uuid,
+            MouApprovalOrReview.decision == MouApprovalOrReviewDecision.REQUEST_MODIFICATION,
+            MouComment.mou_approval_or_review_id == MouApprovalOrReview.uuid
+        )
+        comments_result = await db.execute(comments_query)
+        comments = comments_result.scalars().all()
+
+        return comments
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.post('/{uuid}/approval_or_review', response_model=MouApprovalOrReviewRead, dependencies=[Depends(moh_staff_access)])
 async def add_approval_or_review(
         uuid: uuid.UUID,
