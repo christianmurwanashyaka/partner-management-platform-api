@@ -1,5 +1,8 @@
+import uuid
+from datetime import datetime
+
 from fastapi import APIRouter, Request, Depends, HTTPException, status
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload, aliased, contains_eager
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
@@ -7,7 +10,7 @@ from api.dependencies.access_control import admin_access, partner_access, moh_st
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User
-from db.models.domain import DomainIntervention
+from db.models.domain import DomainIntervention, SubDomain
 from db.models.pagination import PaginatedResponse
 from schemas.domain_intervention import DomainInterventionRead, DomainInterventionList, DomainInterventionCreate
 from helpers.db import check_if_exists, get_all_items, get_first_item
@@ -38,10 +41,51 @@ async def get_domain_interventions(page: int = 1, page_size: int = 100, db: Asyn
     return await get_all_items(db, DomainIntervention, page=page, page_size=page_size)
 
 
+# @router.get('/{uuid}', response_model=DomainInterventionRead)
+# async def get_domain_intervention(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+#     query = select(DomainIntervention).options(selectinload(DomainIntervention.subdomains)).filter(DomainIntervention.uuid == uuid)
+#     domain_intervention = await get_first_item(db, query)
+#     if not domain_intervention:
+#         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Domain intervention not found')
+#     return domain_intervention
+
+
 @router.get('/{uuid}', response_model=DomainInterventionRead)
-async def get_domain_intervention(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    query = select(DomainIntervention).options(selectinload(DomainIntervention.subdomains)).filter(DomainIntervention.uuid == uuid)
+async def get_domain_intervention(uuid: str, db: AsyncSession = Depends(get_db),
+                                  current_user: User = Depends(get_current_user)):
+    subdomain_alias = aliased(SubDomain)
+
+    query = (
+        select(DomainIntervention)
+        .join(subdomain_alias, subdomain_alias.domain_id == DomainIntervention.uuid, isouter=True)
+        .filter(subdomain_alias.deleted_status == False)
+        .filter(DomainIntervention.uuid == uuid)
+        .options(contains_eager(DomainIntervention.subdomains, alias=subdomain_alias)).distinct()
+    )
+
+    result = await db.execute(query)
+    domain_intervention = result.scalars().unique().one_or_none()
+
+    if not domain_intervention:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Domain intervention not found')
+
+    return domain_intervention
+
+
+@router.delete('/{uuid}', response_model=DomainInterventionRead, dependencies=[Depends(admin_access)])
+async def delete_domain_intervention(uuid: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
+    user = request.state.user.email
+
+    query = select(DomainIntervention).filter(DomainIntervention.uuid == uuid)
     domain_intervention = await get_first_item(db, query)
     if not domain_intervention:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Domain intervention not found')
+
+    domain_intervention.deleted_status = True
+    domain_intervention.deleted_by = user
+    domain_intervention.last_updated_at = datetime.now()
+    domain_intervention.last_updated_by = user
+
+    await db.commit()
+    await db.refresh(domain_intervention)
     return domain_intervention

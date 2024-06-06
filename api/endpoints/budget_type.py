@@ -1,3 +1,6 @@
+import uuid
+from datetime import datetime
+
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
@@ -40,4 +43,23 @@ async def get_budget_type(uuid: str, db: AsyncSession = Depends(get_db), current
     budget_type = await get_first_item(db, query)
     if not budget_type:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Budget type not found')
+    return budget_type
+
+
+@router.delete('/{uuid}', response_model=BudgetTypeRead, dependencies=[Depends(admin_access)])
+async def delete_budget_type(uuid: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
+    user = request.state.user.email
+
+    query = select(BudgetType).filter(BudgetType.uuid == uuid)
+    budget_type = await get_first_item(db, query)
+    if not budget_type:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Budget type not found')
+
+    budget_type.deleted_status = True
+    budget_type.deleted_by = user
+    budget_type.last_updated_at = datetime.now()
+    budget_type.last_updated_by = user
+
+    await db.commit()
+    await db.refresh(budget_type)
     return budget_type

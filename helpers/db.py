@@ -52,10 +52,12 @@ async def get_all_items(db: AsyncSession, model: Any, *, page: int = 1, page_siz
     :return: A tuple of total items count and a list of paginated items of the specified model.
     """
 
-    total_items = (await db.execute(select(func.count(model.id)))).scalar_one()
+    total_items_query = select(func.count(model.id)).where(model.deleted_status == False)
+    total_items = (await db.execute(total_items_query)).scalar_one()
     total_pages = (total_items + page_size - 1) // page_size
 
-    query = select(model).order_by(model.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+    query = select(model).where(model.deleted_status == False).order_by(model.created_at.desc()).offset(
+        (page - 1) * page_size).limit(page_size)
 
     if include:
         for field in include:
