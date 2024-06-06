@@ -33,3 +33,10 @@ class MouApplication(CommonBaseModel, table=True):
                                                      description='Current reviewer of the MOU application')
     current_reviewer: Optional['User'] = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
     next_level: Optional[MOHStaffLevel] = Field(default=None, description='Next level for the MOU application')
+
+    @property
+    def reference_number(self) -> str:
+        """Generate a unique reference number combining the creation date and the ID"""
+        if not self.id or not self.created_at:
+            return None
+        return f"{self.created_at:%Y%m%d}-{self.id}"
