@@ -1,3 +1,6 @@
+import uuid
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Request, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -59,4 +62,20 @@ async def get_sub_domain_function(uuid: str, db: AsyncSession = Depends(get_db),
     sub_domain_function = await get_first_item(db, query)
     if not sub_domain_function:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='SubDomainFunction not found')
+    return sub_domain_function
+
+
+@router.delete('/{uuid}', response_model=SubDomainFunctionRead, dependencies=[Depends(admin_access)])
+async def delete_sub_domain_function(uuid: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
+    user = request.state.user.email
+    query = select(SubDomainFunction).filter(SubDomainFunction.uuid == uuid)
+    sub_domain_function = await get_first_item(db, query)
+    if not sub_domain_function:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='SubDomainFunction not found')
+    sub_domain_function.deleted_status = True
+    sub_domain_function.deleted_by = user
+    sub_domain_function.last_updated_at = datetime.now()
+    sub_domain_function.last_updated_by = user
+    await db.commit()
+    await db.refresh(sub_domain_function)
     return sub_domain_function

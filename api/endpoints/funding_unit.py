@@ -1,3 +1,6 @@
+import uuid
+from datetime import datetime
+
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
@@ -40,4 +43,23 @@ async def get_funding_unit(uuid: str, db: AsyncSession = Depends(get_db), curren
     funding_unit = await get_first_item(db, query)
     if not funding_unit:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Funding unit not found')
+    return funding_unit
+
+
+@router.delete('/{uuid}', response_model=FundingUnitRead, dependencies=[Depends(admin_access)])
+async def delete_funding_unit(uuid: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
+    user = request.state.user.email
+
+    query = select(FundingUnit).filter(FundingUnit.uuid == uuid)
+    funding_unit = await get_first_item(db, query)
+    if not funding_unit:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Funding unit not found')
+
+    funding_unit.deleted_status = True
+    funding_unit.deleted_by = user
+    funding_unit.last_updated_at = datetime.now()
+    funding_unit.last_updated_by = user
+
+    await db.commit()
+    await db.refresh(funding_unit)
     return funding_unit

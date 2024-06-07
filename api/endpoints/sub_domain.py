@@ -1,3 +1,6 @@
+import uuid
+from datetime import datetime
+
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -51,4 +54,22 @@ async def get_sub_domain_details(uuid: str, db: AsyncSession = Depends(get_db), 
     subdomain = await get_first_item(db, query)
     if not subdomain:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='SubDomain not found')
+    return subdomain
+
+
+@router.delete('/{uuid}', response_model=SubDomainRead, dependencies=[Depends(admin_access)])
+async def delete_sub_domain(uuid: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
+    user = request.state.user.email
+    query = select(SubDomain).filter(SubDomain.uuid == uuid)
+    subdomain = await get_first_item(db, query)
+    if not subdomain:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='SubDomain not found')
+
+    subdomain.deleted_status = True
+    subdomain.deleted_by = user
+    subdomain.last_updated_at = datetime.now()
+    subdomain.last_updated_by = user
+
+    await db.commit()
+    await db.refresh(subdomain)
     return subdomain
