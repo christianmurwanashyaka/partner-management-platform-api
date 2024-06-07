@@ -35,6 +35,7 @@ class MouApplicationRead(BaseModel):
     mou_detail: MouDetailRead
     documents: List[DocumentRead] = []
     comments: List[MouApplicationBasicCommentRead] = []
+    reference_number: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -53,6 +54,7 @@ class SimpleOrganizationRead(BaseModel):
 class MouApplicationOrganizationRead(BaseModel):
     created_at: datetime
     created_by: str
+    reference_number: Optional[str] = None
     uuid: uuid.UUID
     status: MouApplicationStatus
     mou_detail: ApplicationMouDetailReadWithActivities

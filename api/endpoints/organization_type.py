@@ -1,3 +1,6 @@
+import uuid
+from datetime import datetime
+
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
@@ -40,4 +43,23 @@ async def get_organization_type(uuid: str, db: AsyncSession = Depends(get_db), c
     organization_type = await get_first_item(db, query)
     if not organization_type:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization type not found')
+    return organization_type
+
+
+@router.delete('/{uuid}', response_model=OrganizationTypeRead, dependencies=[Depends(admin_access)])
+async def delete_organization_type(uuid: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
+    user = request.state.user.email
+
+    query = select(OrganizationType).filter(OrganizationType.uuid == uuid)
+    organization_type = await get_first_item(db, query)
+    if not organization_type:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization type not found')
+
+    organization_type.deleted_status = True
+    organization_type.deleted_by = user
+    organization_type.last_updated_at = datetime.now()
+    organization_type.last_updated_by = user
+
+    await db.commit()
+    await db.refresh(organization_type)
     return organization_type

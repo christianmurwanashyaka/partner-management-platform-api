@@ -149,7 +149,8 @@ async def get_mou_applications(
                     website=organization.website
                 ),
                 current_reviewer=current_reviewer_read,
-                next_level=app.next_level
+                next_level=app.next_level,
+                reference_number=app.reference_number,
             )
             response.append(app_with_org)
 
