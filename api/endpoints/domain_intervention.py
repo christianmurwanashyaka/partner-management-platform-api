@@ -13,7 +13,7 @@ from db.models import User
 from db.models.domain import DomainIntervention, SubDomain
 from db.models.pagination import PaginatedResponse
 from schemas.domain_intervention import DomainInterventionRead, DomainInterventionList, DomainInterventionCreate
-from helpers.db import check_if_exists, get_all_items, get_first_item
+from helpers.db import check_if_exists, get_all_items, get_first_item, get_joined_details_by_uuid
 
 router = APIRouter()
 
@@ -41,30 +41,17 @@ async def get_domain_interventions(page: int = 1, page_size: int = 100, db: Asyn
     return await get_all_items(db, DomainIntervention, page=page, page_size=page_size)
 
 
-# @router.get('/{uuid}', response_model=DomainInterventionRead)
-# async def get_domain_intervention(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-#     query = select(DomainIntervention).options(selectinload(DomainIntervention.subdomains)).filter(DomainIntervention.uuid == uuid)
-#     domain_intervention = await get_first_item(db, query)
-#     if not domain_intervention:
-#         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Domain intervention not found')
-#     return domain_intervention
-
-
 @router.get('/{uuid}', response_model=DomainInterventionRead)
 async def get_domain_intervention(uuid: str, db: AsyncSession = Depends(get_db),
                                   current_user: User = Depends(get_current_user)):
-    subdomain_alias = aliased(SubDomain)
-
-    query = (
-        select(DomainIntervention)
-        .join(subdomain_alias, subdomain_alias.domain_id == DomainIntervention.uuid, isouter=True)
-        .filter(subdomain_alias.deleted_status == False)
-        .filter(DomainIntervention.uuid == uuid)
-        .options(contains_eager(DomainIntervention.subdomains, alias=subdomain_alias)).distinct()
+    domain_intervention = await get_joined_details_by_uuid(
+        db=db,
+        model=DomainIntervention,
+        alias_model=SubDomain,
+        join_condition=lambda alias: alias.domain_id == DomainIntervention.uuid,
+        uuid=uuid,
+        relationship_option=DomainIntervention.subdomains
     )
-
-    result = await db.execute(query)
-    domain_intervention = result.scalars().unique().one_or_none()
 
     if not domain_intervention:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Domain intervention not found')
