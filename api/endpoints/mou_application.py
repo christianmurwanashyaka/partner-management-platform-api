@@ -36,6 +36,8 @@ async def create_mou_application(
         mou_application_data: MouApplicationCreate,
         db: AsyncSession = Depends(get_db)):
     user = request.state.user.email
+    full_name = request.state.user.first_name + ' ' + request.state.user.last_name
+    print('FULL NAME :::::', full_name)
     try:
         query = select(MouDetail).filter(MouDetail.uuid == mou_application_data.mou_detail_id)
 
@@ -44,7 +46,11 @@ async def create_mou_application(
         if not mou_detail:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Mou detail not found')
 
-        new_mou_application = MouApplication(mou_detail_id=mou_application_data.mou_detail_id, created_by=user)
+        new_mou_application = MouApplication(
+            mou_detail_id=mou_application_data.mou_detail_id,
+            created_by=user,
+            submitted_by=full_name
+        )
 
         db.add(new_mou_application)
         await db.commit()
@@ -195,6 +201,7 @@ async def get_mou_applications(
             app_with_org = MouApplicationOrganizationRead(
                 created_at=app.created_at,
                 created_by=app.created_by,
+                submitted_by=app.submitted_by,
                 uuid=app.uuid,
                 status=app.status,
                 mou_detail=app.mou_detail,
@@ -208,6 +215,7 @@ async def get_mou_applications(
                 current_reviewer=current_reviewer_read,
                 next_level=app.next_level,
                 reference_number=app.reference_number,
+                last_decision_date=app.last_decision_date,
             )
             response.append(app_with_org)
 
@@ -686,6 +694,7 @@ async def add_approval_or_review(
 
         mou_application.current_reviewer_id = current_user.uuid
         mou_application.next_level = next_level
+        mou_application.last_decision_date = datetime.now()
 
         await db.commit()
         await db.refresh(mou_application)

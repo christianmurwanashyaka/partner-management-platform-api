@@ -36,6 +36,7 @@ class MouApplicationRead(BaseModel):
     documents: List[DocumentRead] = []
     comments: List[MouApplicationBasicCommentRead] = []
     reference_number: Optional[str] = None
+    submitted_by: str
 
     class Config:
         from_attributes = True
@@ -54,6 +55,7 @@ class SimpleOrganizationRead(BaseModel):
 class MouApplicationOrganizationRead(BaseModel):
     created_at: datetime
     created_by: str
+    submitted_by: Optional[str] = None
     reference_number: Optional[str] = None
     uuid: uuid.UUID
     status: MouApplicationStatus
@@ -62,6 +64,7 @@ class MouApplicationOrganizationRead(BaseModel):
     organization: SimpleOrganizationRead
     current_reviewer: Optional[UserProfileForApprovalOrReview] = None
     next_level: Optional[MOHStaffLevel] = None
+    last_decision_date: Optional[datetime] = None
 
     class Config:
         from_attributes = True
