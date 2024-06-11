@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, aliased, contains_eager
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
@@ -10,10 +10,10 @@ from api.dependencies.access_control import admin_access, partner_access, moh_st
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User
-from db.models.domain import SubDomain, DomainIntervention
+from db.models.domain import SubDomain, DomainIntervention, SubDomainFunction
 from db.models.pagination import PaginatedResponse
 from schemas.sub_domain import SubDomainList, SubDomainCreate, SubDomainRead
-from helpers.db import check_if_exists, get_all_items, get_first_item
+from helpers.db import check_if_exists, get_all_items, get_first_item, get_joined_details_by_uuid
 
 router = APIRouter()
 
@@ -50,10 +50,18 @@ async def get_all_sub_domains(page: int = 1, page_size: int = 100, db: AsyncSess
 
 @router.get('/{uuid}', response_model=SubDomainRead)
 async def get_sub_domain_details(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    query = select(SubDomain).options(selectinload(SubDomain.functions)).filter(SubDomain.uuid == uuid)
-    subdomain = await get_first_item(db, query)
+    subdomain = await get_joined_details_by_uuid(
+        db=db,
+        model=SubDomain,
+        alias_model=SubDomainFunction,
+        join_condition=lambda alias: alias.sub_domain_id == SubDomain.uuid,
+        uuid=uuid,
+        relationship_option=SubDomain.functions
+    )
+
     if not subdomain:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='SubDomain not found')
+
     return subdomain
 
 

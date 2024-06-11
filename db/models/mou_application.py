@@ -1,3 +1,4 @@
+from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
@@ -33,6 +34,12 @@ class MouApplication(CommonBaseModel, table=True):
                                                      description='Current reviewer of the MOU application')
     current_reviewer: Optional['User'] = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
     next_level: Optional[MOHStaffLevel] = Field(default=None, description='Next level for the MOU application')
+    created_by: Optional[str] = Field(default=None, description='Email of the user who created the MOU application')
+    submitted_by: Optional[str] = Field(default=None, description='Name of the user who submitted the MOU application')
+    last_decision_date: Optional[datetime] = Field(
+        default=None,
+        description='Date of the last decision made on the MOU application'
+    )
 
     @property
     def reference_number(self) -> str:

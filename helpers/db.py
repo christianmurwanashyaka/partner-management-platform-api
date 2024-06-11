@@ -3,7 +3,7 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Selectable
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, aliased, contains_eager
 from typing import Any, Optional
 
 from db.models.pagination import PaginatedResponse
@@ -85,3 +85,32 @@ async def get_items_by_criteria(db: AsyncSession, query: Selectable):
     """
     result = await db.execute(query)
     return result.scalars().all()
+
+
+async def get_joined_details_by_uuid(db: AsyncSession, model, alias_model, join_condition, uuid: str, relationship_option):
+    """
+    Retrieves joined details of a model by its UUID. This is for models that have items from another model.
+
+    :param db: An AsyncSession instance representing the database session.
+    :param model: The SQLAlchemy model class representing the table.
+    :param alias_model: The SQLAlchemy model class representing the alias table.
+    :param join_condition: The SQLAlchemy join condition between the model and alias model.
+    :param uuid: The UUID of the model to retrieve.
+    :param relationship_option: The relationship option to use for the join.
+
+    :return: the item retrieved from the database.
+    """
+    alias = aliased(alias_model)
+
+    query = (
+        select(model)
+        .join(alias, join_condition(alias), isouter=True)
+        .filter(alias.deleted_status == False)
+        .filter(model.uuid == uuid)
+        .options(contains_eager(relationship_option, alias=alias)).distinct()
+    )
+
+    result = await db.execute(query)
+    item = result.scalars().unique().one_or_none()
+
+    return item

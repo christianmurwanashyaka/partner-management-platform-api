@@ -1,3 +1,6 @@
+from datetime import datetime
+
+import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
@@ -42,3 +45,21 @@ async def create_input(request: Request, input_form: InputCreate, db: AsyncSessi
 @router.get('/', response_model=PaginatedResponse[InputRead])
 async def get_inputs(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     return await get_all_items(db, Input, page=page, page_size=page_size)
+
+
+@router.delete('/{uuid}', response_model=InputRead, dependencies=[Depends(admin_access)])
+async def delete_input(uuid: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
+    user = request.state.user.email
+    query = select(Input).filter(Input.uuid == uuid)
+    input = await get_first_item(db, query)
+    if not input:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Input not found')
+
+    input.deleted_status = True
+    input.deleted_by = user
+    input.last_updated_at = datetime.now()
+    input.last_updated_by = user
+
+    await db.commit()
+    await db.refresh(input)
+    return input
