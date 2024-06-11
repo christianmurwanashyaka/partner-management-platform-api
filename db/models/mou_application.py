@@ -12,6 +12,7 @@ from .user import MOHStaffLevel
 class MouApplicationStatus(str, Enum):
     PENDING = 'pending'
     UNDER_REVIEW = 'under_review'
+    READY_FOR_APPROVAL = 'ready_for_approval'
     UNDER_APPROVAL = 'under_approval'
     APPROVED = 'approved'
     REJECTED = 'rejected'
