@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 
 import uuid
-from fastapi import APIRouter, Request, Depends, status, HTTPException
+from fastapi import APIRouter, Request, Depends, status, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -11,7 +11,7 @@ from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, MOHStaffLevel, \
     MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou, MouReview, PaginatedResponse, \
-    Organization, Activity, ActivityDomain
+    Organization, Activity, ActivityDomain, InputDetail
 from db.models.mou_approval_or_review import MouApprovalOrReview, MouApprovalOrReviewDecision
 from db.models.mou_review import MouReviewDecision
 from helpers.db import get_first_item
@@ -36,6 +36,8 @@ async def create_mou_application(
         mou_application_data: MouApplicationCreate,
         db: AsyncSession = Depends(get_db)):
     user = request.state.user.email
+    full_name = request.state.user.first_name + ' ' + request.state.user.last_name
+    print('FULL NAME :::::', full_name)
     try:
         query = select(MouDetail).filter(MouDetail.uuid == mou_application_data.mou_detail_id)
 
@@ -44,7 +46,11 @@ async def create_mou_application(
         if not mou_detail:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Mou detail not found')
 
-        new_mou_application = MouApplication(mou_detail_id=mou_application_data.mou_detail_id, created_by=user)
+        new_mou_application = MouApplication(
+            mou_detail_id=mou_application_data.mou_detail_id,
+            created_by=user,
+            submitted_by=full_name
+        )
 
         db.add(new_mou_application)
         await db.commit()
@@ -76,38 +82,95 @@ async def create_mou_application(
 async def get_mou_applications(
         page: int = 1,
         page_size: int = 100,
+        organization_uuids: Optional[List[str]] = Query(None),
+        funding_source_uuids: Optional[List[str]] = Query(None),
+        funding_unit_uuids: Optional[List[str]] = Query(None),
+        budget_type_uuids: Optional[List[str]] = Query(None),
+        domain_intervention_uuids: Optional[List[str]] = Query(None),
+        sub_domain_uuids: Optional[List[str]] = Query(None),
+        sub_domain_function_uuids: Optional[List[str]] = Query(None),
+        input_category_uuids: Optional[List[str]] = Query(None),
+        input_uuids: Optional[List[str]] = Query(None),
+        districts: Optional[List[str]] = Query(None),
+        provinces: Optional[List[str]] = Query(None),
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
     try:
+        # base query
+        query = select(MouApplication).options(
+            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
+            joinedload(MouApplication.documents),
+            joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
+            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.domains),
+            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.input_details),
+            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents),
+            joinedload(MouApplication.comments).joinedload(MouComment.user),
+            joinedload(MouApplication.approvals).joinedload(MouApproval.comments).joinedload(MouComment.user),
+            joinedload(MouApplication.reviews).joinedload(MouReview.comments).joinedload(MouComment.user),
+            joinedload(MouApplication.current_reviewer)
+        ).order_by(MouApplication.created_at.desc())
+
+        # filtering by user role
         if current_user.role in ['admin', 'moh_staff']:
-            query = select(MouApplication).options(
-                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
-                joinedload(MouApplication.documents),
-                joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
-                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.domains),
-                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.input_details),
-                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents),
-                joinedload(MouApplication.comments).joinedload(MouComment.user),
-                joinedload(MouApplication.approvals).joinedload(MouApproval.comments).joinedload(MouComment.user),
-                joinedload(MouApplication.reviews).joinedload(MouReview.comments).joinedload(MouComment.user),
-                joinedload(MouApplication.current_reviewer)
-            ).order_by(MouApplication.created_at.desc())
+            pass
         elif current_user.role == 'partner':
-            query = select(MouApplication).where(MouApplication.created_by == current_user.email).options(
-                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
-                joinedload(MouApplication.documents),
-                joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
-                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.domains),
-                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.input_details),
-                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents),
-                joinedload(MouApplication.comments).joinedload(MouComment.user),
-                joinedload(MouApplication.approvals).joinedload(MouApproval.comments).joinedload(MouComment.user),
-                joinedload(MouApplication.reviews).joinedload(MouReview.comments).joinedload(MouComment.user),
-                joinedload(MouApplication.current_reviewer)
-            ).order_by(MouApplication.created_at.desc())
+            query = query.where(MouApplication.created_by == current_user.email)
         else:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+
+        """TODO: ADD VALIDATION FOR FILTERS. TO CHECK IF THEY EXIST, BEFORE TRYING TO FETCH THE RELATED DATA"""
+
+        # filtering by organization uuids
+        if organization_uuids:
+            query = query.where(Project.organization_id.in_(organization_uuids))
+
+        # filtering by funding source uuids
+        if funding_source_uuids:
+            query = query.where(Project.funding_source_id.in_(funding_source_uuids))
+
+        # filtering by funding unit uuids
+        if funding_unit_uuids:
+            query = query.where(Project.funding_unit_id.in_(funding_unit_uuids))
+
+        # filtering by budget type uuids
+        if budget_type_uuids:
+            query = query.where(Project.budget_type_id.in_(budget_type_uuids))
+
+        # filtering by domain intervention uuids
+        if domain_intervention_uuids:
+            query = query.join(MouDetail.project).join(Project.activities).join(Activity.domains).where(
+                ActivityDomain.domain_intervention_id.in_(domain_intervention_uuids))
+
+        # filtering by subdomain uuids
+        if sub_domain_uuids:
+            query = query.join(MouDetail.project).join(Project.activities).join(Activity.domains).where(
+                ActivityDomain.sub_domain_id.in_(sub_domain_uuids))
+
+        # filtering by subdomain function uuids
+        if sub_domain_function_uuids:
+            query = query.join(MouDetail.project).join(Project.activities).join(Activity.domains).where(
+                ActivityDomain.sub_domain_function_id.in_(sub_domain_function_uuids))
+
+        # filtering by input category uuids
+        if input_category_uuids:
+            query = query.join(MouDetail.project).join(Project.activities).join(Activity.input_details).where(
+                InputDetail.input_category_id.in_(input_category_uuids))
+
+        # filtering by input uuids
+        if input_uuids:
+            query = query.join(MouDetail.project).join(Project.activities).join(Activity.input_details).where(
+                InputDetail.input_id.in_(input_uuids))
+
+        # filtering by districts
+        if districts:
+            query = query.join(MouDetail.project).join(Project.activities).join(Activity.input_details).where(
+                InputDetail.district.in_(districts))
+
+        # filtering by provinces
+        if provinces:
+            query = query.join(MouDetail.project).join(Project.activities).join(Activity.input_details).where(
+                InputDetail.province.in_(provinces))
 
         total_items_query = select(func.count()).select_from(query.subquery())
         total_items = (await db.execute(total_items_query)).scalar_one()
@@ -138,6 +201,7 @@ async def get_mou_applications(
             app_with_org = MouApplicationOrganizationRead(
                 created_at=app.created_at,
                 created_by=app.created_by,
+                submitted_by=app.submitted_by,
                 uuid=app.uuid,
                 status=app.status,
                 mou_detail=app.mou_detail,
@@ -151,6 +215,7 @@ async def get_mou_applications(
                 current_reviewer=current_reviewer_read,
                 next_level=app.next_level,
                 reference_number=app.reference_number,
+                last_decision_date=app.last_decision_date,
             )
             response.append(app_with_org)
 
@@ -629,6 +694,7 @@ async def add_approval_or_review(
 
         mou_application.current_reviewer_id = current_user.uuid
         mou_application.next_level = next_level
+        mou_application.last_decision_date = datetime.now()
 
         await db.commit()
         await db.refresh(mou_application)
