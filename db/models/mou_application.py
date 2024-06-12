@@ -9,6 +9,12 @@ from db.models import CommonBaseModel
 from .user import MOHStaffLevel
 
 
+class ModificationEntity(str, Enum):
+    DOCUMENT = 'document'
+    PROJECT = 'project'
+    ACTIVITIES = 'activities'
+
+
 class MouApplicationStatus(str, Enum):
     PENDING = 'pending'
     UNDER_REVIEW = 'under_review'
@@ -41,6 +47,7 @@ class MouApplication(CommonBaseModel, table=True):
         default=None,
         description='Date of the last decision made on the MOU application'
     )
+    modification_entity: Optional[ModificationEntity] = Field(default=None, description='Entity that needs modification if requested')
 
     @property
     def reference_number(self) -> str:

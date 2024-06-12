@@ -12,6 +12,7 @@ class MouApprovalOrReviewDecision(str, Enum):
     REQUEST_MODIFICATION = 'request_modification'
     APPROVE = 'approve'
     REJECT = 'reject'
+    VERIFIED = 'verified'
 
 
 class MouApprovalOrReview(CommonBaseModel, table=True):
