@@ -1,10 +1,12 @@
 from datetime import datetime
+from enum import Enum
 from typing import Optional, List
 
 import uuid
 from pydantic import BaseModel, EmailStr
 
 from db.models import UserRole, MOHStaffLevel
+from db.models.mou_application import ModificationEntity
 from db.models.mou_approval_or_review import MouApprovalOrReviewDecision
 
 
@@ -23,6 +25,7 @@ class UserProfileForApprovalOrReview(BaseModel):
 class MouApprovalOrReviewBase(BaseModel):
     decision: MouApprovalOrReviewDecision
     comment: Optional[str] = None
+    modification_entity: Optional[ModificationEntity] = None
 
 
 class MouApprovalOrReviewCreate(MouApprovalOrReviewBase):
