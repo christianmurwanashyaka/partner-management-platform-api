@@ -15,7 +15,6 @@ import uvicorn
 from db.database import create_db_and_tables, async_session
 from utils.security import create_admin
 
-
 LOGGING_CONFIG["loggers"] = {
     "uvicorn.error": {"level": "INFO"},
     "uvicorn.access": {"level": "INFO"},
@@ -62,7 +61,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-origins = ["http://localhost:5173", "http://173.249.42.7:4173"]
+origins = ["http://localhost:5173", "http://173.249.42.7:4173", "0.0.0.0", "https://ihris.hisprwanda.org:4173", "*"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -91,7 +90,6 @@ app.include_router(mou_detail.router, prefix='/api/v1/mou_detail', tags=['MOU De
 app.include_router(mou_application.router, prefix='/api/v1/mou_application', tags=['MOU Application'])
 app.include_router(mou.router, prefix='/api/v1/mou', tags=['MOU'])
 app.include_router(files.router, prefix='/api/v1/files', tags=['Files'])
-
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=7001, reload=True)
