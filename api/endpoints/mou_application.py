@@ -216,6 +216,7 @@ async def get_mou_applications(
                 next_level=app.next_level,
                 reference_number=app.reference_number,
                 last_decision_date=app.last_decision_date,
+                modification_entity=app.modification_entity,
             )
             response.append(app_with_org)
 
@@ -272,7 +273,10 @@ async def get_mou_application(
                     name=organization.name,
                     email=organization.email,
                     website=organization.website
-                )
+                ),
+                submitted_by=mou_application.submitted_by,
+                modification_entity=mou_application.modification_entity,
+                last_decision_date=mou_application.last_decision_date
             )
 
             return mou_application_with_documents
@@ -785,6 +789,7 @@ async def add_approval_or_review(
             elif approval_or_review.decision == MouApprovalOrReviewDecision.REQUEST_MODIFICATION:
                 mou_application.status = MouApplicationStatus.REQUEST_MODIFICATION
                 mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
+                mou_application.modification_entity = approval_or_review.modification_entity
 
         elif mou_application.status in [MouApplicationStatus.READY_FOR_APPROVAL, MouApplicationStatus.UNDER_APPROVAL]:
             if current_user.level not in approval_stage_levels:

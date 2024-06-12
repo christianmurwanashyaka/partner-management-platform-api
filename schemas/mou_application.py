@@ -5,6 +5,7 @@ import uuid
 from pydantic import BaseModel, EmailStr
 
 from db.models import MouApplicationStatus, MOHStaffLevel
+from db.models.mou_application import ModificationEntity
 from schemas.document import DocumentRead
 from schemas.mou_approval_or_review import UserProfileForApprovalOrReview
 from schemas.mou_detail import MouDetailRead, ApplicationMouDetailRead, ApplicationMouDetailReadWithActivities
@@ -36,7 +37,9 @@ class MouApplicationRead(BaseModel):
     documents: List[DocumentRead] = []
     comments: List[MouApplicationBasicCommentRead] = []
     reference_number: Optional[str] = None
-    submitted_by: str
+    submitted_by: Optional[str] = None
+    last_decision_date: Optional[datetime] = None
+    modification_entity: Optional[ModificationEntity] = None
 
     class Config:
         from_attributes = True
@@ -65,6 +68,7 @@ class MouApplicationOrganizationRead(BaseModel):
     current_reviewer: Optional[UserProfileForApprovalOrReview] = None
     next_level: Optional[MOHStaffLevel] = None
     last_decision_date: Optional[datetime] = None
+    modification_entity: Optional[ModificationEntity] = None
 
     class Config:
         from_attributes = True
