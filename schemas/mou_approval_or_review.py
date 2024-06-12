@@ -25,7 +25,6 @@ class UserProfileForApprovalOrReview(BaseModel):
 class MouApprovalOrReviewBase(BaseModel):
     decision: MouApprovalOrReviewDecision
     comment: Optional[str] = None
-    modification_entity: Optional[ModificationEntity] = None
 
 
 class MouApprovalOrReviewCreate(MouApprovalOrReviewBase):
