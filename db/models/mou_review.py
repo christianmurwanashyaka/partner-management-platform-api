@@ -8,28 +8,18 @@ from db.models import CommonBaseModel
 
 
 class MouReviewDecision(str, Enum):
+    RECOMMEND_APPROVAL = 'recommend_approval'
+    REQUEST_MODIFICATION = 'request_modification'
+    REJECT = 'reject'
     VERIFIED = 'verified'
-    NOT_YET_VERIFIED = 'not_yet_verified'
 
 
 class MouReview(CommonBaseModel, table=True):
     __tablename__ = 'mou_review'
-
-    user_id: uuid.UUID = Field(foreign_key='user.uuid')
-    user: 'User' = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
-
+    
+    decision: MouReviewDecision = Field(description='Decision made during the review')
+    current_review_id: uuid.UUID = Field(foreign_key='user.uuid')
+    current_reviewer: 'User' = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
     mou_application_id: uuid.UUID = Field(foreign_key='mou_application.uuid')
     mou_application: 'MouApplication' = Relationship(back_populates='reviews', sa_relationship_kwargs={'lazy': 'selectin'})
-
     comments: List['MouComment'] = Relationship(back_populates='mou_review', sa_relationship_kwargs={'lazy': 'selectin'})
-
-    decision: MouReviewDecision = Field(description='Decision made during the review')
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.validate_decision()
-
-    def validate_decision(self):
-        from db.models.user import MOHStaffLevel
-        if self.user.level not in [MOHStaffLevel.PARTNER_COORDINATOR, MOHStaffLevel.LEGAL_ADVISOR]:
-            raise ValueError('Only Partner Coordinator or Legal Advisor can make review decisions')
