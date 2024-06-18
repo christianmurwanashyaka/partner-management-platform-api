@@ -4,11 +4,16 @@ from typing import Optional
 import uuid
 from pydantic import BaseModel
 
-from db.models import MOHStaffLevel
-from schemas.mou_approval_or_review import MouApprovalOrReviewBase, UserProfileForApprovalOrReview
+from db.models import MOHStaffLevel, MouReviewDecision
+from schemas.mou_approval_or_review import UserProfileForApprovalOrReview
 
 
-class MouReviewCreate(MouApprovalOrReviewBase):
+class MouReviewBase(BaseModel):
+    decision: MouReviewDecision
+    comment: Optional[str] = None
+
+
+class MouReviewCreate(MouReviewBase):
     pass
 
 
@@ -22,9 +27,8 @@ class MouReviewCommentRead(BaseModel):
         from_attributes = True
 
 
-class MouReviewRead(MouApprovalOrReviewBase):
+class MouReviewRead(MouReviewBase):
     uuid: uuid.UUID
     created_at: datetime
-    created_by: str
     current_reviewer: Optional[UserProfileForApprovalOrReview]
     next_level: Optional[MOHStaffLevel] = None
