@@ -4,7 +4,7 @@ from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Request, Depends, status, HTTPException, Query
 from sqlalchemy import select, func
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.access_control import partner_access, moh_staff_access
 from api.dependencies.auth import get_current_user
@@ -22,7 +22,7 @@ from schemas.mou_application import MouApplicationRead, MouApplicationCreate, Si
     MouApplicationOrganizationRead, MouApplicationBasicCommentRead
 from schemas.mou_approval import MouApprovalRead, MouApprovalCreate
 from schemas.mou_approval_or_review import MouApprovalOrReviewRead, MouApprovalOrReviewCreate, \
-    UserProfileForApprovalOrReview, MouApprovalOrReadCommentRead
+    UserProfileForApprovalOrReview, MouApprovalOrReviewCommentRead
 from schemas.mou_review import MouReviewRead, MouReviewCreate
 from schemas.user import UserProfile
 from utils.files import generate_mou_action_plan, generate_mou_doc, save_mou_doc_to_disk
@@ -332,12 +332,33 @@ async def get_mou_application_approvals(
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
         # Query to get approvals
-        approval_query = select(MouApproval).filter(MouApproval.mou_application_id == uuid).order_by(MouApproval.created_at.desc())
+        approval_query = (
+            select(MouApproval)
+            .options(joinedload(MouApproval.current_approver))
+            .options(joinedload(MouApproval.comments).joinedload(MouComment.user))
+            .filter(MouApproval.mou_application_id == uuid)
+            .order_by(MouApproval.created_at.desc())
+        )
         total_items_query = select(func.count()).select_from(approval_query.subquery())
         total_items = (await db.execute(total_items_query)).scalar_one()
 
         approvals_result = await db.execute(approval_query.offset((page - 1) * page_size).limit(page_size))
-        approvals = approvals_result.scalars().all()
+        approvals = approvals_result.scalars().unique().all()
+
+        response_data = []
+
+        for approval in approvals:
+            current_approver = approval.current_approver
+            comments = [MouApprovalOrReviewCommentRead(uuid=comment.uuid, content=comment.content, created_at=comment.created_at, created_by=comment.created_by) for comment in approval.comments]
+
+            current_approver_read = None
+            if current_approver:
+                print('CURRENT APPROVER :::::::::::::', current_approver)
+                current_approver_read = UserProfileForApprovalOrReview(uuid=current_approver.uuid, first_name=current_approver.first_name, last_name=current_approver.last_name, email=current_approver.email, role=current_approver.role, level=current_approver.level)
+
+            approval_read = MouApprovalRead(uuid=approval.uuid, decision=approval.decision, comment=comments[0].content if comments else None, created_at=approval.created_at, current_approver=current_approver_read)
+
+            response_data.append(approval_read)
 
         total_pages = (total_items + page_size - 1) // page_size
         paginated_response = PaginatedResponse(
@@ -345,7 +366,7 @@ async def get_mou_application_approvals(
             page_size=page_size,
             total_items=total_items,
             total_pages=total_pages,
-            data=approvals
+            data=response_data
         )
 
         return paginated_response
@@ -614,12 +635,51 @@ async def get_mou_application_reviews(
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
         # Query to get reviews
-        review_query = select(MouReview).filter(MouReview.mou_application_id == uuid).order_by(MouReview.created_at.desc())
+        review_query = (
+            select(MouReview)
+            .options(joinedload(MouReview.current_reviewer))
+            .options(joinedload(MouReview.comments).joinedload(MouComment.user))
+            .filter(MouReview.mou_application_id == uuid)
+            .order_by(MouReview.created_at.desc())
+        )
+
         total_items_query = select(func.count()).select_from(review_query.subquery())
         total_items = (await db.execute(total_items_query)).scalar_one()
 
-        reviews_result = await db.execute(review_query.offset((page - 1) * page_size).limit(page_size))
-        reviews = reviews_result.scalars().all()
+        reviews_result = await db.execute(
+            review_query.offset((page - 1) * page_size).limit(page_size)
+        )
+        reviews = reviews_result.scalars().unique().all()
+
+        response_data = []
+
+        for review in reviews:
+            current_reviewer = review.current_reviewer
+            comments = [
+                MouApprovalOrReviewCommentRead(
+                    uuid=comment.uuid,
+                    content=comment.content,
+                    created_at=comment.created_at,
+                    created_by=comment.created_by
+                )
+                for comment in review.comments
+            ]
+
+            current_reviewer_read = None
+            if current_reviewer:
+                print('CURRENT REVIEWER :::::::::::::', current_reviewer)
+                current_reviewer_read = UserProfileForApprovalOrReview(
+                    uuid=current_reviewer.uuid,
+                    first_name=current_reviewer.first_name,
+                    last_name=current_reviewer.last_name,
+                    email=current_reviewer.email,
+                    role=current_reviewer.role,
+                    level=current_reviewer.level,
+                )
+
+            review_read = MouReviewRead(uuid=review.uuid, decision=review.decision, comment=comments[0].content if comments else None, created_at=review.created_at,current_reviewer=current_reviewer_read)
+
+            response_data.append(review_read)
 
         total_pages = (total_items + page_size - 1) // page_size
         paginated_response = PaginatedResponse(
@@ -627,7 +687,7 @@ async def get_mou_application_reviews(
             page_size=page_size,
             total_items=total_items,
             total_pages=total_pages,
-            data=reviews
+            data=response_data
         )
 
         return paginated_response
@@ -702,7 +762,7 @@ async def get_mou_application_approvals_or_reviews(
             current_reviewer = approval_or_review.current_reviewer
 
             comments = [
-                MouApprovalOrReadCommentRead(
+                MouApprovalOrReviewCommentRead(
                     uuid=comment.uuid,
                     content=comment.content,
                     created_at=comment.created_at,
