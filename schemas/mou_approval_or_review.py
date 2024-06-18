@@ -31,7 +31,7 @@ class MouApprovalOrReviewCreate(MouApprovalOrReviewBase):
     pass
 
 
-class MouApprovalOrReadCommentRead(BaseModel):
+class MouApprovalOrReviewCommentRead(BaseModel):
     uuid: uuid.UUID
     content: str
     created_at: datetime
