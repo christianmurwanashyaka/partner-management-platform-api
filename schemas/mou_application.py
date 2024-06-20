@@ -39,7 +39,7 @@ class MouApplicationRead(BaseModel):
     reference_number: Optional[str] = None
     submitted_by: Optional[str] = None
     last_decision_date: Optional[datetime] = None
-    modification_entity: Optional[ModificationEntity] = None
+    modification_entity: str = None
 
     class Config:
         from_attributes = True
@@ -50,6 +50,7 @@ class SimpleOrganizationRead(BaseModel):
     name: str
     email: EmailStr
     website: str
+    organization_type: str
 
     class Config:
         from_attributes = True

@@ -210,7 +210,8 @@ async def get_mou_applications(
                     uuid=organization.uuid,
                     name=organization.name,
                     email=organization.email,
-                    website=organization.website
+                    website=organization.website,
+                    organization_type=organization.organization_type.name
                 ),
                 current_reviewer=current_reviewer_read,
                 next_level=app.next_level,
@@ -272,7 +273,8 @@ async def get_mou_application(
                     uuid=organization.uuid,
                     name=organization.name,
                     email=organization.email,
-                    website=organization.website
+                    website=organization.website,
+                    organization_type=organization.organization_type.name,
                 ),
                 submitted_by=mou_application.submitted_by,
                 modification_entity=mou_application.modification_entity,
