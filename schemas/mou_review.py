@@ -1,16 +1,18 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 import uuid
 from pydantic import BaseModel
 
 from db.models import MOHStaffLevel, MouReviewDecision
+from db.models.mou_application import ModificationEntity
 from schemas.mou_approval_or_review import UserProfileForApprovalOrReview
 
 
 class MouReviewBase(BaseModel):
     decision: MouReviewDecision
     comment: Optional[str] = None
+    modification_entity: Optional[str] = None
 
 
 class MouReviewCreate(MouReviewBase):
