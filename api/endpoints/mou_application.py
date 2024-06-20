@@ -390,57 +390,56 @@ async def add_review(
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
-        # Define the allowed decisions for the review stage
-        review_stage_decisions_partner = [
-            MouReviewDecision.RECOMMEND_APPROVAL,
-            MouReviewDecision.REQUEST_MODIFICATION,
-            MouReviewDecision.REJECT
-        ]
+        # Initial review checks
+        if mou_application.last_decision_date is None:
+            # New application
+            if current_user.level not in [MOHStaffLevel.TECHNICAL_DEPARTMENT, MOHStaffLevel.LEGAL_ADVISOR]:
+                raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                    detail='Only technical department or legal advisor can review a new application')
 
-        review_stage_decisions_others = [
-            MouReviewDecision.VERIFIED,
-            MouReviewDecision.REQUEST_MODIFICATION
-        ]
-
-        review_stage_levels = [
-            MOHStaffLevel.PARTNER_COORDINATOR,
-            MOHStaffLevel.TECHNICAL_DEPARTMENT,
-            MOHStaffLevel.LEGAL_ADVISOR
-        ]
-
-        # Check if the current user is allowed to make the decision
-        if current_user.level not in review_stage_levels:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to make decisions in the review stage')
-
-        if (current_user.level == MOHStaffLevel.PARTNER_COORDINATOR and review.decision not in review_stage_decisions_partner) or (current_user.level in [MOHStaffLevel.TECHNICAL_DEPARTMENT, MOHStaffLevel.LEGAL_ADVISOR] and review.decision not in review_stage_decisions_others):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Invalid decision for the review stage')
-
-        # Handle decisions in the review stage
-        if current_user.level == MOHStaffLevel.PARTNER_COORDINATOR:
-            if review.decision == MouReviewDecision.RECOMMEND_APPROVAL:
-                if mou_application.next_level == MOHStaffLevel.PARTNER_COORDINATOR:
-                    mou_application.status = MouApplicationStatus.UNDER_APPROVAL
-                    mou_application.next_level = MOHStaffLevel.HOD
-                else:
-                    raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Application must be verified by both Technical Department and Legal Advisor before recommending approval')
-            elif review.decision == MouReviewDecision.REJECT:
-                mou_application.status = MouApplicationStatus.REJECTED
-                mou_application.next_level = None
-            elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
-                mou_application.status = MouApplicationStatus.REQUEST_MODIFICATION
-                mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
-                mou_application.modification_entity = review.modification_entity
-
-        elif current_user.level in [MOHStaffLevel.TECHNICAL_DEPARTMENT, MOHStaffLevel.LEGAL_ADVISOR]:
+            # Handle initial reviews
             if review.decision == MouReviewDecision.VERIFIED:
-                if not mou_application.next_level or mou_application.next_level == current_user.level:
-                    mou_application.next_level = MOHStaffLevel.LEGAL_ADVISOR if current_user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT else MOHStaffLevel.TECHNICAL_DEPARTMENT
-                elif mou_application.next_level in [MOHStaffLevel.TECHNICAL_DEPARTMENT, MOHStaffLevel.LEGAL_ADVISOR]:
-                    mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
-                mou_application.status = MouApplicationStatus.UNDER_REVIEW
-            elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
-                mou_application.status = MouApplicationStatus.REQUEST_MODIFICATION
-                mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
+                next_level = MOHStaffLevel.LEGAL_ADVISOR if current_user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT else MOHStaffLevel.TECHNICAL_DEPARTMENT
+            elif review.decision in [MouReviewDecision.REJECT, MouReviewDecision.REQUEST_MODIFICATION]:
+                next_level = MOHStaffLevel.PARTNER_COORDINATOR
+            else:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Invalid decision for the initial review')
+
+        else:
+            # Application with reviews
+            if current_user.level != mou_application.next_level:
+                raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                    detail='You are not authorized to make decisions at this level')
+
+            if current_user.level == MOHStaffLevel.PARTNER_COORDINATOR:
+                if review.decision == MouReviewDecision.RECOMMEND_APPROVAL:
+                    mou_application.status = MouApplicationStatus.UNDER_APPROVAL
+                    next_level = MOHStaffLevel.HOD
+                elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
+                    mou_application.status = MouApplicationStatus.REQUEST_MODIFICATION
+                    mou_application.modification_entity = review.modification_entity
+                    # Ensure next level is not stuck at partner coordinator
+                    if mou_application.current_reviewer.level in [MOHStaffLevel.PARTNER_COORDINATOR, MOHStaffLevel.HOD, MOHStaffLevel.PS]:
+                        next_level = MOHStaffLevel.TECHNICAL_DEPARTMENT
+                    else:
+                        next_level = mou_application.current_reviewer.level
+                elif review.decision == MouReviewDecision.REJECT:
+                    mou_application.status = MouApplicationStatus.REJECTED
+                    next_level = None
+                else:
+                    raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Invalid decision for partner coordinator')
+
+            elif current_user.level in [MOHStaffLevel.TECHNICAL_DEPARTMENT, MOHStaffLevel.LEGAL_ADVISOR]:
+                if review.decision == MouReviewDecision.VERIFIED:
+                    if not mou_application.next_level:  # Only set next_level if it is currently null
+                        next_level = MOHStaffLevel.LEGAL_ADVISOR if current_user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT else MOHStaffLevel.TECHNICAL_DEPARTMENT
+                    else:
+                        next_level = MOHStaffLevel.PARTNER_COORDINATOR
+                elif review.decision in [MouReviewDecision.REJECT, MouReviewDecision.REQUEST_MODIFICATION]:
+                    next_level = MOHStaffLevel.PARTNER_COORDINATOR
+                else:
+                    raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                        detail='Invalid decision for technical department or legal advisor')
 
         # Record the review
         new_review = MouReview(
@@ -471,6 +470,7 @@ async def add_review(
         # Update MOU application with the latest review details
         mou_application.current_reviewer_id = current_user.uuid
         mou_application.last_decision_date = datetime.now()
+        mou_application.next_level = next_level
 
         await db.commit()
         await db.refresh(mou_application)
