@@ -8,6 +8,7 @@ class PartyBase(BaseModel):
     responsibilities: List[str] = Field(..., description="List of responsibilities for the party")
     signatory: str = Field(..., description="Signatory of the party")
     position: Optional[str] = None
+    duration: Optional[str] = None
 
     class Config:
         from_attributes: True
@@ -22,6 +23,7 @@ class PartyUpdate(BaseModel):
     responsibilities: Optional[List[str]] = None
     signatory: Optional[str] = None
     position: Optional[str] = None
+    duration: Optional[str] = None
 
     class Config:
         from_attributes: True
