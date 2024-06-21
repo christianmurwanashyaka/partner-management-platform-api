@@ -39,7 +39,7 @@ class MouApplicationRead(BaseModel):
     reference_number: Optional[str] = None
     submitted_by: Optional[str] = None
     last_decision_date: Optional[datetime] = None
-    modification_entity: str = None
+    modification_entity: Optional[str] = None
 
     class Config:
         from_attributes = True
