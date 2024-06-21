@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import uuid
 from pydantic import BaseModel, EmailStr
@@ -30,6 +30,17 @@ class MouApplicationBasicCommentRead(BaseModel):
         from_attributes = True
 
 
+class SimpleOrganizationRead(BaseModel):
+    uuid: uuid.UUID
+    name: str
+    email: EmailStr
+    website: str
+    organization_type: str
+
+    class Config:
+        from_attributes = True
+
+
 class MouApplicationRead(BaseModel):
     uuid: uuid.UUID
     status: MouApplicationStatus
@@ -39,18 +50,8 @@ class MouApplicationRead(BaseModel):
     reference_number: Optional[str] = None
     submitted_by: Optional[str] = None
     last_decision_date: Optional[datetime] = None
-    modification_entity: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-class SimpleOrganizationRead(BaseModel):
-    uuid: uuid.UUID
-    name: str
-    email: EmailStr
-    website: str
-    organization_type: str
+    modification_entity: Optional[List[Union[ModificationEntity, None]]] = None
+    organization: Optional[SimpleOrganizationRead] = None
 
     class Config:
         from_attributes = True
@@ -63,13 +64,13 @@ class MouApplicationOrganizationRead(BaseModel):
     reference_number: Optional[str] = None
     uuid: uuid.UUID
     status: MouApplicationStatus
+    modification_entity: Optional[List[Union[ModificationEntity, None]]] = None
     mou_detail: ApplicationMouDetailReadWithActivities
     documents: List[DocumentRead] = []
-    organization: SimpleOrganizationRead
+    organization: Optional[SimpleOrganizationRead] = None
     current_reviewer: Optional[UserProfileForApprovalOrReview] = None
     next_level: Optional[MOHStaffLevel] = None
     last_decision_date: Optional[datetime] = None
-    modification_entity: Optional[ModificationEntity] = None
 
     class Config:
         from_attributes = True
