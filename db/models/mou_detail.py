@@ -14,4 +14,3 @@ class MouDetail(CommonBaseModel, table=True):
     parties: List['Party'] = Relationship(back_populates='mou_detail', sa_relationship_kwargs={'lazy': 'selectin'})
     mou_application: Optional['MouApplication'] = Relationship(back_populates='mou_detail', sa_relationship_kwargs={'lazy': 'selectin'})
     documents: List[Document] = Relationship(back_populates='mou_detail', sa_relationship_kwargs={'lazy': 'selectin'})
-    duration: int = Field(default=1, nullable=True)

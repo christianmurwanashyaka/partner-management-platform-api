@@ -12,7 +12,7 @@ from schemas.mou_approval_or_review import UserProfileForApprovalOrReview
 class MouReviewBase(BaseModel):
     decision: MouReviewDecision
     comment: Optional[str] = None
-    modification_entity: Optional[str] = None
+    modification_entity: Optional[List[ModificationEntity]] = None
 
 
 class MouReviewCreate(MouReviewBase):

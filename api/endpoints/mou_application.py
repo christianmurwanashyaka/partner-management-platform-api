@@ -197,6 +197,7 @@ async def get_mou_applications(
                 )
             else:
                 current_reviewer_read = None
+            print('APPLICATION ::::::::::::::', app)
 
             app_with_org = MouApplicationOrganizationRead(
                 created_at=app.created_at,
@@ -419,7 +420,8 @@ async def add_review(
                     next_level = MOHStaffLevel.HOD
                 elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
                     mou_application.status = MouApplicationStatus.REQUEST_MODIFICATION
-                    mou_application.modification_entity = review.modification_entity
+                    if review.modification_entity:
+                        mou_application.modification_entity = review.modification_entity  # Store the list directly
                     # Ensure next level is not stuck at partner coordinator
                     if mou_application.current_reviewer.level in [MOHStaffLevel.PARTNER_COORDINATOR, MOHStaffLevel.HOD, MOHStaffLevel.PS]:
                         next_level = MOHStaffLevel.TECHNICAL_DEPARTMENT

@@ -22,7 +22,6 @@ async def create_mou_detail(
         request: Request,
         project_id: uuid.UUID = Form(...),
         party_ids: str = Form(...),
-        duration: int = Form(...),
         db: AsyncSession = Depends(get_db),
         memo_describing_the_source_of_funds: UploadFile = File(...),
         capacity_building_transfer_plan: UploadFile = File(...),
@@ -38,7 +37,6 @@ async def create_mou_detail(
 
         new_mou_detail = MouDetail(
             project_id=project_id,
-            duration=duration,
             created_by=user
         )
         db.add(new_mou_detail)
@@ -83,7 +81,6 @@ async def update_mou_detail(
         uuid: uuid.UUID,
         project_id: Optional[uuid.UUID] = Form(None),
         party_ids: Optional[str] = Form(None),
-        duration: Optional[int] = Form(None),
         memo_describing_the_source_of_funds: UploadFile = None,
         capacity_building_transfer_plan: UploadFile = None,
         memo_describing_the_long_term_objective: UploadFile = None,
@@ -105,8 +102,6 @@ async def update_mou_detail(
         # Update the MouDetail fields
         if project_id is not None:
             mou_detail.project_id = project_id
-        if duration is not None:
-            mou_detail.duration = duration
 
         # Update parties if provided
         if party_ids is not None:
