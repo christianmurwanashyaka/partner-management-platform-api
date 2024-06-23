@@ -71,6 +71,7 @@ class MouApplicationOrganizationRead(BaseModel):
     current_reviewer: Optional[UserProfileForApprovalOrReview] = None
     next_level: Optional[MOHStaffLevel] = None
     last_decision_date: Optional[datetime] = None
+    comments: List[MouApplicationBasicCommentRead] = []
 
     class Config:
         from_attributes = True

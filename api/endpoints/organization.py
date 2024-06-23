@@ -314,7 +314,8 @@ async def get_organization_mou_applications(uuid: uuid.UUID, db: AsyncSession = 
                     email=organization.email,
                     website=organization.website,
                     organization_type=organization.organization_type.name,
-                )
+                ),
+                comments=app.comments
             )
             response.append(app_with_org)
 

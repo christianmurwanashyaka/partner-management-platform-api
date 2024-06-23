@@ -216,6 +216,7 @@ async def get_mou_applications(
                 ),
                 current_reviewer=current_reviewer_read,
                 next_level=app.next_level,
+                comments=app.comments,
                 reference_number=app.reference_number,
                 last_decision_date=app.last_decision_date,
                 modification_entity=app.modification_entity,
