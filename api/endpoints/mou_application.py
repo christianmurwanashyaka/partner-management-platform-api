@@ -277,6 +277,7 @@ async def get_mou_application(
                     website=organization.website,
                     organization_type=organization.organization_type.name,
                 ),
+                comments=mou_application.comments,
                 submitted_by=mou_application.submitted_by,
                 modification_entity=mou_application.modification_entity,
                 last_decision_date=mou_application.last_decision_date
@@ -841,187 +842,6 @@ async def get_modification_comments(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-"""@router.post('/{uuid}/approval_or_review', response_model=MouApprovalOrReviewRead, dependencies=[Depends(moh_staff_access)])
-async def add_approval_or_review(
-        uuid: uuid.UUID,
-        approval_or_review: MouApprovalOrReviewCreate,
-        db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
-):
-    try:
-        query = select(MouApplication).where(MouApplication.uuid == uuid)
-        result = await db.execute(query)
-        mou_application = result.scalar_one_or_none()
-
-        if not mou_application:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
-
-        # Define the allowed decisions for each stage
-        review_stage_decisions_partner = [
-            MouApprovalOrReviewDecision.RECOMMEND_APPROVAL,
-            MouApprovalOrReviewDecision.REQUEST_MODIFICATION,
-            MouApprovalOrReviewDecision.REJECT
-        ]
-
-        review_stage_decisions_others = [
-            MouApprovalOrReviewDecision.VERIFIED,
-            MouApprovalOrReviewDecision.REQUEST_MODIFICATION
-        ]
-
-        approval_stage_decisions = [
-            MouApprovalOrReviewDecision.APPROVE,
-            MouApprovalOrReviewDecision.REJECT
-        ]
-
-        # Define the user levels for each stage
-        review_stage_levels = [
-            MOHStaffLevel.PARTNER_COORDINATOR,
-            MOHStaffLevel.TECHNICAL_DEPARTMENT,
-            MOHStaffLevel.LEGAL_ADVISOR
-        ]
-
-        approval_stage_levels = [
-            MOHStaffLevel.HOD,
-            MOHStaffLevel.LEGAL_ADVISOR,
-            MOHStaffLevel.PS,
-            MOHStaffLevel.MINISTER_OF_STATE,
-            MOHStaffLevel.MINISTER
-        ]
-
-        # Check if the current user is allowed to make the decision
-        if mou_application.status in [MouApplicationStatus.UNDER_REVIEW, MouApplicationStatus.REQUEST_MODIFICATION]:
-            if current_user.level not in review_stage_levels:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to make decisions in the review stage')
-
-            if (current_user.level == MOHStaffLevel.PARTNER_COORDINATOR and approval_or_review.decision not in review_stage_decisions_partner) or (current_user.level in [MOHStaffLevel.TECHNICAL_DEPARTMENT, MOHStaffLevel.LEGAL_ADVISOR] and approval_or_review.decision not in review_stage_decisions_others):
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Invalid decision for the review stage')
-
-            # Handle decisions in the review stage
-            if current_user.level == MOHStaffLevel.PARTNER_COORDINATOR:
-                if approval_or_review.decision == MouApprovalOrReviewDecision.RECOMMEND_APPROVAL:
-                    if mou_application.next_level == MOHStaffLevel.PARTNER_COORDINATOR:
-                        mou_application.status = MouApplicationStatus.UNDER_APPROVAL
-                        mou_application.next_level = MOHStaffLevel.HOD
-                    else:
-                        raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Application must be verified by both Technical Department and Legal Advisor before recommending approval')
-                elif approval_or_review.decision == MouApprovalOrReviewDecision.REJECT:
-                    mou_application.status = MouApplicationStatus.REJECTED
-                    mou_application.next_level = None
-                elif approval_or_review.decision == MouApprovalOrReviewDecision.REQUEST_MODIFICATION:
-                    mou_application.status = MouApplicationStatus.REQUEST_MODIFICATION
-                    mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
-                    mou_application.modification_entity = approval_or_review.modification_entity
-
-            elif current_user.level in [MOHStaffLevel.TECHNICAL_DEPARTMENT, MOHStaffLevel.LEGAL_ADVISOR]:
-                if approval_or_review.decision == MouApprovalOrReviewDecision.VERIFIED:
-                    if not mou_application.next_level or mou_application.next_level == current_user.level:
-                        mou_application.next_level = MOHStaffLevel.LEGAL_ADVISOR if current_user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT else MOHStaffLevel.TECHNICAL_DEPARTMENT
-                    elif mou_application.next_level in [MOHStaffLevel.TECHNICAL_DEPARTMENT, MOHStaffLevel.LEGAL_ADVISOR]:
-                        mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
-                    mou_application.status = MouApplicationStatus.UNDER_REVIEW
-                elif approval_or_review.decision == MouApprovalOrReviewDecision.REQUEST_MODIFICATION:
-                    mou_application.status = MouApplicationStatus.REQUEST_MODIFICATION
-                    mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
-
-        elif mou_application.status in [MouApplicationStatus.READY_FOR_APPROVAL, MouApplicationStatus.UNDER_APPROVAL]:
-            if current_user.level not in approval_stage_levels:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to make decisions in the approval stage')
-
-            if approval_or_review.decision not in approval_stage_decisions:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Invalid decision for the approval stage')
-
-            # Handle decisions in the approval stage
-            if approval_or_review.decision == MouApprovalOrReviewDecision.APPROVE:
-                if current_user.level in [MOHStaffLevel.MINISTER_OF_STATE, MOHStaffLevel.MINISTER]:
-                    mou_application.status = MouApplicationStatus.APPROVED
-                    organization = mou_application.mou_detail.project.organization
-                    template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
-                    document_buffer = await generate_mou_doc(mou_application, template_path)
-                    filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-                    filepath, filename = await save_mou_doc_to_disk(document_buffer, filename)
-
-                    new_document = Document(
-                        name=f"MOU Application - {mou_application.id}",
-                        description="Memorandum of understanding document",
-                        document_type=DocumentType.MOU,
-                        path=filepath,
-                        filename=filename,
-                        mou_application_id=uuid,
-                        created_by=current_user.email
-                    )
-
-                    db.add(new_document)
-                    await db.commit()
-                    await db.refresh(new_document)
-
-                    new_mou = Mou(
-                        mou_application_id=uuid,
-                        mou_detail_id=mou_application.mou_detail_id,
-                        document_id=new_document.uuid,
-                        created_by=current_user.email
-                    )
-
-                    db.add(new_mou)
-                    await db.commit()
-                    await db.refresh(new_mou)
-                else:
-                    next_level_index = approval_stage_levels.index(current_user.level) + 1
-                    mou_application.next_level = approval_stage_levels[next_level_index]
-            elif approval_or_review.decision == MouApprovalOrReviewDecision.REJECT:
-                if current_user.level in [MOHStaffLevel.MINISTER_OF_STATE, MOHStaffLevel.MINISTER]:
-                    mou_application.status = MouApplicationStatus.REJECTED
-                    mou_application.next_level = None
-                else:
-                    mou_application.status = MouApplicationStatus.UNDER_REVIEW
-                    mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
-
-        # Record the decision
-        new_approval_or_review = MouApprovalOrReview(
-            mou_application_id=uuid,
-            decision=approval_or_review.decision,
-            current_reviewer_id=current_user.uuid,
-            created_by=current_user.email
-        )
-        db.add(new_approval_or_review)
-        await db.commit()
-        await db.refresh(new_approval_or_review)
-
-        # Record the comment if any
-        comment_content = None
-        if approval_or_review.comment:
-            new_comment = MouComment(
-                content=approval_or_review.comment,
-                user_id=current_user.uuid,
-                mou_application_id=uuid,
-                mou_approval_or_review_id=new_approval_or_review.uuid,
-                created_by=current_user.email
-            )
-            db.add(new_comment)
-            await db.commit()
-            await db.refresh(new_comment)
-            comment_content = new_comment.content
-
-        # Update MOU application with the latest review details
-        mou_application.current_reviewer_id = current_user.uuid
-        mou_application.last_decision_date = datetime.now()
-
-        await db.commit()
-        await db.refresh(mou_application)
-
-        return MouApprovalOrReviewRead(
-            uuid=new_approval_or_review.uuid,
-            decision=new_approval_or_review.decision,
-            comment=comment_content,
-            created_at=new_approval_or_review.created_at,
-            created_by=new_approval_or_review.created_by,
-            current_reviewer=current_user,
-            next_level=mou_application.next_level
-        )
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))"""
-
-
 async def update_related_mou_application(entity, db: AsyncSession = Depends(get_db)):
     if isinstance(entity, Activity):
         mou_details = entity.project.mou_details
@@ -1040,6 +860,7 @@ async def update_related_mou_application(entity, db: AsyncSession = Depends(get_
         print(mou_application)
         if mou_application:
             print('^^^^^^^^^^^^^^^^^ IF IS TRUE ^^^^^^^^^^^^^^^^^')
+            mou_application.status = MouApplicationStatus.MODIFIED
             file_path, filename = await generate_mou_action_plan(mou_application, db)
             print('FILE PATH ::::::::::::::::::::', file_path)
             print('FILE NAME ::::::::::::::::::::', filename)
