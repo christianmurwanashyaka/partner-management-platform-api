@@ -1,13 +1,16 @@
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from api.dependencies.access_control import admin_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models.organization import Organization
 from db.models.user import User, UserRole, MOHStaffLevel
 from helpers.db import get_first_item, check_if_exists, get_items_by_criteria
-from schemas.user import UserCreate, Token, LoginRequest, UserProfile, SignupResponse, UserOrganization
+from schemas.user import UserCreate, Token, LoginRequest, UserProfile, SignupResponse, UserOrganization, \
+    ChangePasswordRequest
 from utils.security import get_password_hash, verify_password, create_access_token
 
 router = APIRouter()
@@ -99,3 +102,40 @@ async def get_user_profile(current_user: User = Depends(get_current_user), db: A
             role=current_user.role,
             level=current_user.level
         )
+
+
+@router.post('/{uuid}/reset-password-to-default', response_model=UserProfile, dependencies=[Depends(admin_access)])
+async def reset_password_to_default(uuid: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    try:
+        query = select(User).where(User.uuid == uuid)
+        result = await db.execute(query)
+        user = result.scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='User not found')
+
+        default_password = '1234'
+        user.password = get_password_hash(default_password)
+        await db.commit()
+        await db.refresh(user)
+
+        return user
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post('/change_password', response_model=UserProfile)
+async def change_password(change_password_request: ChangePasswordRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    try:
+        if not verify_password(change_password_request.old_password, current_user.password):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Incorrect old password")
+        current_user.password = get_password_hash(change_password_request.new_password)
+
+        await db.commit()
+        await db.refresh(current_user)
+
+        return current_user
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
