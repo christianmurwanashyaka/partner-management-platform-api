@@ -11,10 +11,10 @@ from .user import MOHStaffLevel
 
 
 class ModificationEntity(str, Enum):
-    DOCUMENT = 'document'
-    PROJECT = 'project'
-    ACTIVITIES = 'activities'
-    MOU = 'mou'
+    DOCUMENT = 'DOCUMENTS'
+    PROJECT = 'PROJECT'
+    ACTIVITIES = 'ACTIVITY'
+    MOU = 'MoU'
 
 
 class MouApplicationStatus(str, Enum):
@@ -25,6 +25,7 @@ class MouApplicationStatus(str, Enum):
     APPROVED = 'approved'
     REJECTED = 'rejected'
     REQUEST_MODIFICATION = 'request_modification'
+    MODIFIED = "modified"
 
 
 class MouApplication(CommonBaseModel, table=True):
