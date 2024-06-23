@@ -79,3 +79,8 @@ class UserProfile(BaseModel):
 class SignupResponse(BaseModel):
     user: UserProfile
     token: BaseToken
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
