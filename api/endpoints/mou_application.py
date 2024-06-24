@@ -425,10 +425,7 @@ async def add_review(
                     if review.modification_entity:
                         mou_application.modification_entity = review.modification_entity  # Store the list directly
                     # Ensure next level is not stuck at partner coordinator
-                    if mou_application.current_reviewer.level in [MOHStaffLevel.PARTNER_COORDINATOR, MOHStaffLevel.HOD, MOHStaffLevel.PS]:
-                        next_level = MOHStaffLevel.TECHNICAL_DEPARTMENT
-                    else:
-                        next_level = mou_application.current_reviewer.level
+                        next_level = MOHStaffLevel.PARTNER_COORDINATOR
                 elif review.decision == MouReviewDecision.REJECT:
                     mou_application.status = MouApplicationStatus.REJECTED
                     next_level = None
