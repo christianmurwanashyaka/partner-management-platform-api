@@ -17,3 +17,6 @@ class ActivityDomain(CommonBaseModel, table=True):
 
     sub_domain_function_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='sub_domain_function.uuid')
     sub_domain_function: 'SubDomainFunction' = Relationship(back_populates='activities', sa_relationship_kwargs={'lazy': 'selectin'})
+
+    sub_function_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='sub_function.uuid')
+    sub_function: 'SubFunction' = Relationship(back_populates='activities', sa_relationship_kwargs={'lazy': 'selectin'})
