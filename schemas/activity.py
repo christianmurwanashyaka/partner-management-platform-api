@@ -8,12 +8,14 @@ from schemas.domain_intervention import DomainInterventionList
 from schemas.input_detail import InputDetailCreate, InputDetailRead
 from schemas.sub_domain import SubDomainList
 from schemas.sub_domain_function import SubDomainFunctionRead
+from schemas.sub_function import SubFunctionRead
 
 
 class ActivityDomain(BaseModel):
     domain_intervention_id: uuid.UUID
     sub_domain_id: uuid.UUID
     sub_domain_function_id: uuid.UUID
+    sub_function_id: uuid.UUID
 
     class Config:
         from_attributes = True
@@ -28,6 +30,7 @@ class ActivityDomainDetail(BaseModel):
     domain_intervention: DomainInterventionList
     sub_domain: SubDomainList
     sub_domain_function: SubDomainFunctionRead
+    sub_function: SubFunctionRead
 
     class Config:
         from_attributes = True
@@ -63,7 +66,6 @@ class ActivityCreate(BaseModel):
     fiscal_year: str
     domains: List[ActivityDomain]
     input_details: List[InputDetailCreate]
-    # operational_zones: List[OperationalZoneCreate]
 
     class Config:
         from_attributes = True
@@ -80,7 +82,6 @@ class ActivityList(BaseModel):
     start_date: date
     end_date: date
     domains: List[ActivityDomainDetail]
-    # operational_zones: List[OperationalZoneRead]
 
     class Config:
         from_attributes = True
@@ -100,7 +101,6 @@ class ActivityRead(BaseModel):
     input_details: List[InputDetailRead]
     created_at: datetime
     created_by: str
-    # operational_zones: List[OperationalZoneRead]
 
     class Config:
         from_attributes = True

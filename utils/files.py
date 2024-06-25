@@ -158,7 +158,8 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
         'Project Name',
         'Domain of Intervention',
         'Sub Domain of Intervention',
-        'Sub Domain Function',  # New column for Sub Domain Function
+        'Sub Domain Function',
+        'Sub Function',
         'Location',
         'Funding Source',
         'Funding Unit',
@@ -215,7 +216,8 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
             for domain in activity_domains:
                 domain_name = domain.domain_intervention.name
                 sub_domain_name = domain.sub_domain.name
-                sub_domain_function_name = domain.sub_domain_function.name if domain.sub_domain_function else "N/A"  # Handle case where there might not be a sub_domain_function
+                sub_domain_function_name = domain.sub_domain_function.name if domain.sub_domain_function else "N/A"
+                sub_function_name = domain.sub_function.name if domain.sub_function else "N/A"
 
                 data = [
                     organization.name,
@@ -223,7 +225,8 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
                     project.name,
                     domain_name,
                     sub_domain_name,
-                    sub_domain_function_name,  # New data for Sub Domain Function
+                    sub_domain_function_name,
+                    sub_function_name,
                     location,
                     project.funding_source.name,
                     project.funding_unit.name,
