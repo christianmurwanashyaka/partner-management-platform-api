@@ -71,7 +71,7 @@ async def generate_mou_doc(mou_application, template_path):
         '{ORGANIZATION_EMAIL}': organization.email,
         '{ORGANIZATION_WEBSITE}': organization.website,
         '{ORGANIZATION_ADDRESS}': organization.rwanda_avenue,
-        '{OVERALL_GOAL}': project.goals[0].name if project.goals else '',
+        '{OVERALL_GOAL}': project.overall_gaol,
         '{ACTIVITIES_DOMAINS}': domains_str,
         '{PARTY_RESPONSIBILITIES}': responsibilities_str,
         '{PARTY_SIGNATORY_NAME}': party_signatory,
@@ -128,13 +128,7 @@ async def generate_mou_doc(mou_application, template_path):
     for paragraph in doc.paragraphs:
         if '{PROJECT_GOALS}' in paragraph.text:
             paragraph.text = paragraph.text.replace('{PROJECT_GOALS}', '')
-            # Check if there are more than one goal
-            if len(project.goals) > 1:
-                goals_to_process = project.goals[1:]  # Skip the first goal
-            else:
-                goals_to_process = project.goals  # Use all goals if only one or none
-
-            for goal in goals_to_process:
+            for goal in project.goals:
                 goal_paragraph = paragraph.insert_paragraph_before(goal.name)
                 goal_paragraph.style = doc.styles['List Number']
                 set_font(goal_paragraph)

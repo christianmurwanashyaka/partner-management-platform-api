@@ -20,8 +20,8 @@ class MOHStaffLevel(str, Enum):
     LEGAL_ADVISOR = "legal_advisor"
     HOD = "hod"
     PS = "ps"
-    MINISTER_OF_STATE = "minister_of_state"
     MINISTER = "minister"
+    # MINISTER_OF_STATE = "minister_of_state"
 
 
 class User(CommonBaseModel, table=True):

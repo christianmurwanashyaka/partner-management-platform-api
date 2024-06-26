@@ -135,7 +135,9 @@ async def get_mou_applications(
 
         # filtering by budget type uuids
         if budget_type_uuids:
-            query = query.where(Project.budget_type_id.in_(budget_type_uuids))
+            query = query.join(MouDetail, MouDetail.uuid == MouApplication.mou_detail_id) \
+                .join(Project, Project.uuid == MouDetail.project_id) \
+                .where(Project.budget_type_id.in_(budget_type_uuids))
 
         # filtering by domain intervention uuids
         if domain_intervention_uuids:
@@ -309,7 +311,7 @@ async def start_review(uuid: str, request: Request, db: AsyncSession = Depends(g
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='MOU application is not in a pending state')
 
         mou_application.status = MouApplicationStatus.UNDER_REVIEW
-        mou_application.current_reviewer_id = user.uuid
+        mou_application.last_updated_at = datetime.now()
 
         await db.commit()
         await db.refresh(mou_application)
@@ -403,9 +405,14 @@ async def add_review(
                                     detail='Only technical department or legal advisor can review a new application')
 
             # Handle initial reviews
+            if review.decision == MouReviewDecision.REJECT:
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    detail='Only partner coordinator is allowed to reject an application in the review stage'
+                )
             if review.decision == MouReviewDecision.VERIFIED:
                 next_level = MOHStaffLevel.LEGAL_ADVISOR if current_user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT else MOHStaffLevel.TECHNICAL_DEPARTMENT
-            elif review.decision in [MouReviewDecision.REJECT, MouReviewDecision.REQUEST_MODIFICATION]:
+            elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
                 next_level = MOHStaffLevel.PARTNER_COORDINATOR
             else:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Invalid decision for the initial review')
@@ -438,7 +445,7 @@ async def add_review(
                         next_level = MOHStaffLevel.LEGAL_ADVISOR if current_user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT else MOHStaffLevel.TECHNICAL_DEPARTMENT
                     else:
                         next_level = MOHStaffLevel.PARTNER_COORDINATOR
-                elif review.decision in [MouReviewDecision.REJECT, MouReviewDecision.REQUEST_MODIFICATION]:
+                elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
                     next_level = MOHStaffLevel.PARTNER_COORDINATOR
                 else:
                     raise HTTPException(status.HTTP_403_FORBIDDEN,
@@ -510,15 +517,16 @@ async def add_approval(
         # Define the allowed decisions for the approval stage
         approval_stage_decisions = [
             MouApprovalDecision.APPROVE,
-            MouApprovalDecision.REJECT
+            MouApprovalDecision.REJECT,
+            MouApprovalDecision.REQUEST_MODIFICATION,
         ]
 
         approval_stage_levels = [
             MOHStaffLevel.HOD,
             MOHStaffLevel.LEGAL_ADVISOR,
             MOHStaffLevel.PS,
-            MOHStaffLevel.MINISTER_OF_STATE,
             MOHStaffLevel.MINISTER
+            # MOHStaffLevel.MINISTER_OF_STATE,
         ]
 
         # Check if the current user is allowed to make the decision
@@ -530,7 +538,7 @@ async def add_approval(
 
         # Handle decisions in the approval stage
         if approval.decision == MouApprovalDecision.APPROVE:
-            if current_user.level in [MOHStaffLevel.MINISTER_OF_STATE, MOHStaffLevel.MINISTER]:
+            if current_user.level == MOHStaffLevel.MINISTER:
                 mou_application.status = MouApplicationStatus.APPROVED
                 organization = mou_application.mou_detail.project.organization
                 template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
@@ -565,11 +573,7 @@ async def add_approval(
             else:
                 next_level_index = approval_stage_levels.index(current_user.level) + 1
                 mou_application.next_level = approval_stage_levels[next_level_index]
-        elif approval.decision == MouApprovalDecision.REJECT:
-            if current_user.level in [MOHStaffLevel.MINISTER_OF_STATE, MOHStaffLevel.MINISTER]:
-                mou_application.status = MouApplicationStatus.REJECTED
-                mou_application.next_level = None
-            else:
+        elif approval.decision in [MouApprovalDecision.REQUEST_MODIFICATION, MouApprovalDecision.REJECT]:
                 mou_application.status = MouApplicationStatus.UNDER_REVIEW
                 mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
 
