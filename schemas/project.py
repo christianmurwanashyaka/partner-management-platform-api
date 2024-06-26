@@ -38,6 +38,7 @@ class ProjectCreate(BaseModel):
     organization_id: uuid.UUID
     funding_unit_id: uuid.UUID
     funding_source_id: uuid.UUID
+    overall_goal: str
     goals: List[GoalCreate]
 
     class Config:
@@ -66,6 +67,7 @@ class ProjectRead(BaseModel):
     currency: str
     created_at: datetime
     created_by: str
+    overall_goal: str
     goals: List[GoalRead]
     activities: List[ActivityList] = []
 
@@ -81,6 +83,7 @@ class ProjectUpdate(BaseModel):
     currency: Optional[str] = None
     funding_unit_id: Optional[uuid.UUID] = None
     funding_source_id: Optional[uuid.UUID] = None
+    overall_goal: Optional[str] = None
     goals: Optional[List[GoalCreate]] = None
 
     class Config:
