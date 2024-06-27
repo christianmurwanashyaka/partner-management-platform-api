@@ -26,6 +26,8 @@ router = APIRouter()
 async def create_activity(request: Request, activity: ActivityCreate, db: AsyncSession = Depends(get_db)):
     user = request.state.user.email
 
+    if not activity.domains or not activity.input_details:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Input details and domains are required for an activity')
     # Check for existing activity with the same basic details
     existing_activity_query = select(Activity).where(
         Activity.project_id == activity.project_id,

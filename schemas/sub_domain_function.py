@@ -1,8 +1,10 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel
+
+from schemas.sub_function import SubFunctionRead
 
 
 class SubDomainFunctionCreate(BaseModel):
@@ -18,6 +20,7 @@ class SubDomainFunctionRead(BaseModel):
     uuid: uuid.UUID
     name: str
     description: Optional[str] = None
+    sub_functions: List[SubFunctionRead] = []
     created_at: datetime
     created_by: str
     sub_domain_id: uuid.UUID

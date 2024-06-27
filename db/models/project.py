@@ -23,6 +23,7 @@ class Project(CommonBaseModel, table=True):
     funding_source: 'FundingSource' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     activities: List['Activity'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     mou_details: List['MouDetail'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
+    overall_goal: str = Field(..., description="The overall goal of the project")
     goals: List['Goal'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
 
 
