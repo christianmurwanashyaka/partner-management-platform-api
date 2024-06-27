@@ -9,6 +9,7 @@ from .base import CommonBaseModel
 
 class MouApprovalDecision(str, Enum):
     APPROVE = 'approve'
+    REQUEST_MODIFICATION = 'request_modification'
     REJECT = 'reject'
 
 

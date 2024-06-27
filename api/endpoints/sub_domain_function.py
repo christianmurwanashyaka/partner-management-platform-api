@@ -9,8 +9,8 @@ from api.dependencies.access_control import admin_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import SubDomain, User, PaginatedResponse
-from db.models.domain import SubDomainFunction
-from helpers.db import get_first_item, check_if_exists, get_all_items
+from db.models.domain import SubDomainFunction, SubFunction
+from helpers.db import get_first_item, check_if_exists, get_all_items, get_joined_details_by_uuid
 from schemas.sub_domain_function import SubDomainFunctionRead, SubDomainFunctionCreate
 
 router = APIRouter()
@@ -58,10 +58,17 @@ async def get_sub_domain_functions(page: int = 1, page_size: int = 100, db: Asyn
 
 @router.get('/{uuid}', response_model=SubDomainFunctionRead)
 async def get_sub_domain_function(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    query = select(SubDomainFunction).filter(SubDomainFunction.uuid == uuid)
-    sub_domain_function = await get_first_item(db, query)
+    sub_domain_function = await get_joined_details_by_uuid(
+        db=db,
+        model=SubDomainFunction,
+        alias_model=SubFunction,
+        join_condition=lambda alias: alias.function_id == SubDomainFunction.uuid,
+        uuid=uuid,
+        relationship_option=SubDomainFunction.sub_functions
+    )
+
     if not sub_domain_function:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='SubDomainFunction not found')
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Subdomain function not found")
     return sub_domain_function
 
 
