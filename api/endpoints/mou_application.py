@@ -26,6 +26,7 @@ from schemas.mou_approval_or_review import MouApprovalOrReviewRead, MouApprovalO
 from schemas.mou_review import MouReviewRead, MouReviewCreate
 from schemas.user import UserProfile
 from utils.files import generate_mou_action_plan, generate_mou_doc, save_mou_doc_to_disk
+from utils.filters import parse_uuid_list, parse_string_list
 
 router = APIRouter()
 
@@ -97,14 +98,31 @@ async def get_mou_applications(
         current_user: User = Depends(get_current_user)
 ):
     try:
-        # base query
+        # Parse URL-encoded, comma-separated UUIDs
+        organization_uuids = parse_uuid_list(organization_uuids)
+        funding_source_uuids = parse_uuid_list(funding_source_uuids)
+        funding_unit_uuids = parse_uuid_list(funding_unit_uuids)
+        budget_type_uuids = parse_uuid_list(budget_type_uuids)
+        domain_intervention_uuids = parse_uuid_list(domain_intervention_uuids)
+        sub_domain_uuids = parse_uuid_list(sub_domain_uuids)
+        sub_domain_function_uuids = parse_uuid_list(sub_domain_function_uuids)
+        input_category_uuids = parse_uuid_list(input_uuids)
+        input_uuids = parse_uuid_list(input_uuids)
+
+        # Parse URL-encoded, comma-separated strings
+        districts = parse_string_list(districts)
+        provinces = parse_string_list(provinces)
+
         query = select(MouApplication).options(
             joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
             joinedload(MouApplication.documents),
             joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.domains),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.input_details),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents),
+            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(
+                Project.activities).joinedload(Activity.domains),
+            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(
+                Project.activities).joinedload(Activity.input_details),
+            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(
+                Project.organization).joinedload(Organization.documents),
             joinedload(MouApplication.comments).joinedload(MouComment.user),
             joinedload(MouApplication.approvals).joinedload(MouApproval.comments).joinedload(MouComment.user),
             joinedload(MouApplication.reviews).joinedload(MouReview.comments).joinedload(MouComment.user),
@@ -121,58 +139,55 @@ async def get_mou_applications(
 
         """TODO: ADD VALIDATION FOR FILTERS. TO CHECK IF THEY EXIST, BEFORE TRYING TO FETCH THE RELATED DATA"""
 
-        # filtering by organization uuids
+        query = query.join(MouApplication.mou_detail).join(MouDetail.project).outerjoin(Project.activities).outerjoin(
+            Activity.domains).outerjoin(Activity.input_details)
+
+        # Filtering by organization uuids
         if organization_uuids:
-            query = query.where(Project.organization_id.in_(organization_uuids))
+            query = query.filter(Project.organization_id.in_(organization_uuids))
 
-        # filtering by funding source uuids
+        # Filtering by funding source uuids
         if funding_source_uuids:
-            query = query.where(Project.funding_source_id.in_(funding_source_uuids))
+            query = query.filter(Project.funding_source_id.in_(funding_source_uuids))
 
-        # filtering by funding unit uuids
+        # Filtering by funding unit uuids
         if funding_unit_uuids:
-            query = query.where(Project.funding_unit_id.in_(funding_unit_uuids))
+            query = query.filter(Project.funding_unit_id.in_(funding_unit_uuids))
 
-        # filtering by budget type uuids
+        # Filtering by budget type uuids
         if budget_type_uuids:
-            query = query.join(MouDetail, MouDetail.uuid == MouApplication.mou_detail_id) \
-                .join(Project, Project.uuid == MouDetail.project_id) \
-                .where(Project.budget_type_id.in_(budget_type_uuids))
+            query = query.filter(Project.budget_type_id.in_(budget_type_uuids))
 
-        # filtering by domain intervention uuids
+        # Filtering by domain intervention uuids
         if domain_intervention_uuids:
-            query = query.join(MouDetail.project).join(Project.activities).join(Activity.domains).where(
-                ActivityDomain.domain_intervention_id.in_(domain_intervention_uuids))
+            query = query.filter(ActivityDomain.domain_intervention_id.in_(domain_intervention_uuids))
 
-        # filtering by subdomain uuids
+        # Filtering by subdomain uuids
         if sub_domain_uuids:
-            query = query.join(MouDetail.project).join(Project.activities).join(Activity.domains).where(
-                ActivityDomain.sub_domain_id.in_(sub_domain_uuids))
+            query = query.filter(ActivityDomain.sub_domain_id.in_(sub_domain_uuids))
 
-        # filtering by subdomain function uuids
+        # Filtering by subdomain function uuids
         if sub_domain_function_uuids:
-            query = query.join(MouDetail.project).join(Project.activities).join(Activity.domains).where(
-                ActivityDomain.sub_domain_function_id.in_(sub_domain_function_uuids))
+            query = query.filter(ActivityDomain.sub_domain_function_id.in_(sub_domain_function_uuids))
 
-        # filtering by input category uuids
+        # Filtering by input category uuids
         if input_category_uuids:
-            query = query.join(MouDetail.project).join(Project.activities).join(Activity.input_details).where(
-                InputDetail.input_category_id.in_(input_category_uuids))
+            query = query.filter(InputDetail.input_category_id.in_(input_category_uuids))
 
-        # filtering by input uuids
+        # Filtering by input uuids
         if input_uuids:
-            query = query.join(MouDetail.project).join(Project.activities).join(Activity.input_details).where(
-                InputDetail.input_id.in_(input_uuids))
+            query = query.filter(InputDetail.input_id.in_(input_uuids))
 
-        # filtering by districts
+        # Filtering by districts
         if districts:
-            query = query.join(MouDetail.project).join(Project.activities).join(Activity.input_details).where(
-                InputDetail.district.in_(districts))
+            query = query.filter(InputDetail.district.in_(districts))
 
-        # filtering by provinces
+        # Filtering by provinces
         if provinces:
-            query = query.join(MouDetail.project).join(Project.activities).join(Activity.input_details).where(
-                InputDetail.province.in_(provinces))
+            query = query.filter(InputDetail.province.in_(provinces))
+
+        # Apply distinct to avoid duplicates due to joins
+        query = query.distinct()
 
         total_items_query = select(func.count()).select_from(query.subquery())
         total_items = (await db.execute(total_items_query)).scalar_one()
