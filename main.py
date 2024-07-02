@@ -9,7 +9,7 @@ from uvicorn.config import LOGGING_CONFIG
 
 from api.endpoints import auth, budget_type, organization_type, funding_source, funding_unit, domain_intervention, \
     input_category, sub_domain, input, organization, user, project, activity, party, mou_detail, mou_application, mou, \
-    files, sub_domain_function, sub_function
+    files, sub_domain_function, sub_function, domain_data_entry
 import uvicorn
 
 from db.database import create_db_and_tables, async_session
@@ -91,6 +91,7 @@ app.include_router(mou_detail.router, prefix='/api/v1/mou_detail', tags=['MOU De
 app.include_router(mou_application.router, prefix='/api/v1/mou_application', tags=['MOU Application'])
 app.include_router(mou.router, prefix='/api/v1/mou', tags=['MOU'])
 app.include_router(files.router, prefix='/api/v1/files', tags=['Files'])
+app.include_router(domain_data_entry.router, prefix='/api/v1/domain_data_entry', tags=["Domain data entry"])
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=7001, reload=True)
