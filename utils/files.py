@@ -71,7 +71,7 @@ async def generate_mou_doc(mou_application, template_path):
         '{ORGANIZATION_EMAIL}': organization.email,
         '{ORGANIZATION_WEBSITE}': organization.website,
         '{ORGANIZATION_ADDRESS}': organization.rwanda_avenue,
-        '{OVERALL_GOAL}': project.overall_gaol,
+        '{OVERALL_GOAL}': project.over_goal,
         '{ACTIVITIES_DOMAINS}': domains_str,
         '{PARTY_RESPONSIBILITIES}': responsibilities_str,
         '{PARTY_SIGNATORY_NAME}': party_signatory,
