@@ -34,3 +34,4 @@ class MouReviewRead(MouReviewBase):
     created_at: datetime
     current_reviewer: Optional[UserProfileForApprovalOrReview]
     next_level: Optional[MOHStaffLevel] = None
+    last_decision_date: Optional[datetime] = None

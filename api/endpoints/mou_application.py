@@ -90,6 +90,7 @@ async def get_mou_applications(
         domain_intervention_uuids: Optional[List[str]] = Query(None),
         sub_domain_uuids: Optional[List[str]] = Query(None),
         sub_domain_function_uuids: Optional[List[str]] = Query(None),
+        sub_function_uuids: Optional[List[str]] = Query(None),
         input_category_uuids: Optional[List[str]] = Query(None),
         input_uuids: Optional[List[str]] = Query(None),
         districts: Optional[List[str]] = Query(None),
@@ -106,6 +107,7 @@ async def get_mou_applications(
         domain_intervention_uuids = parse_uuid_list(domain_intervention_uuids)
         sub_domain_uuids = parse_uuid_list(sub_domain_uuids)
         sub_domain_function_uuids = parse_uuid_list(sub_domain_function_uuids)
+        sub_function_uuids = parse_uuid_list(sub_function_uuids)
         input_category_uuids = parse_uuid_list(input_uuids)
         input_uuids = parse_uuid_list(input_uuids)
 
@@ -169,6 +171,9 @@ async def get_mou_applications(
         # Filtering by subdomain function uuids
         if sub_domain_function_uuids:
             query = query.filter(ActivityDomain.sub_domain_function_id.in_(sub_domain_function_uuids))
+
+        if sub_function_uuids:
+            query = query.filter(ActivityDomain.sub_function_id.in_(sub_function_uuids))
 
         # Filtering by input category uuids
         if input_category_uuids:
@@ -326,6 +331,7 @@ async def start_review(uuid: str, request: Request, db: AsyncSession = Depends(g
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='MOU application is not in a pending state')
 
         mou_application.status = MouApplicationStatus.UNDER_REVIEW
+        mou_application.last_decision_date = datetime.now()
         mou_application.last_updated_at = datetime.now()
 
         await db.commit()
@@ -413,7 +419,7 @@ async def add_review(
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
         # Initial review checks
-        if mou_application.last_decision_date is None:
+        if mou_application.next_level is None:
             # New application
             if current_user.level not in [MOHStaffLevel.TECHNICAL_DEPARTMENT, MOHStaffLevel.LEGAL_ADVISOR]:
                 raise HTTPException(status.HTTP_403_FORBIDDEN,
@@ -507,7 +513,8 @@ async def add_review(
             created_at=new_review.created_at,
             created_by=new_review.created_by,
             current_reviewer=current_user,
-            next_level=mou_application.next_level
+            next_level=mou_application.next_level,
+            last_decision_date=mou_application.last_decision_date,
         )
     except Exception as e:
         await db.rollback()
@@ -550,6 +557,8 @@ async def add_approval(
 
         if approval.decision not in approval_stage_decisions:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Invalid decision for the approval stage')
+
+        # TODO: ADD VALIDATION TO MAKE SURE THE PERSON MAKING THE DECISON IS TRULY THE ONE THAT SHOULD BE MAKING THE DECISION AT THAT STAGE
 
         # Handle decisions in the approval stage
         if approval.decision == MouApprovalDecision.APPROVE:
@@ -632,7 +641,8 @@ async def add_approval(
             created_at=new_approval.created_at,
             created_by=new_approval.created_by,
             current_reviewer=current_user,
-            next_level=mou_application.next_level
+            next_level=mou_application.next_level,
+            last_decision_date=mou_application.last_decision_date,
         )
     except Exception as e:
         await db.rollback()
