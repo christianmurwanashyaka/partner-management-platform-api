@@ -301,6 +301,7 @@ async def get_organization_mou_applications(uuid: uuid.UUID, db: AsyncSession = 
             app_with_org = MouApplicationOrganizationRead(
                 uuid=app.uuid,
                 status=app.status,
+                reference_number=app.reference_number,
                 created_at=app.created_at,
                 created_by=app.created_by,
                 submitted_by=app.submitted_by,
