@@ -9,7 +9,7 @@ from uvicorn.config import LOGGING_CONFIG
 
 from api.endpoints import auth, budget_type, organization_type, funding_source, funding_unit, domain_intervention, \
     input_category, sub_domain, input, organization, user, project, activity, party, mou_detail, mou_application, mou, \
-    files, sub_domain_function, sub_function, domain_data_entry
+    files, sub_domain_function, sub_function, domain_data_entry, exchange_rates, statistics
 import uvicorn
 
 from db.database import create_db_and_tables, async_session
@@ -73,6 +73,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(budget_type.router, prefix='/api/v1/budget_type', tags=["Budget Type"])
+app.include_router(exchange_rates.router, prefix='/api/v1/currency_exchange_rate', tags=["Currency Exchange Rate"])
 app.include_router(organization_type.router, prefix='/api/v1/organization_type', tags=["Organization Type"])
 app.include_router(funding_source.router, prefix='/api/v1/funding_source', tags=["Funding Source"])
 app.include_router(funding_unit.router, prefix='/api/v1/funding_unit', tags=["Funding Unit"])
@@ -89,6 +90,7 @@ app.include_router(activity.router, prefix='/api/v1/activity', tags=["Activity"]
 app.include_router(party.router, prefix='/api/v1/party', tags=["Party"])
 app.include_router(mou_detail.router, prefix='/api/v1/mou_detail', tags=['MOU Detail'])
 app.include_router(mou_application.router, prefix='/api/v1/mou_application', tags=['MOU Application'])
+app.include_router(statistics.router, prefix='/api/v1/statistics', tags=['Statistics'])
 app.include_router(mou.router, prefix='/api/v1/mou', tags=['MOU'])
 app.include_router(files.router, prefix='/api/v1/files', tags=['Files'])
 app.include_router(domain_data_entry.router, prefix='/api/v1/domain_data_entry', tags=["Domain data entry"])
