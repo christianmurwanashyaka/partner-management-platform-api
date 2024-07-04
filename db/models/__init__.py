@@ -3,6 +3,7 @@ from .organization_type import OrganizationType
 from .document import Document, DocumentType
 from .organization import Organization
 from .party import Party
+from .exchange_rate import Currency, CurrencyExchangeRate
 from .funding_unit import FundingUnit
 from .funding_source import FundingSource
 from .budget_type import BudgetType

@@ -90,6 +90,7 @@ async def get_mou_applications(
         domain_intervention_uuids: Optional[List[str]] = Query(None),
         sub_domain_uuids: Optional[List[str]] = Query(None),
         sub_domain_function_uuids: Optional[List[str]] = Query(None),
+        sub_function_uuids: Optional[List[str]] = Query(None),
         input_category_uuids: Optional[List[str]] = Query(None),
         input_uuids: Optional[List[str]] = Query(None),
         districts: Optional[List[str]] = Query(None),
@@ -106,6 +107,7 @@ async def get_mou_applications(
         domain_intervention_uuids = parse_uuid_list(domain_intervention_uuids)
         sub_domain_uuids = parse_uuid_list(sub_domain_uuids)
         sub_domain_function_uuids = parse_uuid_list(sub_domain_function_uuids)
+        sub_function_uuids = parse_uuid_list(sub_function_uuids)
         input_category_uuids = parse_uuid_list(input_uuids)
         input_uuids = parse_uuid_list(input_uuids)
 
@@ -169,6 +171,9 @@ async def get_mou_applications(
         # Filtering by subdomain function uuids
         if sub_domain_function_uuids:
             query = query.filter(ActivityDomain.sub_domain_function_id.in_(sub_domain_function_uuids))
+
+        if sub_function_uuids:
+            query = query.filter(ActivityDomain.sub_function_id.in_(sub_function_uuids))
 
         # Filtering by input category uuids
         if input_category_uuids:
