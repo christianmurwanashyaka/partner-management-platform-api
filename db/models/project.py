@@ -2,6 +2,7 @@ from typing import List
 
 import uuid
 
+from db.models import Currency
 from db.models.base import CommonBaseModel
 from sqlmodel import Field, Relationship
 
@@ -14,7 +15,7 @@ class Project(CommonBaseModel, table=True):
     budget_type_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='budget_type.uuid')
     budget_type: 'BudgetType' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     budget: float = Field(..., description="Planned budget of the project")
-    currency: str = Field(..., description="Currency of the budget")
+    currency: Currency = Field(default=Currency.RWF, description="Currency of the project's budget")
     organization_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization.uuid')
     organization: 'Organization' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     funding_unit_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='funding_unit.uuid')
