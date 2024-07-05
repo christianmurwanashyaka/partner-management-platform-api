@@ -384,7 +384,7 @@ async def get_mou_application_approvals(
                 print('CURRENT APPROVER :::::::::::::', current_approver)
                 current_approver_read = UserProfileForApprovalOrReview(uuid=current_approver.uuid, first_name=current_approver.first_name, last_name=current_approver.last_name, email=current_approver.email, role=current_approver.role, level=current_approver.level)
 
-            approval_read = MouApprovalRead(uuid=approval.uuid, decision=approval.decision, comment=comments[0].content if comments else None, created_at=approval.created_at, current_approver=current_approver_read)
+            approval_read = MouApprovalRead(uuid=approval.uuid, decision=approval.decision, comment=comments[0].content if comments else None, created_at=approval.created_at, current_approver=current_approver_read, last_decision_date=mou_application.last_decision_date)
 
             response_data.append(approval_read)
 
@@ -709,7 +709,7 @@ async def get_mou_application_reviews(
                     level=current_reviewer.level,
                 )
 
-            review_read = MouReviewRead(uuid=review.uuid, decision=review.decision, comment=comments[0].content if comments else None, created_at=review.created_at,current_reviewer=current_reviewer_read)
+            review_read = MouReviewRead(uuid=review.uuid, decision=review.decision, comment=comments[0].content if comments else None, created_at=review.created_at,current_reviewer=current_reviewer_read, last_decision_date=mou_application.last_decision_date)
 
             response_data.append(review_read)
 
