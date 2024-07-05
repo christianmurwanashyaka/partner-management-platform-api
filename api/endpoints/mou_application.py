@@ -14,7 +14,7 @@ from db.models import User, MouDetail, MouApplication, Document, DocumentType, U
     Organization, Activity, ActivityDomain, InputDetail
 from db.models.mou_approval_or_review import MouApprovalOrReview, MouApprovalOrReviewDecision
 from db.models.mou_review import MouReviewDecision
-from helpers.db import get_first_item
+from helpers.db import get_first_item, get_most_recent_decision_time
 from schemas.activity import ActivityDomainDetail
 from schemas.approval_and_review import CombinedApprovalOrReviewRead
 from schemas.comment import MouCommentRead
@@ -27,6 +27,7 @@ from schemas.mou_review import MouReviewRead, MouReviewCreate
 from schemas.user import UserProfile
 from utils.files import generate_mou_action_plan, generate_mou_doc, save_mou_doc_to_disk
 from utils.filters import parse_uuid_list, parse_string_list
+from utils.functions import calculate_time_difference_ms, format_time_difference
 
 router = APIRouter()
 
@@ -38,7 +39,7 @@ async def create_mou_application(
         db: AsyncSession = Depends(get_db)):
     user = request.state.user.email
     full_name = request.state.user.first_name + ' ' + request.state.user.last_name
-    print('FULL NAME :::::', full_name)
+
     try:
         query = select(MouDetail).filter(MouDetail.uuid == mou_application_data.mou_detail_id)
 
@@ -381,10 +382,11 @@ async def get_mou_application_approvals(
 
             current_approver_read = None
             if current_approver:
-                print('CURRENT APPROVER :::::::::::::', current_approver)
                 current_approver_read = UserProfileForApprovalOrReview(uuid=current_approver.uuid, first_name=current_approver.first_name, last_name=current_approver.last_name, email=current_approver.email, role=current_approver.role, level=current_approver.level)
 
-            approval_read = MouApprovalRead(uuid=approval.uuid, decision=approval.decision, comment=comments[0].content if comments else None, created_at=approval.created_at, current_approver=current_approver_read, last_decision_date=mou_application.last_decision_date)
+            processing_time_dict = format_time_difference(approval.processing_time)
+
+            approval_read = MouApprovalRead(uuid=approval.uuid, decision=approval.decision, comment=comments[0].content if comments else None, created_at=approval.created_at, current_approver=current_approver_read, processing_time=processing_time_dict)
 
             response_data.append(approval_read)
 
@@ -472,12 +474,16 @@ async def add_review(
                     raise HTTPException(status.HTTP_403_FORBIDDEN,
                                         detail='Invalid decision for technical department or legal advisor')
 
+        previous_decision_time = await get_most_recent_decision_time(db, uuid)
+        processing_time_ms = calculate_time_difference_ms(previous_decision_time, datetime.now())
+
         # Record the review
         new_review = MouReview(
             mou_application_id=uuid,
             decision=review.decision,
             current_review_id=current_user.uuid,
-            created_by=current_user.email
+            created_by=current_user.email,
+            processing_time=processing_time_ms,
         )
         db.add(new_review)
         await db.commit()
@@ -602,11 +608,15 @@ async def add_approval(
                 mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
 
         # Record the approval
+        previous_decision_time = await get_most_recent_decision_time(db, uuid)
+        processing_time_ms = calculate_time_difference_ms(previous_decision_time, datetime.now())
+
         new_approval = MouApproval(
             mou_application_id=uuid,
             decision=approval.decision,
             current_approver_id=current_user.uuid,
-            created_by=current_user.email
+            created_by=current_user.email,
+            processing_time=processing_time_ms,
         )
         db.add(new_approval)
         await db.commit()
@@ -709,7 +719,15 @@ async def get_mou_application_reviews(
                     level=current_reviewer.level,
                 )
 
-            review_read = MouReviewRead(uuid=review.uuid, decision=review.decision, comment=comments[0].content if comments else None, created_at=review.created_at,current_reviewer=current_reviewer_read, last_decision_date=mou_application.last_decision_date)
+            processing_time_dict = format_time_difference(review.processing_time)
+
+            review_read = MouReviewRead(
+                uuid=review.uuid,
+                decision=review.decision,
+                comment=comments[0].content if comments else None,
+                created_at=review.created_at,
+                current_reviewer=current_reviewer_read,
+                processing_time=processing_time_dict)
 
             response_data.append(review_read)
 
