@@ -35,3 +35,4 @@ class MouReviewRead(MouReviewBase):
     current_reviewer: Optional[UserProfileForApprovalOrReview]
     next_level: Optional[MOHStaffLevel] = None
     last_decision_date: Optional[datetime] = None
+    processing_time: Optional[dict] = None

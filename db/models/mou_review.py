@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 import uuid
 from sqlmodel import Field, Relationship
@@ -23,3 +23,7 @@ class MouReview(CommonBaseModel, table=True):
     mou_application_id: uuid.UUID = Field(foreign_key='mou_application.uuid')
     mou_application: 'MouApplication' = Relationship(back_populates='reviews', sa_relationship_kwargs={'lazy': 'selectin'})
     comments: List['MouComment'] = Relationship(back_populates='mou_review', sa_relationship_kwargs={'lazy': 'selectin'})
+    processing_time: Optional[int] = Field(
+        default=None,
+        description='Processing time from decision to decision'
+    )

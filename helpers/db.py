@@ -1,11 +1,15 @@
-from sqlalchemy import func
+import uuid
+from datetime import datetime
+
+from sqlalchemy import func, and_
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Selectable
-from sqlalchemy.orm import selectinload, aliased, contains_eager
+from sqlalchemy.orm import selectinload, aliased, contains_eager, outerjoin
 from typing import Any, Optional
 
+from db.models import MouReview, MouApproval, MouApplication
 from db.models.pagination import PaginatedResponse
 
 
@@ -114,3 +118,33 @@ async def get_joined_details_by_uuid(db: AsyncSession, model, alias_model, join_
     item = result.scalars().unique().one_or_none()
 
     return item
+
+
+async def get_most_recent_decision_time(db: AsyncSession, mou_application_id: uuid.UUID) -> datetime:
+    # Query for the most recent review and approval
+    query = select(
+        func.max(MouReview.created_at).label('last_review_time'),
+        func.max(MouApproval.created_at).label('last_approval_time'),
+        func.count(MouReview.uuid).label('review_count'),
+        func.count(MouApproval.uuid).label('approval_count')
+    ).select_from(
+        outerjoin(MouReview, MouApproval,
+                  and_(MouReview.mou_application_id == MouApproval.mou_application_id,
+                       MouReview.mou_application_id == mou_application_id))
+    ).where(MouReview.mou_application_id == mou_application_id)
+
+    result = await db.execute(query)
+    last_review_time, last_approval_time, review_count, approval_count = result.first()
+
+    if review_count == 0:
+        # If no reviews exist, get the application's last_decision_date
+        app_query = select(MouApplication.last_decision_date).where(MouApplication.uuid == mou_application_id)
+        app_result = await db.execute(app_query)
+        return app_result.scalar_one()
+
+    if approval_count == 0:
+        # If there are reviews but no approvals, return the last review time
+        return last_review_time
+
+    # If there are both reviews and approvals, return the most recent of the two
+    return max(last_review_time, last_approval_time)

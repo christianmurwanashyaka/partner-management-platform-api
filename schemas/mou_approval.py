@@ -33,3 +33,4 @@ class MouApprovalRead(MouApprovalBase):
     current_approver: Optional[UserProfileForApprovalOrReview] = None
     next_level: Optional[MOHStaffLevel] = None
     last_decision_date: Optional[datetime] = None
+    processing_time: Optional[dict] = None
