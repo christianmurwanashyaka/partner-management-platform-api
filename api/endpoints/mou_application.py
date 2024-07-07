@@ -11,7 +11,7 @@ from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, MOHStaffLevel, \
     MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou, MouReview, PaginatedResponse, \
-    Organization, Activity, ActivityDomain, InputDetail
+    Organization, Activity, ActivityDomain, InputDetail, Party
 from db.models.mou_approval_or_review import MouApprovalOrReview, MouApprovalOrReviewDecision
 from db.models.mou_review import MouReviewDecision
 from helpers.db import get_first_item, get_most_recent_decision_time
@@ -96,6 +96,7 @@ async def get_mou_applications(
         input_uuids: Optional[List[str]] = Query(None),
         districts: Optional[List[str]] = Query(None),
         provinces: Optional[List[str]] = Query(None),
+        status: Optional[List[str]] = Query(None),
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
@@ -115,6 +116,7 @@ async def get_mou_applications(
         # Parse URL-encoded, comma-separated strings
         districts = parse_string_list(districts)
         provinces = parse_string_list(provinces)
+        status = parse_string_list(status)
 
         query = select(MouApplication).options(
             joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
@@ -191,6 +193,10 @@ async def get_mou_applications(
         # Filtering by provinces
         if provinces:
             query = query.filter(InputDetail.province.in_(provinces))
+
+        # filter by status
+        if status:
+            query = query.filter(MouApplication.status.in_(status))
 
         # Apply distinct to avoid duplicates due to joins
         query = query.distinct()
@@ -894,6 +900,10 @@ async def update_related_mou_application(entity, db: AsyncSession = Depends(get_
         mou_details = [entity]
     elif isinstance(entity, Project):
         mou_details = entity.mou_details
+    elif isinstance(entity, Party):
+        print('IS INSTANCE OF PARTY ::::::::;;')
+        mou_details = [entity.mou_detail]
+        print('MOU DETAILS :::::::::::', mou_details)
     else:
         return
 
@@ -906,6 +916,7 @@ async def update_related_mou_application(entity, db: AsyncSession = Depends(get_
         if mou_application:
             print('^^^^^^^^^^^^^^^^^ IF IS TRUE ^^^^^^^^^^^^^^^^^')
             mou_application.status = MouApplicationStatus.MODIFIED
+            print('MOU APPLICATION STATUS', mou_application.status)
             file_path, filename = await generate_mou_action_plan(mou_application, db)
             print('FILE PATH ::::::::::::::::::::', file_path)
             print('FILE NAME ::::::::::::::::::::', filename)
