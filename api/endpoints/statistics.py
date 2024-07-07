@@ -1,15 +1,17 @@
 from typing import Optional, List, Dict
 
 from fastapi import APIRouter, Depends, status, Query, HTTPException
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, CurrencyExchangeRate, Project, Currency, InputDetail, Activity, ActivityDomain, \
-    Organization, FundingSource, FundingUnit, BudgetType, InputCategory, Input, DomainIntervention, SubDomain
+    Organization, FundingSource, FundingUnit, BudgetType, InputCategory, Input, DomainIntervention, SubDomain, \
+    MouApproval, MouReview, MOHStaffLevel
 from db.models.domain import SubDomainFunction, SubFunction
 from utils.filters import parse_uuid_list, parse_string_list
+from utils.functions import format_time_difference
 
 router = APIRouter()
 
@@ -271,6 +273,160 @@ async def get_domain_statistics(
         statistics["debug_info"]["include_subfunctions"] = include_subfunctions
 
         return statistics
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/organizations/budget')
+async def get_organizations_budget(
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Subquery to get the latest exchange rates
+        latest_rates = select(CurrencyExchangeRate.currency,
+                              func.max(CurrencyExchangeRate.created_at).label('max_date')). \
+            group_by(CurrencyExchangeRate.currency).subquery()
+
+        exchange_rates = select(CurrencyExchangeRate.currency, CurrencyExchangeRate.rate). \
+            join(latest_rates,
+                 (CurrencyExchangeRate.currency == latest_rates.c.currency) &
+                 (CurrencyExchangeRate.created_at == latest_rates.c.max_date)). \
+            subquery()
+
+        # Query to get total budget for each organization
+        query = select(
+            Organization.uuid.label('organization_id'),
+            Organization.name.label('organization_name'),
+            func.sum(case(
+                (Project.currency == Currency.RWF, InputDetail.budget),
+                else_=InputDetail.budget * exchange_rates.c.rate
+            )).label('total_budget_rwf'),
+            func.sum(InputDetail.budget).label('total_budget_original'),
+            Project.currency
+        ).select_from(Organization). \
+            join(Project, Project.organization_id == Organization.uuid). \
+            join(Activity, Activity.project_id == Project.uuid). \
+            join(InputDetail, InputDetail.activity_id == Activity.uuid). \
+            outerjoin(exchange_rates, exchange_rates.c.currency == Project.currency). \
+            group_by(Organization.uuid, Organization.name, Project.currency). \
+            order_by(desc('total_budget_rwf'))
+
+        # Execute the query
+        result = await db.execute(query)
+        budget_data = result.fetchall()
+
+        # Process the results
+        organization_budgets = []
+        for row in budget_data:
+            organization_budgets.append({
+                "organization_id": str(row.organization_id),
+                "organization_name": row.organization_name,
+                "total_budget_rwf": float(row.total_budget_rwf) if row.total_budget_rwf else 0,
+                "total_budget_original": float(row.total_budget_original) if row.total_budget_original else 0,
+                "currency": row.currency
+            })
+
+        return {
+            "organization_budgets": organization_budgets
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/average/processing-time/reviews')
+async def get_review_processing_time_statistics(
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Query to get average processing time for reviews
+        query = select(
+            User.level,
+            func.avg(MouReview.processing_time).label('avg_processing_time'),
+            func.count(MouReview.uuid).label('review_count')
+        ).select_from(MouReview).join(User, MouReview.current_review_id == User.uuid). \
+            group_by(User.level)
+
+        # Execute the query
+        result = await db.execute(query)
+        processing_times = result.fetchall()
+
+        # Process the results
+        statistics = {}
+        for row in processing_times:
+            level = row.level
+            avg_time = int(row.avg_processing_time) if row.avg_processing_time else 0
+            review_count = row.review_count
+
+            statistics[level] = {
+                'avg_processing_time_ms': avg_time,
+                'formatted_time': format_time_difference(avg_time),
+                'review_count': review_count
+            }
+
+        # Ensure all levels are represented, even if they have no data
+        for level in MOHStaffLevel:
+            if level not in statistics:
+                statistics[level] = {
+                    'avg_processing_time_ms': 0,
+                    'formatted_time': format_time_difference(0),
+                    'review_count': 0
+                }
+
+        return {
+            "review_processing_time_statistics": statistics
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/average/processing-time/approvals')
+async def get_approval_processing_time_statistics(
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Query to get average processing time for approvals
+        query = select(
+            User.level,
+            func.avg(MouApproval.processing_time).label('avg_processing_time'),
+            func.count(MouApproval.uuid).label('approval_count')
+        ).select_from(MouApproval).join(User, MouApproval.current_approver_id == User.uuid). \
+            group_by(User.level)
+
+        # Execute the query
+        result = await db.execute(query)
+        processing_times = result.fetchall()
+
+        # Process the results
+        statistics = {}
+        for row in processing_times:
+            level = row.level
+            avg_time = int(row.avg_processing_time) if row.avg_processing_time else 0
+            approval_count = row.approval_count
+
+            statistics[level] = {
+                'avg_processing_time_ms': avg_time,
+                'formatted_time': format_time_difference(avg_time),
+                'approval_count': approval_count
+            }
+
+        # Ensure all levels are represented, even if they have no data
+        for level in MOHStaffLevel:
+            if level not in statistics:
+                statistics[level] = {
+                    'avg_processing_time_ms': 0,
+                    'formatted_time': format_time_difference(0),
+                    'approval_count': 0
+                }
+
+        return {
+            "approval_processing_time_statistics": statistics
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
