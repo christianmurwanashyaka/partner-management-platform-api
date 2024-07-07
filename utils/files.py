@@ -44,6 +44,16 @@ async def generate_mou_doc(mou_application, template_path):
     organization = mou_application.mou_detail.project.organization
     project = mou_application.mou_detail.project
 
+    def get_attr_or_none(obj, attr):
+        value = getattr(obj, attr, None)
+        return value if value != '' else None
+
+    home_country = get_attr_or_none(organization, 'home_country')
+    home_country_province = get_attr_or_none(organization, 'home_country_province')
+    home_country_district = get_attr_or_none(organization, 'home_country_district')
+    home_country_avenue = get_attr_or_none(organization, 'home_country_avenue')
+    home_country_po_box = get_attr_or_none(organization, 'home_country_po_box')
+
     # Collect unique domains from the project's activities
     domains = set()
     for activity in project.activities:
@@ -65,6 +75,11 @@ async def generate_mou_doc(mou_application, template_path):
 
     mappings = {
         '{ORGANIZATION_NAME}': organization.name,
+        '{HOME_COUNTRY}': home_country,
+        '{HOME_COUNTRY_PROVINCE}': home_country_province,
+        '{HOME_COUNTRY_DISTRICT}': home_country_district,
+        '{HOME_COUNTRY_AVENUE}': home_country_avenue,
+        '{HOME_COUNTRY_PO_BOX}': home_country_po_box,
         '{PROJECT_NAME}': project.name,
         '{ORGANIZATION_PO_BOX}': organization.rwanda_po_box,
         '{ORGANIZATION_PHONE}': organization.phone_number,
