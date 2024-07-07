@@ -7,6 +7,7 @@ from sqlalchemy.future import select
 
 from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
+from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
 from db.models import Party, User, UserRole
 from schemas.party import PartyRead, PartyCreate, PartyUpdate
@@ -90,6 +91,7 @@ async def update_party(uuid: uuid.UUID, party_update: PartyUpdate, db: AsyncSess
 
         await db.commit()
         await db.refresh(party)
+        await update_related_mou_application(party, db)
 
         return party
     except Exception as e:
