@@ -43,6 +43,7 @@ async def generate_mou_doc(mou_application, template_path):
 
     organization = mou_application.mou_detail.project.organization
     project = mou_application.mou_detail.project
+    current_date = datetime.now().strftime("%d/%m/%Y")
 
     # Collect unique domains from the project's activities
     domains = set()
@@ -75,7 +76,8 @@ async def generate_mou_doc(mou_application, template_path):
         '{ACTIVITIES_DOMAINS}': domains_str,
         '{PARTY_RESPONSIBILITIES}': responsibilities_str,
         '{PARTY_SIGNATORY_NAME}': party_signatory,
-        '{PARTY_SIGNATORY_POSITION}': party_position
+        '{PARTY_SIGNATORY_POSITION}': party_position,
+        '{DATE}': current_date,
     }
 
     def replace_text(element, mappings):
