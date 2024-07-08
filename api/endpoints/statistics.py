@@ -190,7 +190,7 @@ async def get_domain_statistics(
             join(Organization, Organization.uuid == Project.organization_id). \
             join(DomainIntervention, DomainIntervention.uuid == ActivityDomain.domain_intervention_id). \
             outerjoin(SubDomain, SubDomain.uuid == ActivityDomain.sub_domain_id). \
-            outerjoin(SubDomainFunction, SubDomainFunction.uuid == ActivityDomain.sub_domain_function_id). \
+            outerjoin(SubDomainFunction, SubDomain.uuid == ActivityDomain.sub_domain_function_id). \
             outerjoin(SubFunction, SubFunction.uuid == ActivityDomain.sub_function_id)
 
         # Apply filters
@@ -218,61 +218,72 @@ async def get_domain_statistics(
         rows = result.fetchall()
 
         # Process results
-        statistics: Dict[str, Dict] = {
-            "debug_info": {"row_count": len(rows)}
+        organizations_dict: Dict[str, Dict] = {}
+        totals = {
+            "domains": 0,
+            "subdomains": 0,
+            "subdomain_functions": 0,
+            "subfunctions": 0
         }
 
         for row in rows:
             org_name = row.organization_name
 
-            if org_name not in statistics:
-                statistics[org_name] = {}
-                if include_domains:
-                    statistics[org_name]["domains"] = {"count": 0, "names": set()}
-                if include_subdomains:
-                    statistics[org_name]["subdomains"] = {"count": 0, "names": set()}
-                if include_subdomain_functions:
-                    statistics[org_name]["subdomain_functions"] = {"count": 0, "names": set()}
-                if include_subfunctions:
-                    statistics[org_name]["subfunctions"] = {"count": 0, "names": set()}
+            if org_name not in organizations_dict:
+                organizations_dict[org_name] = {
+                    "name": org_name,
+                    "domains": {"count": 0, "names": set()} if include_domains else None,
+                    "subdomains": {"count": 0, "names": set()} if include_subdomains else None,
+                    "subdomain_functions": {"count": 0, "names": set()} if include_subdomain_functions else None,
+                    "subfunctions": {"count": 0, "names": set()} if include_subfunctions else None
+                }
+
+            org = organizations_dict[org_name]
 
             if include_domains and row.domain_name:
-                statistics[org_name]["domains"]["names"].add(row.domain_name)
+                org["domains"]["names"].add(row.domain_name)
             if include_subdomains and row.subdomain_name:
-                statistics[org_name]["subdomains"]["names"].add(row.subdomain_name)
+                org["subdomains"]["names"].add(row.subdomain_name)
             if include_subdomain_functions and row.subdomain_function_name:
-                statistics[org_name]["subdomain_functions"]["names"].add(row.subdomain_function_name)
+                org["subdomain_functions"]["names"].add(row.subdomain_function_name)
             if include_subfunctions and row.subfunction_name:
-                statistics[org_name]["subfunctions"]["names"].add(row.subfunction_name)
+                org["subfunctions"]["names"].add(row.subfunction_name)
 
-        # Calculate totals and convert sets to lists
-        for level in ['domains', 'subdomains', 'subdomain_functions', 'subfunctions']:
-            if level in append_list or (level == 'domains' and not append_list):
-                statistics[f"total_{level}"] = 0
-                for group in statistics.values():
-                    if isinstance(group, dict) and level in group:
-                        group[level]["count"] = len(group[level]["names"])
-                        group[level]["names"] = list(group[level]["names"])
-                        statistics[f"total_{level}"] += group[level]["count"]
+        # Calculate counts and convert sets to lists
+        organizations = []
+        for org in organizations_dict.values():
+            for level in ['domains', 'subdomains', 'subdomain_functions', 'subfunctions']:
+                if org[level]:
+                    org[level]["count"] = len(org[level]["names"])
+                    org[level]["names"] = list(org[level]["names"])
+                    totals[level] += org[level]["count"]
+            organizations.append(org)
 
-        # Add applied filters and debug info to the response
-        statistics["filters_applied"] = {
-            "organizations": organization_uuids,
-            "funding_sources": funding_source_uuids,
-            "funding_units": funding_unit_uuids,
-            "budget_types": budget_type_uuids,
-            "input_categories": input_category_uuids,
-            "inputs": input_uuids,
-            "districts": districts,
-            "provinces": provinces
+        # Prepare the response
+        response = {
+            "organizations": organizations,
+            "totals": totals,
+            "filters_applied": {
+                "organizations": organization_uuids,
+                "funding_sources": funding_source_uuids,
+                "funding_units": funding_unit_uuids,
+                "budget_types": budget_type_uuids,
+                "input_categories": input_category_uuids,
+                "inputs": input_uuids,
+                "districts": districts,
+                "provinces": provinces
+            },
+            "debug_info": {
+                "row_count": len(rows),
+                "appends": append_list,
+                "include_domains": include_domains,
+                "include_subdomains": include_subdomains,
+                "include_subdomain_functions": include_subdomain_functions,
+                "include_subfunctions": include_subfunctions
+            }
         }
-        statistics["debug_info"]["appends"] = append_list
-        statistics["debug_info"]["include_domains"] = include_domains
-        statistics["debug_info"]["include_subdomains"] = include_subdomains
-        statistics["debug_info"]["include_subdomain_functions"] = include_subdomain_functions
-        statistics["debug_info"]["include_subfunctions"] = include_subfunctions
 
-        return statistics
+        return response
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
