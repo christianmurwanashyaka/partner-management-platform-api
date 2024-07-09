@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from typing import List, Optional
 
@@ -96,11 +97,12 @@ async def get_mou_applications(
         input_uuids: Optional[List[str]] = Query(None),
         districts: Optional[List[str]] = Query(None),
         provinces: Optional[List[str]] = Query(None),
-        status: Optional[List[str]] = Query(None),
+        application_status: Optional[List[str]] = Query(None),
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
     try:
+
         # Parse URL-encoded, comma-separated UUIDs
         organization_uuids = parse_uuid_list(organization_uuids)
         funding_source_uuids = parse_uuid_list(funding_source_uuids)
@@ -116,36 +118,26 @@ async def get_mou_applications(
         # Parse URL-encoded, comma-separated strings
         districts = parse_string_list(districts)
         provinces = parse_string_list(provinces)
-        status = parse_string_list(status)
+        application_status = parse_string_list(application_status)
 
-        query = select(MouApplication).options(
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
-            joinedload(MouApplication.documents),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(
-                Project.activities).joinedload(Activity.domains),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(
-                Project.activities).joinedload(Activity.input_details),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(
-                Project.organization).joinedload(Organization.documents),
-            joinedload(MouApplication.comments).joinedload(MouComment.user),
-            joinedload(MouApplication.approvals).joinedload(MouApproval.comments).joinedload(MouComment.user),
-            joinedload(MouApplication.reviews).joinedload(MouReview.comments).joinedload(MouComment.user),
-            joinedload(MouApplication.current_reviewer)
-        ).order_by(MouApplication.created_at.desc())
 
-        # filtering by user role
-        if current_user.role in ['admin', 'moh_staff']:
-            pass
-        elif current_user.role == 'partner':
-            query = query.where(MouApplication.created_by == current_user.email)
-        else:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+        query = (
+            select(
+                MouApplication.created_at,
+                MouApplication.submitted_by,
+                MouApplication.uuid,
+                MouApplication.status,
+                MouApplication.next_level,
+                Organization.name.label('organization')
+            )
+            .join(MouApplication.mou_detail)
+            .join(MouDetail.project)
+            .join(Project.organization)
+            .order_by(MouApplication.created_at.desc())
+        )
 
-        """TODO: ADD VALIDATION FOR FILTERS. TO CHECK IF THEY EXIST, BEFORE TRYING TO FETCH THE RELATED DATA"""
-
-        query = query.join(MouApplication.mou_detail).join(MouDetail.project).outerjoin(Project.activities).outerjoin(
-            Activity.domains).outerjoin(Activity.input_details)
+        if current_user.role == 'partner':
+            query = query.filter(MouApplication.created_by == current_user.email)
 
         # Filtering by organization uuids
         if organization_uuids:
@@ -195,70 +187,34 @@ async def get_mou_applications(
             query = query.filter(InputDetail.province.in_(provinces))
 
         # filter by status
-        if status:
-            query = query.filter(MouApplication.status.in_(status))
+        if application_status:
+            query = query.filter(MouApplication.status.in_(application_status))
 
-        # Apply distinct to avoid duplicates due to joins
-        query = query.distinct()
-
-        total_items_query = select(func.count()).select_from(query.subquery())
-        total_items = (await db.execute(total_items_query)).scalar_one()
+        count_query = select(func.count()).select_from(query.subquery())
+        total_items = (await db.execute(count_query)).scalar_one()
 
         mou_applications_result = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
-        mou_applications = mou_applications_result.unique().scalars().all()
+        mou_applications = mou_applications_result.all()
 
-        response = []
-        for app in mou_applications:
-            organization = app.mou_detail.project.organization
-
-            # Collecting all related documents
-            all_documents = app.documents + app.mou_detail.documents + organization.documents
-
-            current_reviewer = app.current_reviewer
-            if current_reviewer:
-                current_reviewer_read = UserProfileForApprovalOrReview(
-                    uuid=current_reviewer.uuid,
-                    first_name=current_reviewer.first_name,
-                    last_name=current_reviewer.last_name,
-                    email=current_reviewer.email,
-                    role=current_reviewer.role,
-                    level=current_reviewer.level
-                )
-            else:
-                current_reviewer_read = None
-            print('APPLICATION ::::::::::::::', app)
-
-            app_with_org = MouApplicationOrganizationRead(
+        response_data = [
+            MouApplicationOrganizationRead(
                 created_at=app.created_at,
-                created_by=app.created_by,
                 submitted_by=app.submitted_by,
+                reference_number=f"{app.created_at:%Y%m%d}-{app.uuid.int % 1000000:06d}",
                 uuid=app.uuid,
                 status=app.status,
-                mou_detail=app.mou_detail,
-                documents=all_documents,
-                organization=SimpleOrganizationRead(
-                    uuid=organization.uuid,
-                    name=organization.name,
-                    email=organization.email,
-                    website=organization.website,
-                    organization_type=organization.organization_type.name
-                ),
-                current_reviewer=current_reviewer_read,
-                next_level=app.next_level,
-                comments=app.comments,
-                reference_number=app.reference_number,
-                last_decision_date=app.last_decision_date,
-                modification_entity=app.modification_entity,
+                organization=app.organization,
+                next_level=app.next_level
             )
-            response.append(app_with_org)
+            for app in mou_applications
+        ]
 
-        total_pages = (total_items + page_size - 1) // page_size
         return PaginatedResponse(
             page=page,
             page_size=page_size,
             total_items=total_items,
-            total_pages=total_pages,
-            data=response
+            total_pages=(total_items + page_size - 1) // page_size,
+            data=response_data
         )
 
     except Exception as e:
