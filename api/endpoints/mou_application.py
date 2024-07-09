@@ -12,7 +12,7 @@ from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, MOHStaffLevel, \
     MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou, MouReview, PaginatedResponse, \
-    Organization, Activity, ActivityDomain, InputDetail, Party
+    Organization, Activity, ActivityDomain, InputDetail, Party, OrganizationType
 from db.models.mou_approval_or_review import MouApprovalOrReview, MouApprovalOrReviewDecision
 from db.models.mou_review import MouReviewDecision
 from helpers.db import get_first_item, get_most_recent_decision_time
@@ -120,7 +120,6 @@ async def get_mou_applications(
         provinces = parse_string_list(provinces)
         application_status = parse_string_list(application_status)
 
-
         query = (
             select(
                 MouApplication.created_at,
@@ -128,11 +127,13 @@ async def get_mou_applications(
                 MouApplication.uuid,
                 MouApplication.status,
                 MouApplication.next_level,
-                Organization.name.label('organization')
+                Organization.name.label('organization'),
+                OrganizationType.name.label('organization_type')
             )
             .join(MouApplication.mou_detail)
             .join(MouDetail.project)
             .join(Project.organization)
+            .join(Organization.organization_type)
             .order_by(MouApplication.created_at.desc())
         )
 
@@ -204,6 +205,7 @@ async def get_mou_applications(
                 uuid=app.uuid,
                 status=app.status,
                 organization=app.organization,
+                organization_type=app.organization_type,
                 next_level=app.next_level
             )
             for app in mou_applications

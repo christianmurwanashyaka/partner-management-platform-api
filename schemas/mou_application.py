@@ -64,6 +64,7 @@ class MouApplicationOrganizationRead(BaseModel):
     uuid: uuid.UUID
     status: MouApplicationStatus
     organization: str
+    organization_type: str
     next_level: Optional[MOHStaffLevel] = None
 
     class Config:
