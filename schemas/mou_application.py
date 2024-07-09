@@ -59,19 +59,23 @@ class MouApplicationRead(BaseModel):
 
 class MouApplicationOrganizationRead(BaseModel):
     created_at: datetime
-    created_by: str
     submitted_by: Optional[str] = None
     reference_number: Optional[str] = None
     uuid: uuid.UUID
     status: MouApplicationStatus
-    modification_entity: Optional[List[Union[ModificationEntity, None]]] = None
-    mou_detail: ApplicationMouDetailReadWithActivities
-    documents: List[DocumentRead] = []
-    organization: Optional[SimpleOrganizationRead] = None
-    current_reviewer: Optional[UserProfileForApprovalOrReview] = None
+    organization: str
     next_level: Optional[MOHStaffLevel] = None
-    last_decision_date: Optional[datetime] = None
-    comments: List[MouApplicationBasicCommentRead] = []
+
+    class Config:
+        from_attributes = True
+
+
+class MouApplicationProjectRead(BaseModel):
+    uuid: uuid.UUID
+    reference_number: str
+    project_name: str
+    status: MouApplicationStatus
+    comment: Optional[str] = None
 
     class Config:
         from_attributes = True

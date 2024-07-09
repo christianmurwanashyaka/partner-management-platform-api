@@ -1,7 +1,7 @@
 from typing import Optional, List
 
 import uuid
-from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, File, UploadFile
+from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, File, UploadFile, Query
 from sqlalchemy import func
 from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
@@ -11,7 +11,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.access_control import partner_access, admin_access, moh_staff_access
 from api.dependencies.auth import get_current_user
 from db.database import get_db
-from db.models import Project, MouApplication, MouDetail, Mou
+from db.models import Project, MouApplication, MouDetail, Mou, MouComment
 from db.models.organization import Organization
 from db.models.document import Document, DocumentType
 from db.models.pagination import PaginatedResponse
@@ -19,7 +19,7 @@ from db.models.user import User, UserRole
 from helpers.exceptions import handle_integrity_error
 from schemas.activity import ActivityRead
 from schemas.mou import MouRead
-from schemas.mou_application import MouApplicationRead, MouApplicationOrganizationRead, SimpleOrganizationRead
+from schemas.mou_application import MouApplicationProjectRead
 from schemas.mou_detail import MouDetailRead
 from schemas.organization import OrganizationRead
 from helpers.db import check_if_exists, get_all_items, get_first_item
@@ -262,65 +262,67 @@ async def get_organization(uuid: str, db: AsyncSession = Depends(get_db), curren
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
 
-@router.get('/{uuid}/mou_applications', response_model=List[MouApplicationOrganizationRead])
-async def get_organization_mou_applications(uuid: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get('/{uuid}/mou_applications', response_model=PaginatedResponse[MouApplicationProjectRead])
+async def get_organization_mou_applications(
+    uuid: uuid.UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     try:
-        # Fetch the organization
-        query = select(Organization).filter(Organization.uuid == uuid)
-        organization = await db.execute(query)
-        organization = organization.scalar_one_or_none()
+        # Base query
+        base_query = (
+            select(
+                MouApplication.uuid,
+                MouApplication.created_at,
+                MouApplication.status,
+                Project.name.label('project_name'),
+                func.coalesce(func.nullif(func.string_agg(MouComment.content, '; '), ''), None).label('comment')
+            )
+            .join(MouApplication.mou_detail)
+            .join(MouDetail.project)
+            .join(Project.organization)
+            .outerjoin(MouApplication.comments)
+            .filter(Organization.uuid == uuid)
+            .group_by(MouApplication.uuid, MouApplication.created_at, MouApplication.status, Project.name)
+        )
 
-        if not organization:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
-
-        # Fetch projects for the organization
-        query = select(Project).filter(Project.organization_id == uuid)
-        projects = await db.execute(query)
-        projects = projects.scalars().all()
-
-        if not projects:
-            return []
-
-        # Fetch MOU applications for these projects
-        project_ids = [project.uuid for project in projects]
-        query = select(MouApplication).join(MouDetail).filter(MouDetail.project_id.in_(project_ids))
-        mou_applications = await db.execute(query)
-        mou_applications = mou_applications.scalars().all()
-
-        # Filter MOU applications based on the user's role
-        if current_user.role == 'admin' or current_user.role == 'moh_staff':
-            filtered_mou_applications = mou_applications
-        elif current_user.role == 'partner':
-            filtered_mou_applications = [app for app in mou_applications if app.created_by == current_user.email]
-        else:
+        # Apply role-based filtering
+        if current_user.role == 'partner':
+            base_query = base_query.filter(MouApplication.created_by == current_user.email)
+        elif current_user.role not in ['admin', 'moh_staff']:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these MOU applications')
 
-        # Prepare the response
-        response = []
-        for app in filtered_mou_applications:
-            app_with_org = MouApplicationOrganizationRead(
-                uuid=app.uuid,
-                status=app.status,
-                reference_number=app.reference_number,
-                created_at=app.created_at,
-                created_by=app.created_by,
-                submitted_by=app.submitted_by,
-                last_decision_date=app.last_decision_date,
-                modification_entity=app.modification_entity,
-                mou_detail=app.mou_detail,
-                documents=app.documents,
-                organization=SimpleOrganizationRead(
-                    uuid=organization.uuid,
-                    name=organization.name,
-                    email=organization.email,
-                    website=organization.website,
-                    organization_type=organization.organization_type.name,
-                ),
-                comments=app.comments
-            )
-            response.append(app_with_org)
+        # Count total items
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_items = await db.scalar(count_query)
 
-        return response
+        # Fetch paginated results
+        query = base_query.order_by(MouApplication.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        result = await db.execute(query)
+        mou_applications = result.all()
+
+        data = [
+            MouApplicationProjectRead(
+                uuid=app.uuid,
+                reference_number=f"{app.created_at:%Y%m%d}-{app.uuid.int % 1000000:06d}",
+                project_name=app.project_name,
+                status=app.status,
+                comment=app.comment
+            )
+            for app in mou_applications
+        ]
+
+        total_pages = (total_items + page_size - 1) // page_size
+
+        return PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            data=data
+        )
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
