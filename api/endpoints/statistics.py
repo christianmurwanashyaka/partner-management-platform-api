@@ -8,7 +8,7 @@ from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, CurrencyExchangeRate, Project, Currency, InputDetail, Activity, ActivityDomain, \
     Organization, FundingSource, FundingUnit, BudgetType, InputCategory, Input, DomainIntervention, SubDomain, \
-    MouApproval, MouReview, MOHStaffLevel
+    MouApproval, MouReview, MOHStaffLevel, MouDetail, MouApplication, MouApplicationStatus
 from db.models.domain import SubDomainFunction, SubFunction
 from utils.filters import parse_uuid_list, parse_string_list
 from utils.functions import format_time_difference
@@ -306,7 +306,7 @@ async def get_organizations_budget(
                  (CurrencyExchangeRate.created_at == latest_rates.c.max_date)). \
             subquery()
 
-        # Query to get total budget for each organization
+        # Query to get total budget for each organization from approved MOU applications
         query = select(
             Organization.uuid.label('organization_id'),
             Organization.name.label('organization_name'),
@@ -318,9 +318,12 @@ async def get_organizations_budget(
             Project.currency
         ).select_from(Organization). \
             join(Project, Project.organization_id == Organization.uuid). \
+            join(MouDetail, MouDetail.project_id == Project.uuid). \
+            join(MouApplication, MouApplication.mou_detail_id == MouDetail.uuid). \
             join(Activity, Activity.project_id == Project.uuid). \
             join(InputDetail, InputDetail.activity_id == Activity.uuid). \
             outerjoin(exchange_rates, exchange_rates.c.currency == Project.currency). \
+            filter(MouApplication.status == MouApplicationStatus.APPROVED). \
             group_by(Organization.uuid, Organization.name, Project.currency). \
             order_by(desc('total_budget_rwf'))
 
