@@ -4,7 +4,7 @@ from typing import List, Optional
 
 import uuid
 from fastapi import APIRouter, Request, Depends, status, HTTPException, Query
-from sqlalchemy import select, func
+from sqlalchemy import distinct, select, func
 from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.access_control import partner_access, moh_staff_access
@@ -191,10 +191,18 @@ async def get_mou_applications(
         if application_status:
             query = query.filter(MouApplication.status.in_(application_status))
 
-        count_query = select(func.count()).select_from(query.subquery())
+        count_query = select(func.count(distinct(MouApplication.uuid))).select_from(query.subquery())
         total_items = (await db.execute(count_query)).scalar_one()
 
-        mou_applications_result = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+        mou_applications_result = await db.execute(query.group_by(
+            MouApplication.uuid,
+            MouApplication.created_at,
+            MouApplication.submitted_by,
+            MouApplication.status,
+            MouApplication.next_level,
+            Organization.name,
+            OrganizationType.name
+        ).offset((page - 1) * page_size).limit(page_size))
         mou_applications = mou_applications_result.all()
 
         response_data = [
@@ -528,7 +536,9 @@ async def add_approval(
         if approval.decision not in approval_stage_decisions:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Invalid decision for the approval stage')
 
-        # TODO: ADD VALIDATION TO MAKE SURE THE PERSON MAKING THE DECISON IS TRULY THE ONE THAT SHOULD BE MAKING THE DECISION AT THAT STAGE
+        if mou_application.next_level and current_user.level != mou_application.next_level:
+            raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                detail='You are not authorized to make decisions at this level')
 
         # Handle decisions in the approval stage
         if approval.decision == MouApprovalDecision.APPROVE:
