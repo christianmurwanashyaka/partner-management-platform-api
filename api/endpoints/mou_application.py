@@ -231,60 +231,43 @@ async def get_mou_applications(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get('/{uuid}', response_model=MouApplicationRead)
+@router.get('/{uuid}')
 async def get_mou_application(
         uuid: uuid.UUID,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
     try:
-        query = select(MouApplication).filter(MouApplication.uuid == uuid).options(
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
-            joinedload(MouApplication.documents),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.domains),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.input_details),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents),
-            joinedload(MouApplication.comments).joinedload(MouComment.user),
-            joinedload(MouApplication.approvals).joinedload(MouApproval.comments).joinedload(MouComment.user),
-            joinedload(MouApplication.reviews).joinedload(MouReview.comments).joinedload(MouComment.user)
+        query = (
+            select(MouApplication)
+            .options(
+                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization)
+            )
+            .where(MouApplication.uuid == uuid)
         )
-        mou_application_result = await db.execute(query)
-        mou_application = mou_application_result.unique().scalar_one_or_none()
+
+        result = await db.execute(query)
+        mou_application = result.unique().scalar_one_or_none()
 
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
         if current_user.role in ['admin', 'moh_staff'] or (current_user.role == 'partner' and mou_application.created_by == current_user.email):
-            organization = mou_application.mou_detail.project.organization
-
-            # Collecting all related documents
-            all_documents = mou_application.documents + mou_application.mou_detail.documents + organization.documents
-
-            mou_application_with_documents = MouApplicationRead(
-                uuid=mou_application.uuid,
-                status=mou_application.status,
-                mou_detail=mou_application.mou_detail,
-                documents=all_documents,  # Adding all related documents
-                organization=SimpleOrganizationRead(
-                    uuid=organization.uuid,
-                    name=organization.name,
-                    email=organization.email,
-                    website=organization.website,
-                    organization_type=organization.organization_type.name,
-                ),
-                comments=mou_application.comments,
-                submitted_by=mou_application.submitted_by,
-                modification_entity=mou_application.modification_entity,
-                last_decision_date=mou_application.last_decision_date
-            )
-
-            return mou_application_with_documents
+            return {
+                "next_level": mou_application.next_level,
+                "organization_uuid": mou_application.mou_detail.project.organization.uuid,
+                "mou_detail_id": mou_application.mou_detail_id,
+                "project_uuid": mou_application.mou_detail.project.uuid,
+                "last_decision_date": mou_application.last_decision_date,
+                "modification_entity": mou_application.modification_entity,
+                "status": mou_application.status,
+            }
         else:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this MOU application')
 
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        # Log the exception
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.patch('/{uuid}/start_review', response_model=MouApplicationRead, dependencies=[Depends(moh_staff_access)])
@@ -546,28 +529,45 @@ async def add_approval(
                 mou_application.status = MouApplicationStatus.APPROVED
                 organization = mou_application.mou_detail.project.organization
                 template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
-                document_buffer = await generate_mou_doc(mou_application, template_path)
-                filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-                filepath, filename = await save_mou_doc_to_disk(document_buffer, filename)
 
-                new_document = Document(
-                    name=f"MOU Application - {mou_application.id}",
+                docx_buffer, pdf_buffer = await generate_mou_doc(mou_application, template_path)
+
+                docx_filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+                docx_filepath, docx_filename = await save_mou_doc_to_disk(docx_buffer, docx_filename, 'docx')
+
+                pdf_filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                pdf_filepath, pdf_filename = await save_mou_doc_to_disk(pdf_buffer, pdf_filename, 'pdf')
+
+                new_docx_document = Document(
+                    name=f"MOU Application - {mou_application.id} (DOCX)",
                     description="Memorandum of understanding document",
                     document_type=DocumentType.MOU,
-                    path=filepath,
-                    filename=filename,
+                    path=docx_filepath,
+                    filename=docx_filename,
                     mou_application_id=uuid,
                     created_by=current_user.email
                 )
 
-                db.add(new_document)
+                new_pdf_document = Document(
+                    name=f"MOU Application - {mou_application.id}",
+                    description="Memorandum of understanding document",
+                    document_type=DocumentType.MOU,
+                    path=pdf_filepath,
+                    filename=pdf_filename,
+                    mou_application_id=uuid,
+                    created_by=current_user.email
+                )
+
+                db.add(new_docx_document)
+                db.add(new_pdf_document)
                 await db.commit()
-                await db.refresh(new_document)
+                await db.refresh(new_docx_document)
+                await db.refresh(new_pdf_document)
 
                 new_mou = Mou(
                     mou_application_id=uuid,
                     mou_detail_id=mou_application.mou_detail_id,
-                    document_id=new_document.uuid,
+                    document_id=new_pdf_document.uuid,  # Use PDF as the primary document
                     created_by=current_user.email
                 )
 
