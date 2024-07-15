@@ -3,6 +3,9 @@ import tempfile
 from datetime import datetime
 from io import BytesIO
 from itertools import chain
+from tempfile import NamedTemporaryFile
+
+from docx2pdf import convert
 from fastapi import status
 
 from docx import Document
@@ -150,10 +153,36 @@ async def generate_mou_doc(mou_application, template_path):
                 goal_paragraph.style = doc.styles['List Number']
                 set_font(goal_paragraph)
 
-    buffer = BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
-    return buffer
+    # buffer = BytesIO()
+    # doc.save(buffer)
+    # buffer.seek(0)
+    # return buffer
+
+    docx_buffer = BytesIO()
+    doc.save(docx_buffer)
+    docx_buffer.seek(0)
+
+    pdf_buffer = BytesIO()
+
+    with NamedTemporaryFile(delete=False, suffix='.docx') as tmp_docx:
+        tmp_docx.write(docx_buffer.getvalue())
+        tmp_docx_path = tmp_docx.name
+
+    try:
+        with NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_pdf:
+            tmp_pdf_path = tmp_pdf.name
+
+        convert(tmp_docx_path, tmp_pdf_path)
+
+        with open(tmp_pdf_path, 'rb') as pdf_file:
+            pdf_buffer.write(pdf_file.read())
+        pdf_buffer.seek(0)
+
+    finally:
+        os.unlink(tmp_docx_path)
+        os.unlink(tmp_pdf_path)
+
+    return docx_buffer, pdf_buffer
 
 
 async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(get_db)):
@@ -266,10 +295,10 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
         raise Exception(f"Failed to save file: {str(e)}")
 
 
-async def save_mou_doc_to_disk(document_buffer, filename):
-    directory = os.path.join(os.getcwd(), 'generated_mou_docs')
+async def save_mou_doc_to_disk(document_buffer, filename, doc_type):
+    directory = os.path.join(os.getcwd(), f'generated_mou_docs_{doc_type}')
     os.makedirs(directory, exist_ok=True)
     file_path = os.path.join(directory, filename)
     with open(file_path, 'wb') as file:
-        file.write(document_buffer.read())
+        file.write(document_buffer.getvalue())  # Use getvalue() instead of read()
     return file_path, filename

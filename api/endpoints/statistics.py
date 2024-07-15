@@ -70,8 +70,10 @@ async def get_budget_statistics(
             join(Activity, Activity.uuid == InputDetail.activity_id). \
             join(ActivityDomain, ActivityDomain.activity_id == Activity.uuid). \
             join(Project, Project.uuid == Activity.project_id). \
-            outerjoin(exchange_rates, exchange_rates.c.currency == Project.currency)
-
+            join(MouDetail, MouDetail.project_id == Project.uuid). \
+            join(MouApplication, MouApplication.mou_detail_id == MouDetail.uuid). \
+            outerjoin(exchange_rates, exchange_rates.c.currency == Project.currency). \
+            filter(MouApplication.status == MouApplicationStatus.APPROVED)  # Add this line to filter for approved applications
 
         # Apply filters
         if organization_uuids:
