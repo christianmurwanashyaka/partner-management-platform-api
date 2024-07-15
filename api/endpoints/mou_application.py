@@ -231,60 +231,43 @@ async def get_mou_applications(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get('/{uuid}', response_model=MouApplicationRead)
+@router.get('/{uuid}')
 async def get_mou_application(
         uuid: uuid.UUID,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
     try:
-        query = select(MouApplication).filter(MouApplication.uuid == uuid).options(
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization),
-            joinedload(MouApplication.documents),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.documents),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.domains),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.activities).joinedload(Activity.input_details),
-            joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization).joinedload(Organization.documents),
-            joinedload(MouApplication.comments).joinedload(MouComment.user),
-            joinedload(MouApplication.approvals).joinedload(MouApproval.comments).joinedload(MouComment.user),
-            joinedload(MouApplication.reviews).joinedload(MouReview.comments).joinedload(MouComment.user)
+        query = (
+            select(MouApplication)
+            .options(
+                joinedload(MouApplication.mou_detail).joinedload(MouDetail.project).joinedload(Project.organization)
+            )
+            .where(MouApplication.uuid == uuid)
         )
-        mou_application_result = await db.execute(query)
-        mou_application = mou_application_result.unique().scalar_one_or_none()
+
+        result = await db.execute(query)
+        mou_application = result.unique().scalar_one_or_none()
 
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
         if current_user.role in ['admin', 'moh_staff'] or (current_user.role == 'partner' and mou_application.created_by == current_user.email):
-            organization = mou_application.mou_detail.project.organization
-
-            # Collecting all related documents
-            all_documents = mou_application.documents + mou_application.mou_detail.documents + organization.documents
-
-            mou_application_with_documents = MouApplicationRead(
-                uuid=mou_application.uuid,
-                status=mou_application.status,
-                mou_detail=mou_application.mou_detail,
-                documents=all_documents,  # Adding all related documents
-                organization=SimpleOrganizationRead(
-                    uuid=organization.uuid,
-                    name=organization.name,
-                    email=organization.email,
-                    website=organization.website,
-                    organization_type=organization.organization_type.name,
-                ),
-                comments=mou_application.comments,
-                submitted_by=mou_application.submitted_by,
-                modification_entity=mou_application.modification_entity,
-                last_decision_date=mou_application.last_decision_date
-            )
-
-            return mou_application_with_documents
+            return {
+                "next_level": mou_application.next_level,
+                "organization_uuid": mou_application.mou_detail.project.organization.uuid,
+                "mou_detail_id": mou_application.mou_detail_id,
+                "project_uuid": mou_application.mou_detail.project.uuid,
+                "last_decision_date": mou_application.last_decision_date,
+                "modification_entity": mou_application.modification_entity,
+                "status": mou_application.status,
+            }
         else:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this MOU application')
 
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        # Log the exception
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.patch('/{uuid}/start_review', response_model=MouApplicationRead, dependencies=[Depends(moh_staff_access)])
