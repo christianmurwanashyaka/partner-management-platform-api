@@ -529,28 +529,45 @@ async def add_approval(
                 mou_application.status = MouApplicationStatus.APPROVED
                 organization = mou_application.mou_detail.project.organization
                 template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
-                document_buffer = await generate_mou_doc(mou_application, template_path)
-                filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-                filepath, filename = await save_mou_doc_to_disk(document_buffer, filename)
 
-                new_document = Document(
-                    name=f"MOU Application - {mou_application.id}",
+                docx_buffer, pdf_buffer = await generate_mou_doc(mou_application, template_path)
+
+                docx_filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+                docx_filepath, docx_filename = await save_mou_doc_to_disk(docx_buffer, docx_filename, 'docx')
+
+                pdf_filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+                pdf_filepath, pdf_filename = await save_mou_doc_to_disk(pdf_buffer, pdf_filename, 'pdf')
+
+                new_docx_document = Document(
+                    name=f"MOU Application - {mou_application.id} (DOCX)",
                     description="Memorandum of understanding document",
                     document_type=DocumentType.MOU,
-                    path=filepath,
-                    filename=filename,
+                    path=docx_filepath,
+                    filename=docx_filename,
                     mou_application_id=uuid,
                     created_by=current_user.email
                 )
 
-                db.add(new_document)
+                new_pdf_document = Document(
+                    name=f"MOU Application - {mou_application.id}",
+                    description="Memorandum of understanding document",
+                    document_type=DocumentType.MOU,
+                    path=pdf_filepath,
+                    filename=pdf_filename,
+                    mou_application_id=uuid,
+                    created_by=current_user.email
+                )
+
+                db.add(new_docx_document)
+                db.add(new_pdf_document)
                 await db.commit()
-                await db.refresh(new_document)
+                await db.refresh(new_docx_document)
+                await db.refresh(new_pdf_document)
 
                 new_mou = Mou(
                     mou_application_id=uuid,
                     mou_detail_id=mou_application.mou_detail_id,
-                    document_id=new_document.uuid,
+                    document_id=new_pdf_document.uuid,  # Use PDF as the primary document
                     created_by=current_user.email
                 )
 
