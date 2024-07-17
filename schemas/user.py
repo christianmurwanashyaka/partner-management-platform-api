@@ -92,3 +92,11 @@ class AssignDomain(BaseModel):
     user_uuid: uuid.UUID
     domain_uuid: uuid.UUID
     subdomain_uuid_list: Optional[List[uuid.UUID]] = None
+
+
+class OrganizationUserCreate(UserBase):
+    pass
+
+    class Config:
+        from_attributes = True
+
