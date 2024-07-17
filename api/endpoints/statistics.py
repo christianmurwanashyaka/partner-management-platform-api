@@ -1,7 +1,7 @@
 from typing import Optional, List, Dict
 
 from fastapi import APIRouter, Depends, status, Query, HTTPException
-from sqlalchemy import select, func, case, desc
+from sqlalchemy import select, func, case, desc, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies.auth import get_current_user
@@ -443,6 +443,91 @@ async def get_approval_processing_time_statistics(
 
         return {
             "approval_processing_time_statistics": statistics
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/district_domains')
+async def get_district_domain_statistics(
+    domain_intervention_uuid: str = Query(..., description="UUID of the domain intervention"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        # Subquery to get the latest exchange rates
+        latest_rates = select(CurrencyExchangeRate.currency,
+                              func.max(CurrencyExchangeRate.created_at).label('max_date')). \
+            group_by(CurrencyExchangeRate.currency).subquery()
+
+        exchange_rates = select(CurrencyExchangeRate.currency, CurrencyExchangeRate.rate). \
+            join(latest_rates,
+                 (CurrencyExchangeRate.currency == latest_rates.c.currency) &
+                 (CurrencyExchangeRate.created_at == latest_rates.c.max_date)). \
+            subquery()
+
+        # Query to get statistics for each district within the specified domain
+        query = select(
+            InputDetail.district,
+            func.count(distinct(MouDetail.uuid)).label('number_of_mou'),
+            func.sum(case(
+                (Project.currency == Currency.RWF, InputDetail.budget),
+                else_=InputDetail.budget * exchange_rates.c.rate
+            )).label('total_budget_rwf')
+        ).select_from(InputDetail). \
+            join(Activity, Activity.uuid == InputDetail.activity_id). \
+            join(ActivityDomain, ActivityDomain.activity_id == Activity.uuid). \
+            join(Project, Project.uuid == Activity.project_id). \
+            join(MouDetail, MouDetail.project_id == Project.uuid). \
+            join(MouApplication, MouApplication.mou_detail_id == MouDetail.uuid). \
+            outerjoin(exchange_rates, exchange_rates.c.currency == Project.currency). \
+            filter(MouApplication.status == MouApplicationStatus.APPROVED). \
+            filter(InputDetail.district.isnot(None)). \
+            filter(ActivityDomain.domain_intervention_id == domain_intervention_uuid). \
+            group_by(InputDetail.district). \
+            order_by(desc('total_budget_rwf'))
+
+        # Execute the query
+        result = await db.execute(query)
+        district_data = result.fetchall()
+
+        # Process the results
+        places_found = [
+            {
+                "district": row.district,
+                "numberOfMoU": row.number_of_mou,
+                "totalBudgetsInRw": float(row.total_budget_rwf) if row.total_budget_rwf else 0
+            }
+            for row in district_data
+        ]
+
+        # Get all districts in Rwanda
+        all_districts = [
+            # East Province
+            "Bugesera", "Gatsibo", "Kayonza", "Kirehe", "Ngoma", "Nyagatare", "Rwamagana",
+            # Kigali Province
+            "Gasabo", "Kicukiro", "Nyarugenge",
+            # North Province
+            "Burera", "Gakenke", "Gicumbi", "Musanze", "Rulindo",
+            # South Province
+            "Gisagara", "Huye", "Kamonyi", "Muhanga", "Nyamagabe", "Nyanza", "Nyaruguru", "Ruhango",
+            # West Province
+            "Karongi", "Ngororero", "Nyabihu", "Nyamasheke", "Rubavu", "Rusizi", "Rutsiro"
+        ]
+
+        # Find districts not in the result
+        places_not_found = list(set(all_districts) - set(row.district for row in district_data))
+
+        # Get the domain name
+        domain_query = select(DomainIntervention.name).where(DomainIntervention.uuid == domain_intervention_uuid)
+        domain_result = await db.execute(domain_query)
+        domain_name = domain_result.scalar_one_or_none()
+
+        return {
+            "domain": domain_name,
+            "placesFound": places_found,
+            "placesNotFound": places_not_found
         }
 
     except Exception as e:
