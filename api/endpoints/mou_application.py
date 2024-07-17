@@ -260,10 +260,13 @@ async def get_mou_application(
                 "project_uuid": mou_application.mou_detail.project.uuid,
                 "last_decision_date": mou_application.last_decision_date,
                 "modification_entity": mou_application.modification_entity,
+                "currency": mou_application.mou_detail.project.currency,
                 "status": mou_application.status,
             }
         else:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this MOU application')
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail='You are not authorized to access this MOU application')
 
     except Exception as e:
         # Log the exception
