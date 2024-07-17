@@ -24,8 +24,8 @@ class OrganizationRead(BaseModel):
 
     rwanda_province: str
     rwanda_district: str
-    rwanda_avenue: str
-    rwanda_po_box: str
+    rwanda_avenue: Optional[str] = None
+    rwanda_po_box: Optional[str] = None
 
     organization_type: OrganizationTypeRead
     documents: List[DocumentRead] = []
