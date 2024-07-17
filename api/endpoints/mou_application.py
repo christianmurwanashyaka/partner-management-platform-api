@@ -118,7 +118,7 @@ async def get_mou_applications(
         provinces = parse_string_list(provinces)
         application_status = parse_string_list(application_status)
 
-        query = (
+        base_query = (
             select(
                 MouApplication.created_at,
                 MouApplication.submitted_by,
@@ -135,54 +135,63 @@ async def get_mou_applications(
             .join(Project.activities)
             .join(Activity.domains)
             .join(Activity.input_details)
-            .order_by(MouApplication.created_at.desc())
+            .group_by(
+                MouApplication.uuid,
+                MouApplication.created_at,
+                MouApplication.submitted_by,
+                MouApplication.status,
+                MouApplication.next_level,
+                Organization.name,
+                OrganizationType.name
+            )
         )
 
-        if current_user.role == 'partner':
-            query = query.filter(MouApplication.created_by == current_user.email)
-
         # Apply filters
+        filters = []
+        if current_user.role == 'partner':
+            filters.append(MouApplication.created_by == current_user.email)
         if organization_uuids:
-            query = query.filter(Project.organization_id.in_(organization_uuids))
+            filters.append(Project.organization_id.in_(organization_uuids))
         if funding_source_uuids:
-            query = query.filter(Project.funding_source_id.in_(funding_source_uuids))
+            filters.append(Project.funding_source_id.in_(funding_source_uuids))
         if funding_unit_uuids:
-            query = query.filter(Project.funding_unit_id.in_(funding_unit_uuids))
+            filters.append(Project.funding_unit_id.in_(funding_unit_uuids))
         if budget_type_uuids:
-            query = query.filter(Project.budget_type_id.in_(budget_type_uuids))
+            filters.append(Project.budget_type_id.in_(budget_type_uuids))
         if domain_intervention_uuids:
-            query = query.filter(ActivityDomain.domain_intervention_id.in_(domain_intervention_uuids))
+            filters.append(ActivityDomain.domain_intervention_id.in_(domain_intervention_uuids))
         if sub_domain_uuids:
-            query = query.filter(ActivityDomain.sub_domain_id.in_(sub_domain_uuids))
+            filters.append(ActivityDomain.sub_domain_id.in_(sub_domain_uuids))
         if sub_domain_function_uuids:
-            query = query.filter(ActivityDomain.sub_domain_function_id.in_(sub_domain_function_uuids))
+            filters.append(ActivityDomain.sub_domain_function_id.in_(sub_domain_function_uuids))
         if sub_function_uuids:
-            query = query.filter(ActivityDomain.sub_function_id.in_(sub_function_uuids))
+            filters.append(ActivityDomain.sub_function_id.in_(sub_function_uuids))
         if input_category_uuids:
-            query = query.filter(InputDetail.input_category_id.in_(input_category_uuids))
+            filters.append(InputDetail.input_category_id.in_(input_category_uuids))
         if input_uuids:
-            query = query.filter(InputDetail.input_id.in_(input_uuids))
+            filters.append(InputDetail.input_id.in_(input_uuids))
         if districts:
-            query = query.filter(InputDetail.district.in_(districts))
+            filters.append(InputDetail.district.in_(districts))
         if provinces:
-            query = query.filter(InputDetail.province.in_(provinces))
+            filters.append(InputDetail.province.in_(provinces))
         if application_status:
-            query = query.filter(MouApplication.status.in_(application_status))
+            filters.append(MouApplication.status.in_(application_status))
+
+        # Apply all filters to the base query
+        for filter_condition in filters:
+            base_query = base_query.filter(filter_condition)
 
         # Count query
-        count_query = select(func.count(distinct(MouApplication.uuid))).select_from(query.subquery())
+        count_query = select(func.count()).select_from(base_query.subquery())
         total_items = (await db.execute(count_query)).scalar_one()
 
         # Paginated query
-        paginated_query = query.group_by(
-            MouApplication.uuid,
-            MouApplication.created_at,
-            MouApplication.submitted_by,
-            MouApplication.status,
-            MouApplication.next_level,
-            Organization.name,
-            OrganizationType.name
-        ).offset((page - 1) * page_size).limit(page_size)
+        paginated_query = (
+            base_query
+            .order_by(MouApplication.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
 
         mou_applications = (await db.execute(paginated_query)).all()
 
