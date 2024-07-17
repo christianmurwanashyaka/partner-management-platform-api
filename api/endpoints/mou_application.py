@@ -103,8 +103,7 @@ async def get_mou_applications(
         current_user: User = Depends(get_current_user)
 ):
     try:
-
-        # Parse URL-encoded, comma-separated UUIDs
+        # Parse URL-encoded, comma-separated UUIDs and strings
         organization_uuids = parse_uuid_list(organization_uuids)
         funding_source_uuids = parse_uuid_list(funding_source_uuids)
         funding_unit_uuids = parse_uuid_list(funding_unit_uuids)
@@ -113,10 +112,8 @@ async def get_mou_applications(
         sub_domain_uuids = parse_uuid_list(sub_domain_uuids)
         sub_domain_function_uuids = parse_uuid_list(sub_domain_function_uuids)
         sub_function_uuids = parse_uuid_list(sub_function_uuids)
-        input_category_uuids = parse_uuid_list(input_uuids)
+        input_category_uuids = parse_uuid_list(input_category_uuids)
         input_uuids = parse_uuid_list(input_uuids)
-
-        # Parse URL-encoded, comma-separated strings
         districts = parse_string_list(districts)
         provinces = parse_string_list(provinces)
         application_status = parse_string_list(application_status)
@@ -135,67 +132,49 @@ async def get_mou_applications(
             .join(MouDetail.project)
             .join(Project.organization)
             .join(Organization.organization_type)
+            .join(Project.activities)
+            .join(Activity.domains)
+            .join(Activity.input_details)
             .order_by(MouApplication.created_at.desc())
         )
 
         if current_user.role == 'partner':
             query = query.filter(MouApplication.created_by == current_user.email)
 
-        # Filtering by organization uuids
+        # Apply filters
         if organization_uuids:
             query = query.filter(Project.organization_id.in_(organization_uuids))
-
-        # Filtering by funding source uuids
         if funding_source_uuids:
             query = query.filter(Project.funding_source_id.in_(funding_source_uuids))
-
-        # Filtering by funding unit uuids
         if funding_unit_uuids:
             query = query.filter(Project.funding_unit_id.in_(funding_unit_uuids))
-
-        # Filtering by budget type uuids
         if budget_type_uuids:
             query = query.filter(Project.budget_type_id.in_(budget_type_uuids))
-
-        # Filtering by domain intervention uuids
         if domain_intervention_uuids:
             query = query.filter(ActivityDomain.domain_intervention_id.in_(domain_intervention_uuids))
-
-        # Filtering by subdomain uuids
         if sub_domain_uuids:
             query = query.filter(ActivityDomain.sub_domain_id.in_(sub_domain_uuids))
-
-        # Filtering by subdomain function uuids
         if sub_domain_function_uuids:
             query = query.filter(ActivityDomain.sub_domain_function_id.in_(sub_domain_function_uuids))
-
         if sub_function_uuids:
             query = query.filter(ActivityDomain.sub_function_id.in_(sub_function_uuids))
-
-        # Filtering by input category uuids
         if input_category_uuids:
             query = query.filter(InputDetail.input_category_id.in_(input_category_uuids))
-
-        # Filtering by input uuids
         if input_uuids:
             query = query.filter(InputDetail.input_id.in_(input_uuids))
-
-        # Filtering by districts
         if districts:
             query = query.filter(InputDetail.district.in_(districts))
-
-        # Filtering by provinces
         if provinces:
             query = query.filter(InputDetail.province.in_(provinces))
-
-        # filter by status
         if application_status:
             query = query.filter(MouApplication.status.in_(application_status))
 
+        # Count query
         count_query = select(func.count(distinct(MouApplication.uuid))).select_from(query.subquery())
         total_items = (await db.execute(count_query)).scalar_one()
 
-        mou_applications_result = await db.execute(query.group_by(
+        # Paginated query
+        paginated_query = query.group_by(
             MouApplication.uuid,
             MouApplication.created_at,
             MouApplication.submitted_by,
@@ -203,8 +182,9 @@ async def get_mou_applications(
             MouApplication.next_level,
             Organization.name,
             OrganizationType.name
-        ).offset((page - 1) * page_size).limit(page_size))
-        mou_applications = mou_applications_result.all()
+        ).offset((page - 1) * page_size).limit(page_size)
+
+        mou_applications = (await db.execute(paginated_query)).all()
 
         response_data = [
             MouApplicationOrganizationRead(

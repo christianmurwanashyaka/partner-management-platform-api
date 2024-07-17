@@ -43,7 +43,8 @@ async def get_budget_statistics(
         sub_domain_uuids = parse_uuid_list(sub_domain_uuids)
         sub_domain_function_uuids = parse_uuid_list(sub_domain_function_uuids)
         sub_function_uuids = parse_uuid_list(sub_function_uuids)
-        input_category_uuids = parse_uuid_list(input_uuids)
+        input_category_uuids = parse_uuid_list(input_category_uuids)
+        input_uuids = parse_uuid_list(input_uuids)
         districts = parse_string_list(districts)
         provinces = parse_string_list(provinces)
 
