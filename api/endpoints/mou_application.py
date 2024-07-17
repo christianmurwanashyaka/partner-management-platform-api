@@ -253,13 +253,13 @@ async def get_mou_application(
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
-        organization_documents = mou_application.mou_detail.project.organization.documents;
-        print('ORGANIZATION DOCUMENTS ', organization_documents)
+        organization_documents = mou_application.mou_detail.project.organization.documents
 
         application_documents = mou_application.documents
-        print('APPLICATION DOCUMENTS', application_documents)
 
-        all_documents = organization_documents + application_documents
+        mou_detail_documents = mou_application.mou_detail.documents
+
+        all_documents = organization_documents + application_documents + mou_detail_documents
         formatted_documents = [
             {
                 "name": doc.filename,
