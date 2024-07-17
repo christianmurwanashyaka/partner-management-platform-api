@@ -1,5 +1,6 @@
 import time
 from datetime import datetime
+from enum import Enum
 from typing import List, Optional
 
 import uuid
@@ -252,6 +253,23 @@ async def get_mou_application(
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
+        organization_documents = mou_application.mou_detail.project.organization.documents;
+        print('ORGANIZATION DOCUMENTS ', organization_documents)
+
+        application_documents = mou_application.documents
+        print('APPLICATION DOCUMENTS', application_documents)
+
+        all_documents = organization_documents + application_documents
+        formatted_documents = [
+            {
+                "name": doc.filename,
+                "path": doc.path,
+                "document_type": doc.document_type.value if isinstance(doc.document_type, Enum) else str(
+                    doc.document_type)
+            }
+            for doc in all_documents
+        ]
+
         if current_user.role in ['admin', 'moh_staff'] or (current_user.role == 'partner' and mou_application.created_by == current_user.email):
             return {
                 "next_level": mou_application.next_level,
@@ -262,6 +280,7 @@ async def get_mou_application(
                 "modification_entity": mou_application.modification_entity,
                 "currency": mou_application.mou_detail.project.currency,
                 "status": mou_application.status,
+                "documents": formatted_documents,
             }
         else:
             raise HTTPException(
