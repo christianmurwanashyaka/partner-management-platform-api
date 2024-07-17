@@ -25,10 +25,11 @@ from schemas.mou import MouRead
 from schemas.mou_application import MouApplicationProjectRead
 from schemas.mou_detail import MouDetailRead
 from schemas.organization import OrganizationRead
+from schemas.user import OrganizationUserCreate
 from helpers.db import check_if_exists, get_all_items, get_first_item
 from schemas.project import ProjectRead, ProjectList
 from utils.files import handle_upload_file
-from utils.security import get_password_hash
+from utils.security import get_password_hash, create_access_token
 
 router = APIRouter()
 
@@ -271,6 +272,49 @@ async def get_organization(uuid: str, db: AsyncSession = Depends(get_db), curren
         return organization
     else:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+
+
+@router.post('/{uuid}/user')
+async def add_organization_user(
+        uuid: uuid.UUID,
+        user: OrganizationUserCreate,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)):
+
+    if current_user.role != UserRole.PARTNER:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Only partners can create data managers and data reporters")
+    organization_query = select(Organization).filter(Organization.uuid == uuid)
+    organization = await get_first_item(db, organization_query)
+
+    if not organization:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
+
+    if user.role not in [UserRole.DATA_MANAGER, UserRole.DATA_REPORTER]:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid role. Must be data_manager or data_reporter")
+
+    if await check_if_exists(User, db, email=user.email):
+        raise HTTPException(status.HTTP_409_CONFLICT, detail='User with this email already exists')
+
+    hashed_password = get_password_hash(user.password)
+    db_user = User(
+        email=user.email,
+        password=hashed_password,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        role=user.role,
+        phone_number=user.phone_number,
+        organization_uuid=uuid,
+        created_by=current_user.email
+    )
+
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+
+    token = create_access_token(data={"sub": user.email, "role": user.role})
+    return {"user": db_user, "token": {"access_token": token, "token_type": "bearer"}}
 
 
 @router.get('/{uuid}/mou_applications', response_model=PaginatedResponse[MouApplicationProjectRead])
