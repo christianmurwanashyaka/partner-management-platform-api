@@ -30,8 +30,8 @@ class Organization(CommonBaseModel, table=True):
     # Rwanda address components
     rwanda_province: str = Field(sa_column=sa.Column(sa.String))
     rwanda_district: str = Field(sa_column=sa.Column(sa.String))
-    rwanda_avenue: str = Field(sa_column=sa.Column(sa.String))
-    rwanda_po_box: str = Field(sa_column=sa.Column(sa.String))
+    rwanda_avenue: Optional[str] = Field(sa_column=sa.Column(sa.String), default=None)
+    rwanda_po_box: Optional[str] = Field(sa_column=sa.Column(sa.String), default=None)
 
     organization_type_id: uuid.UUID = Field(
         default=None,
