@@ -496,8 +496,8 @@ async def get_district_domain_statistics(
         places_found = [
             {
                 "district": row.district,
-                "numberOfMoU": row.number_of_mou,
-                "totalBudgetsInRw": float(row.total_budget_rwf) if row.total_budget_rwf else 0
+                "number_of_projects": row.number_of_mou,
+                "total_budget_in_rwf": float(row.total_budget_rwf) if row.total_budget_rwf else 0
             }
             for row in district_data
         ]
@@ -526,8 +526,8 @@ async def get_district_domain_statistics(
 
         return {
             "domain": domain_name,
-            "placesFound": places_found,
-            "placesNotFound": places_not_found
+            "districts_found": places_found,
+            "districts_not_found": places_not_found
         }
 
     except Exception as e:
