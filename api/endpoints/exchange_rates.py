@@ -33,7 +33,7 @@ async def create_currency_exchange_rate(
 
 
 @router.get('/', response_model=List[ExchangeRateRead])
-async def get_exchange_rates(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_exchange_rates(db: AsyncSession = Depends(get_db)):
     query = select(CurrencyExchangeRate).where(CurrencyExchangeRate.deleted_status == False).order_by(CurrencyExchangeRate.created_at.desc())
 
     result = await db.execute(query)

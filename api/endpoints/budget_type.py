@@ -33,12 +33,12 @@ async def create_budget_type(request: Request, budget_type: BudgetTypeCreate, db
 
 
 @router.get('/', response_model=PaginatedResponse[BudgetTypeRead])
-async def get_budget_types(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_budget_types(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, BudgetType, page=page, page_size=page_size)
 
 
 @router.get('/{uuid}', response_model=BudgetTypeRead)
-async def get_budget_type(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_budget_type(uuid: str, db: AsyncSession = Depends(get_db)):
     query = select(BudgetType).filter(BudgetType.uuid == uuid)
     budget_type = await get_first_item(db, query)
     if not budget_type:

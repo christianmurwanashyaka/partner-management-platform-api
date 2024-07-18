@@ -33,12 +33,12 @@ async def create_funding_source(request: Request, funding_source: FundingSourceC
 
 
 @router.get('/', response_model=PaginatedResponse[FundingSource])
-async def get_funding_sources(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_funding_sources(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, FundingSource, page=page, page_size=page_size)
 
 
 @router.get('/{uuid}', response_model=FundingSourceRead)
-async def get_funding_source(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_funding_source(uuid: str, db: AsyncSession = Depends(get_db)):
     query = select(FundingSource).filter(FundingSource.uuid == uuid)
     funding_source = await get_first_item(db, query)
     if not funding_source:

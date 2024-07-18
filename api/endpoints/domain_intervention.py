@@ -37,13 +37,12 @@ async def create_domain_intervention(request: Request, domain_intervention: Doma
 
 
 @router.get('/', response_model=PaginatedResponse[DomainInterventionList])
-async def get_domain_interventions(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_domain_interventions(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, DomainIntervention, page=page, page_size=page_size)
 
 
 @router.get('/{uuid}', response_model=DomainInterventionRead)
-async def get_domain_intervention(uuid: str, db: AsyncSession = Depends(get_db),
-                                  current_user: User = Depends(get_current_user)):
+async def get_domain_intervention(uuid: str, db: AsyncSession = Depends(get_db)):
     domain_intervention = await get_joined_details_by_uuid(
         db=db,
         model=DomainIntervention,
