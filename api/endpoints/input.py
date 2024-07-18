@@ -43,7 +43,7 @@ async def create_input(request: Request, input_form: InputCreate, db: AsyncSessi
 
 
 @router.get('/', response_model=PaginatedResponse[InputRead])
-async def get_inputs(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_inputs(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, Input, page=page, page_size=page_size)
 
 

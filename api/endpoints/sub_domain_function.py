@@ -52,12 +52,12 @@ async def create_subdomain_function(request: Request, sub_domain_function_form: 
 
 
 @router.get('/', response_model=PaginatedResponse[SubDomainFunctionRead])
-async def get_sub_domain_functions(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_sub_domain_functions(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, SubDomainFunction, page=page, page_size=page_size)
 
 
 @router.get('/{uuid}', response_model=SubDomainFunctionRead)
-async def get_sub_domain_function(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_sub_domain_function(uuid: str, db: AsyncSession = Depends(get_db)):
     sub_domain_function = await get_joined_details_by_uuid(
         db=db,
         model=SubDomainFunction,

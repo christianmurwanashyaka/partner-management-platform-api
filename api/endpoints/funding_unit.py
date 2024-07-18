@@ -33,12 +33,12 @@ async def create_funding_unit(request: Request, funding_unit: FundingUnitCreate,
 
 
 @router.get('/', response_model=PaginatedResponse[FundingUnitRead])
-async def get_funding_units(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_funding_units(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, FundingUnit, page=page, page_size=page_size)
 
 
 @router.get('/{uuid}', response_model=FundingUnitRead)
-async def get_funding_unit(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_funding_unit(uuid: str, db: AsyncSession = Depends(get_db)):
     query = select(FundingUnit).filter(FundingUnit.uuid == uuid)
     funding_unit = await get_first_item(db, query)
     if not funding_unit:
