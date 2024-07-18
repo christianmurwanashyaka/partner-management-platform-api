@@ -44,12 +44,12 @@ async def create_subdomain(request: Request, sub_domain_form: SubDomainCreate, d
 
 
 @router.get('/', response_model=PaginatedResponse[SubDomainList])
-async def get_all_sub_domains(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_all_sub_domains(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
     return await get_all_items(db, SubDomain, page=page, page_size=page_size)
 
 
 @router.get('/{uuid}', response_model=SubDomainRead)
-async def get_sub_domain_details(uuid: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_sub_domain_details(uuid: str, db: AsyncSession = Depends(get_db)):
     subdomain = await get_joined_details_by_uuid(
         db=db,
         model=SubDomain,

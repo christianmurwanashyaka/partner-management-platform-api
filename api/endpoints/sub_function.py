@@ -60,8 +60,7 @@ async def create_sub_function(
 async def get_sub_functions(
         page: int = 1,
         page_size: int = 100,
-        db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: AsyncSession = Depends(get_db)
 ):
     return await get_all_items(db, SubFunction, page=page, page_size=page_size)
 
@@ -69,8 +68,7 @@ async def get_sub_functions(
 @router.get('/{uuid}', response_model=SubFunctionRead)
 async def get_sub_function(
         uuid: str,
-        db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: AsyncSession = Depends(get_db)
 ):
     query = select(SubFunction).filter(SubFunction.uuid == uuid)
     sub_function = await get_first_item(db, query)
