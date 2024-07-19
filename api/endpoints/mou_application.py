@@ -99,6 +99,9 @@ async def get_mou_applications(
         districts: Optional[List[str]] = Query(None),
         provinces: Optional[List[str]] = Query(None),
         application_status: Optional[List[str]] = Query(None),
+        next_levels: Optional[List[str]] = Query(None),
+        sort_by: Optional[str] = Query(None, description="Field to sort by: status, budget, created_at"),
+        order: Optional[str] = Query("desc", description="Sort order: asc or desc"),
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
@@ -117,34 +120,60 @@ async def get_mou_applications(
         districts = parse_string_list(districts)
         provinces = parse_string_list(provinces)
         application_status = parse_string_list(application_status)
+        next_levels = parse_string_list(next_levels)
 
-        base_query = (
-            select(
-                MouApplication.created_at,
-                MouApplication.submitted_by,
-                MouApplication.uuid,
-                MouApplication.status,
-                MouApplication.next_level,
-                Organization.name.label('organization'),
-                OrganizationType.name.label('organization_type')
-            )
-            .join(MouApplication.mou_detail)
-            .join(MouDetail.project)
-            .join(Project.organization)
-            .join(Organization.organization_type)
-            .join(Project.activities)
-            .join(Activity.domains)
-            .join(Activity.input_details)
-            .group_by(
-                MouApplication.uuid,
-                MouApplication.created_at,
-                MouApplication.submitted_by,
-                MouApplication.status,
-                MouApplication.next_level,
-                Organization.name,
-                OrganizationType.name
-            )
+        # Determine if we need to calculate the budget
+        calculate_budget = sort_by == 'budget'
+
+        # Base query
+        base_query = select(
+            MouApplication.created_at,
+            MouApplication.submitted_by,
+            MouApplication.uuid,
+            MouApplication.status,
+            MouApplication.next_level,
+            Organization.name.label('organization'),
+            OrganizationType.name.label('organization_type')
         )
+
+        # Add budget calculation only if needed
+        if calculate_budget:
+            budget_subquery = (
+                select(
+                    InputDetail.activity_id,
+                    func.sum(InputDetail.budget).label('total_budget')
+                )
+                .group_by(InputDetail.activity_id)
+                .subquery()
+            )
+            base_query = base_query.add_columns(
+                func.coalesce(func.sum(budget_subquery.c.total_budget), 0).label('total_budget')
+            )
+
+        # Join tables
+        base_query = base_query.join(MouApplication.mou_detail).\
+            join(MouDetail.project).\
+            join(Project.organization).\
+            join(Organization.organization_type).\
+            join(Project.activities)
+
+        if calculate_budget:
+            base_query = base_query.outerjoin(budget_subquery, Activity.uuid == budget_subquery.c.activity_id)
+
+        base_query = base_query.join(Activity.domains).\
+            join(Activity.input_details)
+
+        # Group by
+        group_by_columns = [
+            MouApplication.uuid,
+            MouApplication.created_at,
+            MouApplication.submitted_by,
+            MouApplication.status,
+            MouApplication.next_level,
+            Organization.name,
+            OrganizationType.name
+        ]
+        base_query = base_query.group_by(*group_by_columns)
 
         # Apply filters
         filters = []
@@ -176,10 +205,27 @@ async def get_mou_applications(
             filters.append(InputDetail.province.in_(provinces))
         if application_status:
             filters.append(MouApplication.status.in_(application_status))
+        if next_levels:
+            filters.append(MouApplication.next_level.in_(next_levels))
 
         # Apply all filters to the base query
         for filter_condition in filters:
             base_query = base_query.filter(filter_condition)
+
+        # Apply sorting
+        if sort_by:
+            if sort_by == 'status':
+                order_by = MouApplication.status.desc() if order == 'desc' else MouApplication.status.asc()
+            elif sort_by == 'budget':
+                order_by = func.sum(budget_subquery.c.total_budget).desc() if order == 'desc' else func.sum(budget_subquery.c.total_budget).asc()
+            elif sort_by == 'created_at':
+                order_by = MouApplication.created_at.desc() if order == 'desc' else MouApplication.created_at.asc()
+            else:
+                order_by = MouApplication.created_at.desc()  # Default sorting
+        else:
+            order_by = MouApplication.created_at.desc()  # Default sorting
+
+        base_query = base_query.order_by(order_by)
 
         # Count query
         count_query = select(func.count()).select_from(base_query.subquery())
@@ -188,7 +234,6 @@ async def get_mou_applications(
         # Paginated query
         paginated_query = (
             base_query
-            .order_by(MouApplication.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -204,7 +249,8 @@ async def get_mou_applications(
                 status=app.status,
                 organization=app.organization,
                 organization_type=app.organization_type,
-                next_level=app.next_level
+                next_level=app.next_level,
+                total_budget=app.total_budget if calculate_budget else None
             )
             for app in mou_applications
         ]

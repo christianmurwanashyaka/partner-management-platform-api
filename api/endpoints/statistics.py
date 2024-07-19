@@ -532,3 +532,44 @@ async def get_district_domain_statistics(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/applications/levels')
+async def get_mou_applications_per_level(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        # Query to get the statistics
+        query = select(
+            MouApplication.next_level,
+            func.count(MouApplication.uuid).label('number_of_applications'),
+            func.array_agg(distinct(Organization.name)).label('organizations')
+        ).select_from(MouApplication).\
+            join(MouDetail, MouDetail.uuid == MouApplication.mou_detail_id).\
+            join(Project, Project.uuid == MouDetail.project_id).\
+            join(Organization, Organization.uuid == Project.organization_id). \
+            where(MouApplication.status != MouApplicationStatus.APPROVED). \
+            group_by(MouApplication.next_level)
+
+        # Execute the query
+        result = await db.execute(query)
+        statistics = result.fetchall()
+
+        # Process the results
+        processed_statistics = []
+        for row in statistics:
+            if row.next_level:  # Exclude rows where next_level is None
+                processed_statistics.append({
+                    "position": row.next_level,
+                    "number_of_applications": row.number_of_applications,
+                    "organizations": row.organizations
+                })
+
+        # Sort the results by numberOfApplications in descending order
+        processed_statistics.sort(key=lambda x: x['number_of_applications'], reverse=True)
+
+        return processed_statistics
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
