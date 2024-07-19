@@ -33,6 +33,8 @@ class Organization(CommonBaseModel, table=True):
     rwanda_avenue: Optional[str] = Field(sa_column=sa.Column(sa.String), default=None)
     rwanda_po_box: Optional[str] = Field(sa_column=sa.Column(sa.String), default=None)
 
+    rgb_number: Optional[str] = Field(sa_column=sa.Column(sa.String), default=None)
+
     organization_type_id: uuid.UUID = Field(
         default=None,
         sa_column=sa.Column(sa.ForeignKey('organization_type.uuid'))

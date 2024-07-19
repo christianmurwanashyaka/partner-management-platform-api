@@ -53,6 +53,7 @@ async def create_organization(
         rwanda_district: str = Form(...),
         rwanda_avenue: Optional[str] = Form(None),
         rwanda_po_box: Optional[str] = Form(None),
+        rgb_number: Optional[str] = Form(None),
         organization_type_id: uuid.UUID = Form(...),
         appointment_letter: UploadFile = File(...),
         notified_constitution_bylaws: UploadFile = None,
@@ -102,6 +103,7 @@ async def create_organization(
         rwanda_district=rwanda_district,
         rwanda_avenue=rwanda_avenue,
         rwanda_po_box=rwanda_po_box,
+        rgb_number=rgb_number,
         organization_type_id=organization_type_id,
         created_by=user_email,
     )
@@ -164,6 +166,7 @@ async def update_organization(
         rwanda_district: Optional[str] = Form(None),
         rwanda_avenue: Optional[str] = Form(None),
         rwanda_po_box: Optional[str] = Form(None),
+        rgb_number: Optional[str] = Form(None),
         organization_type_id: Optional[uuid.UUID] = Form(None),
         appointment_letter: UploadFile = None,
         notified_constitution_bylaws: UploadFile = None,
@@ -198,6 +201,7 @@ async def update_organization(
             "rwanda_district": rwanda_district,
             "rwanda_avenue": rwanda_avenue,
             "rwanda_po_box": rwanda_po_box,
+            "rgb_number": rgb_number,
             "organization_type_id": organization_type_id
         }
 
