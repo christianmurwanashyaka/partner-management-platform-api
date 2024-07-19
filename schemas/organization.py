@@ -27,6 +27,8 @@ class OrganizationRead(BaseModel):
     rwanda_avenue: Optional[str] = None
     rwanda_po_box: Optional[str] = None
 
+    rgb_number: Optional[str] = None
+
     organization_type: OrganizationTypeRead
     documents: List[DocumentRead] = []
 
@@ -47,6 +49,7 @@ class OrganizationUpdate(BaseModel):
     rwanda_district: Optional[str] = None
     rwanda_avenue: Optional[str] = None
     rwanda_po_box: Optional[str] = None
+    rgb_number: Optional[str] = None
     organization_type_id: Optional[uuid.UUID] = None
 
     class Config:
