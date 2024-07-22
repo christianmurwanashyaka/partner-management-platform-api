@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     LAST_NAME: str
     ROLE: str
 
+    # email configuration
+    MAIL_USERNAME: str
+    MAIL_PASSWORD: str
+    MAIL_FROM: str
+    MAIL_PORT: int
+    MAIL_SERVER: str
+    MAIL_STARTTLS: bool = True  # Changed from MAIL_TLS
+    MAIL_SSL_TLS: bool = False  # Changed from MAIL_SSL
+    USE_CREDENTIALS: bool = True
+
     class Config:
         env_file = env_path
 

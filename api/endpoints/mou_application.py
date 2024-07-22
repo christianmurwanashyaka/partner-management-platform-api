@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.access_control import partner_access, moh_staff_access
 from api.dependencies.auth import get_current_user
+from api.dependencies.email_notification_handler import get_email_notification_handler
 from db.database import get_db
 from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, MOHStaffLevel, \
     MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou, MouReview, PaginatedResponse, \
@@ -17,6 +18,8 @@ from db.models import User, MouDetail, MouApplication, Document, DocumentType, U
 from db.models.mou_approval_or_review import MouApprovalOrReview, MouApprovalOrReviewDecision
 from db.models.mou_review import MouReviewDecision
 from helpers.db import get_first_item, get_most_recent_decision_time
+from notification.handlers import EmailNotificationHandler
+from notification.services import notify_partner_coordinators, notify_moh_staff, notify_partner
 from schemas.activity import ActivityDomainDetail
 from schemas.approval_and_review import CombinedApprovalOrReviewRead
 from schemas.comment import MouCommentRead
@@ -38,7 +41,9 @@ router = APIRouter()
 async def create_mou_application(
         request: Request,
         mou_application_data: MouApplicationCreate,
-        db: AsyncSession = Depends(get_db)):
+        db: AsyncSession = Depends(get_db),
+        email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)
+):
     user = request.state.user.email
     full_name = request.state.user.first_name + ' ' + request.state.user.last_name
 
@@ -76,16 +81,18 @@ async def create_mou_application(
         await db.commit()
         await db.refresh(excel_document)
 
+        await notify_partner_coordinators(db, str(new_mou_application.id), created_by=user.email, email_handler=email_handler)
+
         return new_mou_application
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get('/level', response_model=PaginatedResponse[MouApplicationOrganizationRead])
+@router.get('/level', response_model=PaginatedResponse[MouApplicationOrganizationRead], dependencies=[Depends(moh_staff_access)])
 async def get_level_specific_mou_applications(
         level: Optional[MOHStaffLevel] = Query(None, description="Filter applications by level"),
-        status: Optional[List[MouApplicationStatus]] = Query(None, description="Filter applications by status"),
+        application_status: Optional[List[MouApplicationStatus]] = Query(None, description="Filter applications by status"),
         page: int = 1,
         page_size: int = 100,
         sort_by: Optional[str] = Query(None, description="Field to sort by: status, created_at"),
@@ -109,29 +116,32 @@ async def get_level_specific_mou_applications(
 
         filters = []
 
-        if level:
-            if level == MOHStaffLevel.PARTNER_COORDINATOR:
+        # Use current_user's level if no specific level is provided
+        user_level = level or current_user.level
+
+        if user_level:
+            if user_level == MOHStaffLevel.PARTNER_COORDINATOR:
                 filters.append(
                     or_(
                         MouApplication.status == MouApplicationStatus.PENDING,
                         MouApplication.next_level == MOHStaffLevel.PARTNER_COORDINATOR
                     )
                 )
-            elif level in [MOHStaffLevel.LEGAL_ADVISOR, MOHStaffLevel.TECHNICAL_DEPARTMENT]:
+            elif user_level in [MOHStaffLevel.LEGAL_ADVISOR, MOHStaffLevel.TECHNICAL_DEPARTMENT]:
                 filters.append(
                     or_(
                         and_(
                             MouApplication.status == MouApplicationStatus.UNDER_REVIEW,
                             MouApplication.next_level.is_(None)
                         ),
-                        MouApplication.next_level == level
+                        MouApplication.next_level == user_level
                     )
                 )
             else:
-                filters.append(MouApplication.next_level == level)
+                filters.append(MouApplication.next_level == user_level)
 
-        if status:
-            filters.append(MouApplication.status.in_(status))
+        if application_status:
+            filters.append(MouApplication.status.in_(application_status))
 
         # Apply all filters
         for filter_condition in filters:
@@ -462,7 +472,11 @@ async def get_mou_application(
 
 
 @router.patch('/{uuid}/start_review', response_model=MouApplicationRead, dependencies=[Depends(moh_staff_access)])
-async def start_review(uuid: str, request: Request, db: AsyncSession = Depends(get_db)):
+async def start_review(
+        uuid: str,
+        request: Request,
+        db: AsyncSession = Depends(get_db),
+        email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)):
     user = request.state.user
     if user.role != UserRole.MOH_STAFF or user.level != MOHStaffLevel.PARTNER_COORDINATOR:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
@@ -483,6 +497,15 @@ async def start_review(uuid: str, request: Request, db: AsyncSession = Depends(g
 
         await db.commit()
         await db.refresh(mou_application)
+
+        await notify_moh_staff(
+            db,
+            email_handler,
+            levels=[MOHStaffLevel.LEGAL_ADVISOR, MOHStaffLevel.TECHNICAL_DEPARTMENT],
+            created_by=user.email,
+            subject="MOU Application Review Started",
+            message=f"An MOU application (ID: {mou_application.id}) has been set to 'Under Review' and requires your attention."
+        )
 
         return mou_application
     except Exception as e:
@@ -556,7 +579,8 @@ async def add_review(
         uuid: uuid.UUID,
         review: MouReviewCreate,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)
 ):
     try:
         query = select(MouApplication).where(MouApplication.uuid == uuid)
@@ -658,6 +682,35 @@ async def add_review(
         await db.commit()
         await db.refresh(mou_application)
 
+        if mou_application.next_level:
+            await notify_moh_staff(
+                db,
+                email_handler,
+                levels=[mou_application.next_level],
+                created_by=current_user.email,
+                subject="MOU Application Requires Your Review",
+                message=f"An MOU application (ID: {mou_application.id}) has been reviewed and requires your attention."
+            )
+
+        if review.decision == MouReviewDecision.REJECT:
+            await notify_partner(
+                db,
+                email_handler,
+                mou_application.id,
+                created_by=current_user.email,
+                subject="MOU Application Rejected",
+                message=f"Your MOU application (ID: {mou_application.id}) has been rejected."
+            )
+        elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
+            await notify_partner(
+                db,
+                email_handler,
+                mou_application.id,
+                created_by=current_user.email,
+                subject="MOU Application Requires Modification",
+                message=f"Your MOU application (ID: {mou_application.id}) requires modifications. Please review and update accordingly."
+            )
+
         return MouReviewRead(
             uuid=new_review.uuid,
             decision=new_review.decision,
@@ -678,7 +731,8 @@ async def add_approval(
         uuid: uuid.UUID,
         approval: MouApprovalCreate,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)
 ):
     try:
         query = select(MouApplication).where(MouApplication.uuid == uuid)
@@ -718,6 +772,7 @@ async def add_approval(
         if approval.decision == MouApprovalDecision.APPROVE:
             if current_user.level == MOHStaffLevel.MINISTER:
                 mou_application.status = MouApplicationStatus.APPROVED
+                mou_application.next_level = None
                 organization = mou_application.mou_detail.project.organization
                 template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
 
@@ -765,12 +820,53 @@ async def add_approval(
                 db.add(new_mou)
                 await db.commit()
                 await db.refresh(new_mou)
+
+                await notify_partner(
+                    db,
+                    email_handler,
+                    mou_application.id,
+                    created_by=current_user.email,
+                    subject="MOU Application Approved",
+                    message=f"Your MOU application (ID: {mou_application.id}) has been approved. Please find the attached MOU document.",
+                    attachment_path=pdf_filepath,
+                    attachment_filename=pdf_filename
+                )
             else:
                 next_level_index = approval_stage_levels.index(current_user.level) + 1
                 mou_application.next_level = approval_stage_levels[next_level_index]
-        elif approval.decision in [MouApprovalDecision.REQUEST_MODIFICATION, MouApprovalDecision.REJECT]:
-                mou_application.status = MouApplicationStatus.UNDER_REVIEW
-                mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
+
+                await notify_moh_staff(
+                    db,
+                    email_handler,
+                    created_by=current_user.email,
+                    levels=[mou_application.next_level],
+                    subject="MOU Application Requires Your Approval",
+                    message=f"An MOU application (ID: {mou_application.id}) has been approved at the previous level and requires your attention."
+                )
+        elif approval.decision == MouApprovalDecision.REQUEST_MODIFICATION:
+            mou_application.status = MouApplicationStatus.UNDER_REVIEW
+            mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
+            await notify_moh_staff(
+                db,
+                email_handler,
+                created_by=current_user.email,
+                levels=[MOHStaffLevel.PARTNER_COORDINATOR],
+                subject="MOU Application Requires Modification",
+                message=f"An MOU application (ID: {mou_application.id}) requires modification. Please review and coordinate with the partner."
+            )
+        elif approval.decision == MouApprovalDecision.REJECT:
+            mou_application.status = MouApplicationStatus.UNDER_REVIEW
+            mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
+
+            # Notify partner coordinator about rejection
+            await notify_moh_staff(
+                db,
+                email_handler,
+                created_by=current_user.email,
+                levels=[MOHStaffLevel.PARTNER_COORDINATOR],
+                subject="MOU Application Rejected",
+                message=f"An MOU application (ID: {mou_application.id}) has been rejected. Please review and take appropriate action."
+            )
 
         # Record the approval
         previous_decision_time = await get_most_recent_decision_time(db, uuid)
@@ -1052,7 +1148,11 @@ async def get_modification_comments(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-async def update_related_mou_application(entity, db: AsyncSession = Depends(get_db)):
+async def update_related_mou_application(
+        entity,
+        db: AsyncSession = Depends(get_db),
+        email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)
+):
     if isinstance(entity, Activity):
         mou_details = entity.project.mou_details
     elif isinstance(entity, MouDetail):
@@ -1104,6 +1204,15 @@ async def update_related_mou_application(entity, db: AsyncSession = Depends(get_
 
             mou_application.last_updated_at = datetime.utcnow()
             mou_application.last_updated_by = mou_application.created_by
+
+            await notify_moh_staff(
+                db,
+                email_handler,
+                levels=[MOHStaffLevel.PARTNER_COORDINATOR],
+                subject="MOU Application Modified",
+                message=f"An MOU application (ID: {mou_application.id}) has been modified and requires your attention.",
+                created_by=mou_application.last_updated_by
+            )
 
             await db.commit()
             await db.refresh(mou_application)
