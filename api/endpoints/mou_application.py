@@ -5,7 +5,7 @@ from typing import List, Optional
 
 import uuid
 from fastapi import APIRouter, Request, Depends, status, HTTPException, Query
-from sqlalchemy import distinct, select, func
+from sqlalchemy import distinct, select, func, and_, or_
 from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.access_control import partner_access, moh_staff_access
@@ -77,6 +77,113 @@ async def create_mou_application(
         await db.refresh(excel_document)
 
         return new_mou_application
+
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get('/level', response_model=PaginatedResponse[MouApplicationOrganizationRead])
+async def get_level_specific_mou_applications(
+        level: Optional[MOHStaffLevel] = Query(None, description="Filter applications by level"),
+        status: Optional[List[MouApplicationStatus]] = Query(None, description="Filter applications by status"),
+        page: int = 1,
+        page_size: int = 100,
+        sort_by: Optional[str] = Query(None, description="Field to sort by: status, created_at"),
+        order: Optional[str] = Query("desc", description="Sort order: asc or desc"),
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        base_query = select(
+            MouApplication.created_at,
+            MouApplication.submitted_by,
+            MouApplication.uuid,
+            MouApplication.status,
+            MouApplication.next_level,
+            Organization.name.label('organization'),
+            OrganizationType.name.label('organization_type')
+        ).join(MouApplication.mou_detail). \
+            join(MouDetail.project). \
+            join(Project.organization). \
+            join(Organization.organization_type)
+
+        filters = []
+
+        if level:
+            if level == MOHStaffLevel.PARTNER_COORDINATOR:
+                filters.append(
+                    or_(
+                        MouApplication.status == MouApplicationStatus.PENDING,
+                        MouApplication.next_level == MOHStaffLevel.PARTNER_COORDINATOR
+                    )
+                )
+            elif level in [MOHStaffLevel.LEGAL_ADVISOR, MOHStaffLevel.TECHNICAL_DEPARTMENT]:
+                filters.append(
+                    or_(
+                        and_(
+                            MouApplication.status == MouApplicationStatus.UNDER_REVIEW,
+                            MouApplication.next_level.is_(None)
+                        ),
+                        MouApplication.next_level == level
+                    )
+                )
+            else:
+                filters.append(MouApplication.next_level == level)
+
+        if status:
+            filters.append(MouApplication.status.in_(status))
+
+        # Apply all filters
+        for filter_condition in filters:
+            base_query = base_query.filter(filter_condition)
+
+        # Apply sorting
+        if sort_by:
+            if sort_by == 'status':
+                order_by = MouApplication.status.desc() if order == 'desc' else MouApplication.status.asc()
+            elif sort_by == 'created_at':
+                order_by = MouApplication.created_at.desc() if order == 'desc' else MouApplication.created_at.asc()
+            else:
+                order_by = MouApplication.created_at.desc()  # Default sorting
+        else:
+            order_by = MouApplication.created_at.desc()  # Default sorting
+
+        base_query = base_query.order_by(order_by)
+
+        # Count query
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_items = (await db.execute(count_query)).scalar_one()
+
+        # Paginated query
+        paginated_query = (
+            base_query
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+
+        mou_applications = (await db.execute(paginated_query)).all()
+
+        response_data = [
+            MouApplicationOrganizationRead(
+                created_at=app.created_at,
+                submitted_by=app.submitted_by,
+                reference_number=f"{app.created_at:%Y%m%d}-{app.uuid.int % 1000000:06d}",
+                uuid=app.uuid,
+                status=app.status,
+                organization=app.organization,
+                organization_type=app.organization_type,
+                next_level=app.next_level
+            )
+            for app in mou_applications
+        ]
+
+        return PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=(total_items + page_size - 1) // page_size,
+            data=response_data
+        )
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -209,11 +316,31 @@ async def get_mou_applications(
             filters.append(InputDetail.district.in_(districts))
         if provinces:
             filters.append(InputDetail.province.in_(provinces))
+        if next_levels:
+            next_level_filter = []
+            for level in next_levels:
+                if level == MOHStaffLevel.PARTNER_COORDINATOR.value:
+                    next_level_filter.append(
+                        or_(
+                            MouApplication.status == MouApplicationStatus.PENDING,
+                            MouApplication.next_level == MOHStaffLevel.PARTNER_COORDINATOR
+                        )
+                    )
+                elif level in [MOHStaffLevel.LEGAL_ADVISOR.value, MOHStaffLevel.TECHNICAL_DEPARTMENT.value]:
+                    next_level_filter.append(
+                        or_(
+                            and_(
+                                MouApplication.status == MouApplicationStatus.UNDER_REVIEW,
+                                MouApplication.next_level.is_(None)
+                            ),
+                            MouApplication.next_level == level
+                        )
+                    )
+                else:
+                    next_level_filter.append(MouApplication.next_level == level)
+            filters.append(or_(*next_level_filter))
         if application_status:
             filters.append(MouApplication.status.in_(application_status))
-        if next_levels:
-            filters.append(MouApplication.next_level.in_(next_levels))
-        filters.append(MouApplication.created_at.between(start_date, end_date))
 
         # Apply all filters to the base query
         for filter_condition in filters:
