@@ -100,6 +100,12 @@ async def get_mou_applications(
         provinces: Optional[List[str]] = Query(None),
         application_status: Optional[List[str]] = Query(None),
         next_levels: Optional[List[str]] = Query(None),
+        start_date: Optional[datetime] = Query(
+            default=datetime(1970, 1, 1),
+            description="Filter applications created on or after this date"),
+        end_date: Optional[datetime] = Query(
+            default=datetime(9999, 12, 31),
+            description="Filter applications created on or before this date"),
         sort_by: Optional[str] = Query(None, description="Field to sort by: status, budget, created_at"),
         order: Optional[str] = Query("desc", description="Sort order: asc or desc"),
         db: AsyncSession = Depends(get_db),
@@ -207,6 +213,7 @@ async def get_mou_applications(
             filters.append(MouApplication.status.in_(application_status))
         if next_levels:
             filters.append(MouApplication.next_level.in_(next_levels))
+        filters.append(MouApplication.created_at.between(start_date, end_date))
 
         # Apply all filters to the base query
         for filter_condition in filters:
