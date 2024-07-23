@@ -14,6 +14,7 @@ from schemas.user import UserProfile
 
 class MouApplicationCreate(BaseModel):
     mou_detail_id: uuid.UUID
+    partner_template_comment: Optional[str] = None
 
     class Config:
         from_attributes = True

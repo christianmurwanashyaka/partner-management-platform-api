@@ -51,6 +51,7 @@ class MouApplication(CommonBaseModel, table=True):
         description='Date of the last decision made on the MOU application'
     )
     modification_entity: Optional[List[Union[ModificationEntity, None]]] = Field(default=None, sa_column=Column(ARRAY(String)), description='Entities that need modification if requested')
+    partner_template_comment: Optional[str] = Field(default=None, description='Partner template comment')
 
     @property
     def reference_number(self) -> str:

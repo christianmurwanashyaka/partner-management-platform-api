@@ -1,5 +1,5 @@
 import uuid
-from fastapi import APIRouter, Request, Depends, HTTPException, status
+from fastapi import APIRouter, Request, Depends, HTTPException, status, Query
 from sqlalchemy import func, delete
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload, joinedload
@@ -9,14 +9,14 @@ from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
-from db.models import Activity
+from db.models import Activity, MouDetail, MouApplication, MouApplicationStatus
 from db.models.organization import Organization
 from db.models.pagination import PaginatedResponse
 from db.models.project import Project, Goal
 from db.models.user import User, UserRole
 from helpers.db import get_all_items, get_items_by_criteria
 from schemas.activity import ActivityList
-from schemas.project import ProjectRead, ProjectCreate, ProjectUpdate
+from schemas.project import ProjectRead, ProjectCreate, ProjectUpdate, ProjectList
 
 router = APIRouter()
 
@@ -34,6 +34,7 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
         organization_id=project.organization_id,
         funding_unit_id=project.funding_unit_id,
         funding_source_id=project.funding_source_id,
+        duration=project.duration,
         created_by=user
     )
     db.add(new_project)
@@ -116,31 +117,50 @@ async def update_project(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get('/', response_model=PaginatedResponse[ProjectRead])
+@router.get('/', response_model=PaginatedResponse[ProjectList])
 async def get_projects(
-        page: int = 1,
-        page_size: int = 100,
-        db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+    page: int = 1,
+    page_size: int = 100,
+    approved: bool = Query(False, description="Filter projects with approved MOU applications only"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    if current_user.role in ['admin', 'moh_staff']:
-        paginated_response = await get_all_items(db, Project, page=page, page_size=page_size, include=['organization'])
-    elif current_user.role == 'partner':
-        query = select(Project).join(Organization).filter(Organization.created_by == current_user.email)
-        total_items = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar_one()
-        projects = await get_items_by_criteria(db, query.offset((page - 1) * page_size).limit(page_size))
+    try:
+        if current_user.role not in ['admin', 'moh_staff', 'partner']:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+
+        query = select(Project.uuid, Project.name, Project.duration, Project.currency, Project.budget)
+
+        if current_user.role == 'partner':
+            query = query.join(Organization).filter(Organization.created_by == current_user.email)
+
+        if approved:
+            query = query.join(MouDetail, MouDetail.project_id == Project.uuid)
+            query = query.join(MouApplication, MouApplication.mou_detail_id == MouDetail.uuid)
+            query = query.filter(MouApplication.status == MouApplicationStatus.APPROVED)
+
+        total_items = await db.scalar(select(func.count()).select_from(query.subquery()))
+
+        projects = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+        projects = [ProjectList(
+            uuid=p.uuid,
+            name=p.name,
+            duration=p.duration,
+            currency=p.currency,
+            budget=p.budget
+        ) for p in projects.fetchall()]
+
         total_pages = (total_items + page_size - 1) // page_size
-        paginated_response = PaginatedResponse(
+
+        return PaginatedResponse(
             page=page,
             page_size=page_size,
             total_items=total_items,
             total_pages=total_pages,
             data=projects
         )
-    else:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
-
-    return paginated_response
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 # TODO: SHOULD VALIDATE THAT PROJECT EXISTS FIRST

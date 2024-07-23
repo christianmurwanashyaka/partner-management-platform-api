@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, status, Form, Fi
 from sqlalchemy import func
 from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import partner_access, admin_access, moh_staff_access
@@ -23,7 +23,7 @@ from schemas.mou_application import MouApplicationProjectRead
 from schemas.mou_detail import MouDetailRead
 from schemas.organization import OrganizationRead
 from helpers.db import check_if_exists, get_all_items, get_first_item
-from schemas.project import ProjectRead
+from schemas.project import ProjectRead, ProjectList
 from utils.files import handle_upload_file
 from utils.security import get_password_hash
 
@@ -332,7 +332,7 @@ async def get_organization_mou_applications(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get('/{organization_uuid}/projects', response_model=PaginatedResponse[ProjectRead])
+@router.get('/{organization_uuid}/projects', response_model=PaginatedResponse[ProjectList])
 async def get_organization_projects(
         organization_uuid: str,
         page: int = 1,
@@ -341,12 +341,13 @@ async def get_organization_projects(
         current_user: User = Depends(get_current_user)
 ):
     try:
-        query = select(Organization).filter(Organization.uuid == organization_uuid).options(
-            joinedload(Organization.projects)
-        )
+        # Query to get the organization with its projects
+        query = select(Organization).options(
+            selectinload(Organization.projects)
+        ).filter(Organization.uuid == organization_uuid)
 
-        organization_result = await db.execute(query)
-        organization = organization_result.unique().scalar_one_or_none()
+        result = await db.execute(query)
+        organization = result.scalar_one_or_none()
 
         if not organization:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
@@ -358,10 +359,24 @@ async def get_organization_projects(
             elif current_user.role != 'partner':
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these projects')
 
-        # Order projects by most recent
-        projects = sorted(organization.projects, key=lambda x: x.created_at, reverse=True)
+        # Sort projects by created_at before creating ProjectList objects
+        sorted_projects = sorted(organization.projects, key=lambda x: x.created_at, reverse=True)
+
+        # Convert projects to ProjectList objects
+        projects = [
+            ProjectList(
+                uuid=project.uuid,
+                name=project.name,
+                duration=project.duration,
+                currency=project.currency,
+                budget=project.budget
+            )
+            for project in sorted_projects
+        ]
+
+        # Paginate the results
         total_items = len(projects)
-        projects_paginated = projects[(page - 1) * page_size:page * page_size]
+        projects_paginated = projects[(page - 1) * page_size: page * page_size]
 
         total_pages = (total_items + page_size - 1) // page_size
         paginated_response = PaginatedResponse(

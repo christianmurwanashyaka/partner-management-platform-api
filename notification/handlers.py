@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
+from io import BytesIO
+from fastapi import UploadFile
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
-from pydantic import EmailStr
-from typing import List, Optional
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+from typing import Optional
 
 from db.models import Notification
 from core.config import settings
@@ -38,7 +37,19 @@ class EmailNotificationHandler(NotificationHandler):
         )
 
         if attachment:
-            filename, content, content_type = attachment
-            message.attachments = [(filename, content, content_type)]
+            try:
+                filename, content, content_type = attachment
+                # Create an UploadFile object without setting content_type
+                file = UploadFile(
+                    filename=filename,
+                    file=BytesIO(content)
+                )
 
-        await self.fastmail.send_message(message)
+                # Set the attachment as a list of tuples
+                message.attachments = [(file, {})]  # Empty dict for metadata
+            except ValueError as e:
+                print(f"Error unpacking attachment: {str(e)}")
+        try:
+            await self.fastmail.send_message(message)
+        except Exception as e:
+            raise  # Re-raise the exception after logging
