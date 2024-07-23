@@ -4,6 +4,7 @@ from typing import List, Optional
 import uuid
 from pydantic import BaseModel
 
+from db.models import Currency
 from schemas.activity import ActivityList
 from schemas.budget_type import BudgetTypeRead
 from schemas.funding_source import FundingSourceRead
@@ -40,6 +41,7 @@ class ProjectCreate(BaseModel):
     funding_source_id: uuid.UUID
     overall_goal: str
     goals: List[GoalCreate]
+    duration: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -50,7 +52,8 @@ class ProjectList(BaseModel):
     name: str
     description: Optional[str] = None
     budget: float
-    currency: str
+    currency: Currency
+    duration: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -70,6 +73,7 @@ class ProjectRead(BaseModel):
     overall_goal: str
     goals: List[GoalRead]
     activities: List[ActivityList] = []
+    duration: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -85,6 +89,7 @@ class ProjectUpdate(BaseModel):
     funding_source_id: Optional[uuid.UUID] = None
     overall_goal: Optional[str] = None
     goals: Optional[List[GoalCreate]] = None
+    duration: Optional[str] = None
 
     class Config:
         from_attributes = True

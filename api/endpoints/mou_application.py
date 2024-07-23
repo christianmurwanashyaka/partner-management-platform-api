@@ -57,6 +57,7 @@ async def create_mou_application(
 
         new_mou_application = MouApplication(
             mou_detail_id=mou_application_data.mou_detail_id,
+            partner_template_comment=mou_application_data.partner_template_comment,
             created_by=user,
             submitted_by=full_name
         )
@@ -460,6 +461,7 @@ async def get_mou_application(
                 "currency": mou_application.mou_detail.project.currency,
                 "status": mou_application.status,
                 "documents": formatted_documents,
+                "partner_template_comment": mou_application.partner_template_comment,
             }
         else:
             raise HTTPException(
@@ -821,10 +823,12 @@ async def add_approval(
                 await db.commit()
                 await db.refresh(new_mou)
 
+                print('MOU APPLICATION UUID', mou_application.uuid)
+
                 await notify_partner(
                     db,
                     email_handler,
-                    mou_application.id,
+                    mou_application.uuid,
                     created_by=current_user.email,
                     subject="MOU Application Approved",
                     message=f"Your MOU application (ID: {mou_application.id}) has been approved. Please find the attached MOU document.",
