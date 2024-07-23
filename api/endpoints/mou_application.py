@@ -57,6 +57,7 @@ async def create_mou_application(
 
         new_mou_application = MouApplication(
             mou_detail_id=mou_application_data.mou_detail_id,
+            partner_template_comment=mou_application_data.partner_template_comment,
             created_by=user,
             submitted_by=full_name
         )
@@ -460,6 +461,7 @@ async def get_mou_application(
                 "currency": mou_application.mou_detail.project.currency,
                 "status": mou_application.status,
                 "documents": formatted_documents,
+                "partner_template_comment": mou_application.partner_template_comment,
             }
         else:
             raise HTTPException(
