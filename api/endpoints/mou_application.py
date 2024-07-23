@@ -821,10 +821,12 @@ async def add_approval(
                 await db.commit()
                 await db.refresh(new_mou)
 
+                print('MOU APPLICATION UUID', mou_application.uuid)
+
                 await notify_partner(
                     db,
                     email_handler,
-                    mou_application.id,
+                    mou_application.uuid,
                     created_by=current_user.email,
                     subject="MOU Application Approved",
                     message=f"Your MOU application (ID: {mou_application.id}) has been approved. Please find the attached MOU document.",

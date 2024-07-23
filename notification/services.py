@@ -1,3 +1,4 @@
+import mimetypes
 from typing import List
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,7 +83,7 @@ async def notify_partner(
     attachment_filename: str = None
 ):
     # Get the partner's email associated with the application
-    query = select(MouApplication.created_by).where(MouApplication.id == application_id)
+    query = select(MouApplication.created_by).where(MouApplication.uuid == application_id)
     result = await db.execute(query)
     partner_email = result.scalar_one_or_none()
 
@@ -90,10 +91,19 @@ async def notify_partner(
         logging.error(f"Partner email not found for application ID: {application_id}")
         return
 
+    # Get the partner's UUID
+    partner_uuid_query = select(User.uuid).where(User.email == partner_email)
+    partner_uuid_result = await db.execute(partner_uuid_query)
+    partner_uuid = partner_uuid_result.scalar_one_or_none()
+
+    if not partner_uuid:
+        logging.error(f"Partner UUID not found for email: {partner_email}")
+        return
+
     notification = Notification(
-        recipient_email=partner_email,
-        subject=subject,
+        recipient_id=partner_uuid,
         from_email=settings.MAIL_FROM,
+        subject=subject,
         message=message,
         is_read=False,
         created_by=created_by
@@ -103,12 +113,13 @@ async def notify_partner(
     await db.commit()
     await db.refresh(notification)
 
-    # Send the email with attachment if provided
+    # Prepare attachment if provided
+    attachment = None
     if attachment_path and attachment_filename:
-        await email_handler.send_notification_with_attachment(
-            notification,
-            attachment_path,
-            attachment_filename
-        )
-    else:
-        await email_handler.send_notification(notification)
+        with open(attachment_path, "rb") as file:
+            content = file.read()
+        content_type = mimetypes.guess_type(attachment_filename)[0] or "application/octet-stream"
+        attachment = (attachment_filename, content, content_type)
+
+    # Send the email with or without attachment
+    await email_handler.send_notification(notification, attachment)
