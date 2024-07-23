@@ -81,7 +81,7 @@ async def create_mou_application(
         await db.commit()
         await db.refresh(excel_document)
 
-        await notify_partner_coordinators(db, str(new_mou_application.id), created_by=user.email, email_handler=email_handler)
+        await notify_partner_coordinators(db, str(new_mou_application.id), created_by=user, email_handler=email_handler)
 
         return new_mou_application
 
