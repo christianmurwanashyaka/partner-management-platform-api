@@ -101,10 +101,27 @@ async def generate_mou_doc(mou_application, template_path):
         '{DATE}': current_date,
     }
 
+    first_occurrence = True
+
     def replace_text(element, mappings):
+        nonlocal first_occurrence
         for key, value in mappings.items():
             if key in element.text:
-                element.text = element.text.replace(key, str(value))
+                if key == '{ORGANIZATION_NAME}' and first_occurrence:
+                    # Split the text into parts
+                    parts = element.text.split(key)
+                    element.text = parts[0]
+
+                    # Add the organization name with uppercase and bold formatting
+                    run = element.add_run(value.upper())
+                    run.bold = True
+
+                    # Add any remaining text
+                    element.add_run(parts[1] if len(parts) > 1 else '')
+
+                    first_occurrence = False
+                else:
+                    element.text = element.text.replace(key, str(value))
 
     # Iterate through all elements to replace placeholders
     for paragraph in doc.paragraphs:
