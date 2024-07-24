@@ -707,7 +707,7 @@ async def add_review(
             await notify_partner(
                 db,
                 email_handler,
-                mou_application.id,
+                mou_application.uuid,
                 created_by=current_user.email,
                 subject="MOU Application Requires Modification",
                 message=f"Your MOU application (ID: {mou_application.id}) requires modifications. Please review and update accordingly."
