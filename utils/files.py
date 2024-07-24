@@ -77,6 +77,8 @@ async def generate_mou_doc(mou_application, template_path):
             party_signatory = party.signatory
             party_position = party.position
 
+    project_duration = project.duration if project.duration else "1"
+
     mappings = {
         '{ORGANIZATION_NAME}': organization.name,
         '{HOME_COUNTRY}': home_country,
