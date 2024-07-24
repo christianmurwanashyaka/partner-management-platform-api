@@ -1,5 +1,5 @@
 from datetime import datetime,date
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import uuid
 from pydantic import BaseModel
@@ -38,7 +38,7 @@ class ProjectCreate(BaseModel):
     currency: str
     organization_id: uuid.UUID
     funding_unit_id: uuid.UUID
-    funding_source_id: uuid.UUID
+    funding_source_id: Union[uuid.UUID, str]
     overall_goal: str
     goals: List[GoalCreate]
     duration: Optional[str] = None
