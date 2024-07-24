@@ -369,7 +369,8 @@ async def get_organization_projects(
                 name=project.name,
                 duration=project.duration,
                 currency=project.currency,
-                budget=project.budget
+                budget=project.budget,
+                fiscal_years=project.fiscal_years
             )
             for project in sorted_projects
         ]

@@ -2,6 +2,8 @@ from typing import List, Optional
 
 import uuid
 
+from sqlalchemy import String, ARRAY, Column, Float
+
 from db.models import Currency
 from db.models.base import CommonBaseModel
 from sqlmodel import Field, Relationship
@@ -14,8 +16,11 @@ class Project(CommonBaseModel, table=True):
     description: str | None = Field(default=None, nullable=True, description="Optional description of the project")
     budget_type_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='budget_type.uuid')
     budget_type: 'BudgetType' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
-    budget: float = Field(..., description="Planned budget of the project")
-    currency: Currency = Field(default=Currency.RWF, description="Currency of the project's budget")
+    budget: List[float] = Field(sa_column=Column(ARRAY(Float)),
+                                description="Planned budget of the project for each fiscal year")
+    fiscal_years: List[str] = Field(sa_column=Column(ARRAY(String)),
+                                    description="Fiscal years corresponding to the budget")
+    currency: str = Field(..., description="Currency of the project")
     organization_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization.uuid')
     organization: 'Organization' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     funding_unit_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='funding_unit.uuid')

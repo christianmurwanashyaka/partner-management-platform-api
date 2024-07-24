@@ -1,8 +1,6 @@
 import os
-import tempfile
 from datetime import datetime
 from io import BytesIO
-from itertools import chain
 from tempfile import NamedTemporaryFile
 
 from docx2pdf import convert
@@ -173,11 +171,6 @@ async def generate_mou_doc(mou_application, template_path):
                 goal_paragraph.style = doc.styles['List Number']
                 set_font(goal_paragraph)
 
-    # buffer = BytesIO()
-    # doc.save(buffer)
-    # buffer.seek(0)
-    # return buffer
-
     docx_buffer = BytesIO()
     doc.save(docx_buffer)
     docx_buffer.seek(0)
@@ -206,11 +199,9 @@ async def generate_mou_doc(mou_application, template_path):
 
 
 async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(get_db)):
-    print('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX THIS IS IT XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
     wb = Workbook()
     ws = wb.active
     ws.title = 'Action Plan'
-    print('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX AFTER TITLE XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
 
     headers = [
         'Organization',
@@ -238,7 +229,6 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
     bold_font = Font(bold=True)
     for cell in ws[1]:
         cell.font = bold_font
-    print('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX BEFORE PROJECT XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX')
     query = select(MouApplication).options(
         selectinload(MouApplication.mou_detail).selectinload(MouDetail.project).selectinload(Project.organization)
     ).where(MouApplication.uuid == mou_application.uuid)
@@ -250,11 +240,8 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MouApplication not found')
 
     project = mou_application.mou_detail.project
+    funding_source = project.other_funding_source if project.other_funding_source else (project.funding_source.name if project.funding_source else "N/A")
     organization = project.organization
-
-    # project = await mou_application.mou_detail.project
-    print('THE PROJECT :::::::::::::::::::', project)
-    # organization = project.organization
 
     # Fetching activities and their related data
     project_activities_query = select(Activity).where(Activity.project_id == project.uuid)
@@ -288,7 +275,7 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
                     sub_domain_function_name,
                     sub_function_name,
                     location,
-                    project.funding_source.name,
+                    funding_source,
                     project.funding_unit.name,
                     activity.name,
                     activity.description,
