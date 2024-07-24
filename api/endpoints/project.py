@@ -29,11 +29,18 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Either funding_source_id or other_funding_source must be provided"
         )
+    if len(project.budget) != len(project.fiscal_years):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The number of budget entries must match the number of fiscal years"
+        )
+
     new_project = Project(
         name=project.name,
         description=project.description,
         budget_type_id=project.budget_type_id,
         budget=project.budget,
+        fiscal_years=project.fiscal_years,
         currency=project.currency,
         overall_goal=project.overall_goal,
         organization_id=project.organization_id,
@@ -135,8 +142,9 @@ async def get_projects(
         if current_user.role not in ['admin', 'moh_staff', 'partner']:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
-        query = select(Project.uuid, Project.name, Project.duration, Project.currency, Project.budget)
-
+        print('--------------------------------------------------------')
+        query = select(Project.uuid, Project.name, Project.duration, Project.currency, Project.budget, Project.fiscal_years)
+        print('-------------------------------------------------------- query :::::', query)
         if current_user.role == 'partner':
             query = query.join(Organization).filter(Organization.created_by == current_user.email)
 
@@ -148,12 +156,14 @@ async def get_projects(
         total_items = await db.scalar(select(func.count()).select_from(query.subquery()))
 
         projects = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+        print('PROJECTS :::::::::::::', projects)
         projects = [ProjectList(
             uuid=p.uuid,
             name=p.name,
             duration=p.duration,
             currency=p.currency,
-            budget=p.budget
+            budget=p.budget,
+            fiscal_years=p.fiscal_years
         ) for p in projects.fetchall()]
 
         total_pages = (total_items + page_size - 1) // page_size

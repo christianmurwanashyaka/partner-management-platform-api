@@ -34,7 +34,8 @@ class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
     budget_type_id: uuid.UUID
-    budget: float
+    budget: List[float]
+    fiscal_years: List[str]
     currency: str
     organization_id: uuid.UUID
     funding_unit_id: uuid.UUID
@@ -52,7 +53,8 @@ class ProjectList(BaseModel):
     uuid: uuid.UUID
     name: str
     description: Optional[str] = None
-    budget: float
+    budget: List[float]
+    fiscal_years: List[str]
     currency: Currency
     duration: Optional[str] = None
 
@@ -68,7 +70,8 @@ class ProjectRead(BaseModel):
     funding_unit: FundingUnitRead
     funding_source: Optional[FundingSourceRead] = None
     other_funding_source: Optional[str] = None
-    budget: float
+    budget: List[float]
+    fiscal_years: List[str]
     currency: str
     created_at: datetime
     created_by: str
