@@ -87,6 +87,7 @@ async def generate_mou_doc(mou_application, template_path):
         '{HOME_COUNTRY_AVENUE}': home_country_avenue,
         '{HOME_COUNTRY_PO_BOX}': home_country_po_box,
         '{PROJECT_NAME}': project.name,
+        '{PROJECT_DURATION}': project_duration,
         '{ORGANIZATION_PO_BOX}': organization.rwanda_po_box,
         '{ORGANIZATION_PHONE}': organization.phone_number,
         '{ORGANIZATION_EMAIL}': organization.email,

@@ -1,7 +1,6 @@
 import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Query
 from sqlalchemy import func, delete
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload, joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -10,7 +9,7 @@ from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
-from db.models import Activity, MouDetail, MouApplication, MouApplicationStatus, FundingSource
+from db.models import Activity, MouDetail, MouApplication, MouApplicationStatus
 from db.models.organization import Organization
 from db.models.pagination import PaginatedResponse
 from db.models.project import Project, Goal
@@ -25,34 +24,11 @@ router = APIRouter()
 @router.post('/', response_model=ProjectRead, dependencies=[Depends(partner_access)])
 async def create_project(request: Request, project: ProjectCreate, db: AsyncSession = Depends(get_db)):
     user = request.state.user.email
-
-    # Check if funding source exists, if not create it
-    funding_source = None
-    if isinstance(project.funding_source_id, str):
-        # If funding_source_id is a string, it's a name for a new funding source
-        funding_source = FundingSource(name=project.funding_source_id, created_by=user)
-        db.add(funding_source)
-        try:
-            await db.flush()  # This assigns the UUID to the new funding source
-        except IntegrityError:
-            await db.rollback()
-            # If the funding source already exists, fetch it
-            stmt = select(FundingSource).where(FundingSource.name == project.funding_source_id)
-            result = await db.execute(stmt)
-            funding_source = result.scalar_one_or_none()
-            if not funding_source:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                                    detail="Funding source creation failed and existing one not found")
-    else:
-        # If funding_source_id is a UUID, fetch the existing funding source
-        stmt = select(FundingSource).where(FundingSource.uuid == project.funding_source_id)
-        result = await db.execute(stmt)
-        funding_source = result.scalar_one_or_none()
-        if not funding_source:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                                detail="Specified funding source not found")
-
-    # Create the new project
+    if project.funding_source_id is None and project.other_funding_source is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either funding_source_id or other_funding_source must be provided"
+        )
     new_project = Project(
         name=project.name,
         description=project.description,
@@ -62,13 +38,13 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
         overall_goal=project.overall_goal,
         organization_id=project.organization_id,
         funding_unit_id=project.funding_unit_id,
-        funding_source_id=funding_source.uuid,
+        funding_source_id=project.funding_source_id,
+        other_funding_source=project.other_funding_source,
         duration=project.duration,
         created_by=user
     )
     db.add(new_project)
 
-    # Create goals
     for goal_data in project.goals:
         new_goal = Goal(
             name=goal_data.name,
@@ -81,6 +57,7 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
     try:
         await db.commit()
         await db.refresh(new_project)
+
     except Exception as e:
         await db.rollback()
         raise HTTPException(
