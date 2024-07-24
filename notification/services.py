@@ -4,7 +4,7 @@ from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from db.models import Notification, UserRole, User, MOHStaffLevel, MouApplication
+from db.models import Notification, UserRole, User, MOHStaffLevel, MouApplication, Organization
 import logging
 from .handlers import EmailNotificationHandler
 from core.config import settings
@@ -123,3 +123,80 @@ async def notify_partner(
 
     # Send the email with or without attachment
     await email_handler.send_notification(notification, attachment)
+
+
+async def notify_new_user(db: AsyncSession, email_handler: EmailNotificationHandler, user: User, organization: Organization):
+    subject = "Welcome to Our System - Your Account and Organization Details"
+    message = f"""
+    Dear {user.first_name} {user.last_name},
+
+    Welcome to our system! Your account has been successfully created with the following details:
+
+    User Profile:
+    - Email: {user.email}
+    - Phone: {user.phone_number}
+
+    Organization Details:
+    - Name: {organization.name}
+    - Email: {organization.email}
+    - Phone: {organization.phone_number}
+    - Website: {organization.website}
+
+    You can now log in to your account using your email and the password you provided during registration.
+
+    If you have any questions or need assistance, please don't hesitate to contact our support team.
+
+    Best regards,
+    The System Team
+    """
+
+    notification = Notification(
+        recipient_id=user.uuid,
+        subject=subject,
+        from_email=settings.MAIL_FROM,
+        message=message,
+        is_read=False,
+        created_by=user.email
+    )
+
+    db.add(notification)
+    await db.commit()
+    await db.refresh(notification)
+
+    await email_handler.send_notification(notification)
+
+
+async def notify_new_organization(db: AsyncSession, email_handler: EmailNotificationHandler, user: User, organization: Organization):
+    subject = "Welcome to Our System - Your Organization Has Been Registered"
+    message = f"""
+    Dear {organization.name},
+
+    Welcome to our system! Your organization has been successfully registered with the following details:
+
+    Organization Information:
+    - Name: {organization.name}
+    - Email: {organization.email}
+    - Phone: {organization.phone_number}
+    - Website: {organization.website}
+    - Rwanda Representative: {organization.rwanda_representative}
+
+    We look forward to working with you. If you have any questions or need assistance, please don't hesitate to contact our support team.
+
+    Best regards,
+    The System Team
+    """
+
+    notification = Notification(
+        recipient_id=user.uuid,  # Using the existing user's UUID
+        subject=subject,
+        from_email=settings.MAIL_FROM,
+        message=message,
+        is_read=False,
+        created_by=user.email
+    )
+
+    db.add(notification)
+    await db.commit()
+    await db.refresh(notification)
+
+    await email_handler.send_notification(notification)
