@@ -38,7 +38,8 @@ class ProjectCreate(BaseModel):
     currency: str
     organization_id: uuid.UUID
     funding_unit_id: uuid.UUID
-    funding_source_id: Union[uuid.UUID, str]
+    funding_source_id: Optional[uuid.UUID] = None
+    other_funding_source: Optional[str] = None
     overall_goal: str
     goals: List[GoalCreate]
     duration: Optional[str] = None
@@ -65,7 +66,8 @@ class ProjectRead(BaseModel):
     description: Optional[str] = None
     budget_type: BudgetTypeRead
     funding_unit: FundingUnitRead
-    funding_source: FundingSourceRead
+    funding_source: Optional[FundingSourceRead] = None
+    other_funding_source: Optional[str] = None
     budget: float
     currency: str
     created_at: datetime

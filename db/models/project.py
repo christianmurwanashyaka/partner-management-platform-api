@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import uuid
 
@@ -20,8 +20,10 @@ class Project(CommonBaseModel, table=True):
     organization: 'Organization' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     funding_unit_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='funding_unit.uuid')
     funding_unit: 'FundingUnit' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
-    funding_source_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='funding_source.uuid')
-    funding_source: 'FundingSource' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
+    funding_source_id: Optional[uuid.UUID] = Field(default=None, foreign_key='funding_source.uuid')
+    funding_source: Optional['FundingSource'] = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
+    other_funding_source: Optional[str] = Field(
+        default=None, nullable=True, description="Name of the funding source if not in the predefined list")
     activities: List['Activity'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     mou_details: List['MouDetail'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     overall_goal: str = Field(..., description="The overall goal of the project")
