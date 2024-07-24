@@ -10,6 +10,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import partner_access, admin_access, moh_staff_access
 from api.dependencies.auth import get_current_user
+from api.dependencies.email_notification_handler import get_email_notification_handler
 from db.database import get_db
 from db.models import Project, MouApplication, MouDetail, Mou, MouComment
 from db.models.organization import Organization
@@ -17,6 +18,8 @@ from db.models.document import Document, DocumentType
 from db.models.pagination import PaginatedResponse
 from db.models.user import User, UserRole
 from helpers.exceptions import handle_integrity_error
+from notification.handlers import EmailNotificationHandler
+from notification.services import notify_new_user
 from schemas.activity import ActivityRead
 from schemas.mou import MouRead
 from schemas.mou_application import MouApplicationProjectRead
@@ -58,6 +61,7 @@ async def create_organization(
         appointment_letter: UploadFile = File(...),
         notified_constitution_bylaws: UploadFile = None,
         db: AsyncSession = Depends(get_db),
+        email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)
 ):
     if await check_if_exists(Organization, db, name=name):
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Organization with this name already exists")
@@ -137,6 +141,9 @@ async def create_organization(
             db.add(notified_constitution_bylaws_doc)
 
         await db.commit()
+        await notify_new_user(db, email_handler, db_user, new_organization)
+        await notify_new_organization(db, email_handler, new_organization)
+
     except IntegrityError as e:
         await handle_integrity_error(e, db)
     except Exception as e:
@@ -369,7 +376,8 @@ async def get_organization_projects(
                 name=project.name,
                 duration=project.duration,
                 currency=project.currency,
-                budget=project.budget
+                budget=project.budget,
+                fiscal_years=project.fiscal_years
             )
             for project in sorted_projects
         ]
