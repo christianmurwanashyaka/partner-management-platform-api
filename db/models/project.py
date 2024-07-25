@@ -2,7 +2,8 @@ from typing import List, Optional
 
 import uuid
 
-from sqlalchemy import String, ARRAY, Column, Float
+from pydantic import field_validator
+from sqlalchemy import String, ARRAY, Column, Float, JSON
 
 from db.models import Currency
 from db.models.base import CommonBaseModel
@@ -16,11 +17,12 @@ class Project(CommonBaseModel, table=True):
     description: str | None = Field(default=None, nullable=True, description="Optional description of the project")
     budget_type_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='budget_type.uuid')
     budget_type: 'BudgetType' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
-    budget: List[float] = Field(sa_column=Column(ARRAY(Float)),
-                                description="Planned budget of the project for each fiscal year")
-    fiscal_years: List[str] = Field(sa_column=Column(ARRAY(String)),
-                                    description="Fiscal years corresponding to the budget")
-    currency: str = Field(..., description="Currency of the project")
+    fiscal_year_budgets: List[dict] = Field(
+        sa_column=Column(JSON),
+        description="List of dictionaries containing fiscal year and budget for each year of the project"
+    )
+    currency: Currency = Field(default=Currency.RWF, description="Currency of the project's budget")
+    total_budget: float = Field(default=0.0, description="Total budget of the project")
     organization_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization.uuid')
     organization: 'Organization' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     funding_unit_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='funding_unit.uuid')
@@ -34,6 +36,19 @@ class Project(CommonBaseModel, table=True):
     overall_goal: str = Field(..., description="The overall goal of the project")
     goals: List['Goal'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     duration: str | None = Field(default=None, nullable=True, description="The duration of the project")
+
+    @field_validator('fiscal_year_budgets')
+    def check_fiscal_year_budgets(cls, v):
+        if not v:
+            raise ValueError("At least one fiscal year budget must be provided")
+        fiscal_years = set()
+        for item in v:
+            if 'fiscal_year' not in item or 'budget' not in item:
+                raise ValueError("Each fiscal year budget must have 'fiscal_year' and 'budget' keys")
+            if item['fiscal_year'] in fiscal_years:
+                raise ValueError(f"Duplicate fiscal year: {item['fiscal_year']}")
+            fiscal_years.add(item['fiscal_year'])
+        return v
 
 
 class Goal(CommonBaseModel, table=True):
