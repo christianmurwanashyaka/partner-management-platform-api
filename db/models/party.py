@@ -19,3 +19,4 @@ class Party(CommonBaseModel, table=True):
     mou_detail: Optional['MouDetail'] = Relationship(back_populates='parties', sa_relationship_kwargs={'lazy': 'selectin'})
     position: str = Field(default='CEO', description='Position of the signatory')
     duration: Optional[str] = Field(default=None, description="The duration of the mou")
+    reason_for_extended_duration: Optional[str] = Field(default=None, description="Reason why duration is more than 1 year")

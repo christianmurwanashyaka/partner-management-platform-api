@@ -7,6 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
+from api.dependencies.email_notification_handler import get_email_notification_handler
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
 from db.models import Activity, MouDetail, MouApplication, MouApplicationStatus
@@ -15,6 +16,7 @@ from db.models.pagination import PaginatedResponse
 from db.models.project import Project, Goal
 from db.models.user import User, UserRole
 from helpers.db import get_all_items, get_items_by_criteria
+from notification.handlers import EmailNotificationHandler
 from schemas.activity import ActivityList
 from schemas.project import ProjectRead, ProjectCreate, ProjectUpdate, ProjectList
 
@@ -83,7 +85,8 @@ async def update_project(
         uuid: uuid.UUID,
         project_update: ProjectUpdate,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)
 ):
     try:
         # Fetch the existing project with eager loading for goals
@@ -104,8 +107,8 @@ async def update_project(
         update_data = project_update.dict(exclude_unset=True)
 
         if 'fiscal_year_budgets' in update_data:
-            project.fiscal_year_budgets = [fby.dict() for fby in update_data['fiscal_year_budgets']]
-            calculated_total = sum(fby.budget for fby in update_data['fiscal_year_budgets'])
+            project.fiscal_year_budgets = update_data['fiscal_year_budgets']
+            calculated_total = sum(fby['budget'] for fby in update_data['fiscal_year_budgets'])
 
             if 'total_budget' in update_data:
                 if abs(update_data['total_budget'] - calculated_total) > 0.01:
@@ -128,8 +131,8 @@ async def update_project(
             new_goals = [
                 Goal(
                     project_id=project.uuid,
-                    name=goal.name,
-                    description=goal.description,
+                    name=goal['name'],
+                    description=goal['description'],
                     created_by=current_user.email
                 )
                 for goal in update_data['goals']
@@ -139,7 +142,7 @@ async def update_project(
         await db.commit()
         await db.refresh(project)
 
-        await update_related_mou_application(project, db)
+        await update_related_mou_application(project, db, email_handler)
 
         return project
     except ValueError as ve:
@@ -162,7 +165,7 @@ async def get_projects(
         if current_user.role not in ['admin', 'moh_staff', 'partner']:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
-        query = select(Project.uuid, Project.name, Project.duration, Project.currency, Project.fiscal_year_budgets)
+        query = select(Project.uuid, Project.name, Project.duration, Project.currency, Project.fiscal_year_budgets, Project.total_budget)
 
         if current_user.role == 'partner':
             query = query.join(Organization).filter(Organization.created_by == current_user.email)
@@ -182,6 +185,7 @@ async def get_projects(
             duration=p.duration,
             currency=p.currency,
             fiscal_year_budgets=p.fiscal_year_budgets,
+            total_budget=p.total_budget,
         ) for p in projects.fetchall()]
 
         total_pages = (total_items + page_size - 1) // page_size

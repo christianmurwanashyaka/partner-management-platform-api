@@ -25,6 +25,7 @@ async def create_party(request: Request, party_data: PartyCreate, db: AsyncSessi
         position=party_data.position,
         organization_id=party_data.organization_id,
         duration=party_data.duration,
+        reason_for_extended_duration=party_data.reason_for_extended_duration,
         created_by=user
     )
     try:
