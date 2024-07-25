@@ -80,6 +80,7 @@ class ProjectList(BaseModel):
     fiscal_year_budgets: List[FiscalYearBudget]
     currency: Currency
     duration: Optional[str] = None
+    total_budget: float
 
     class Config:
         from_attributes = True

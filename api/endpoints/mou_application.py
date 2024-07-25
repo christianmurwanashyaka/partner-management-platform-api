@@ -14,7 +14,9 @@ from api.dependencies.email_notification_handler import get_email_notification_h
 from db.database import get_db
 from db.models import User, MouDetail, MouApplication, Document, DocumentType, UserRole, MOHStaffLevel, \
     MouApprovalDecision, MouApproval, MouApplicationStatus, MouComment, Project, Mou, MouReview, PaginatedResponse, \
-    Organization, Activity, ActivityDomain, InputDetail, Party, OrganizationType
+    Organization, Activity, ActivityDomain, InputDetail, Party, OrganizationType, Input, InputCategory, \
+    DomainIntervention, SubDomain, FundingSource, FundingUnit, BudgetType
+from db.models.domain import SubDomainFunction, SubFunction
 from db.models.mou_approval_or_review import MouApprovalOrReview, MouApprovalOrReviewDecision
 from db.models.mou_review import MouReviewDecision
 from helpers.db import get_first_item, get_most_recent_decision_time
@@ -226,6 +228,7 @@ async def get_mou_applications(
             description="Filter applications created on or before this date"),
         sort_by: Optional[str] = Query(None, description="Field to sort by: status, budget, created_at"),
         order: Optional[str] = Query("desc", description="Sort order: asc or desc"),
+        search: Optional[str] = Query(None, description="Search query for names"),
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
@@ -264,28 +267,39 @@ async def get_mou_applications(
         if calculate_budget:
             budget_subquery = (
                 select(
-                    InputDetail.activity_id,
+                    Activity.project_id,
                     func.sum(InputDetail.budget).label('total_budget')
                 )
-                .group_by(InputDetail.activity_id)
+                .join(InputDetail.activity)
+                .group_by(Activity.project_id)
                 .subquery()
             )
             base_query = base_query.add_columns(
-                func.coalesce(func.sum(budget_subquery.c.total_budget), 0).label('total_budget')
+                func.coalesce(budget_subquery.c.total_budget, 0).label('total_budget')
             )
 
         # Join tables
-        base_query = base_query.join(MouApplication.mou_detail).\
-            join(MouDetail.project).\
-            join(Project.organization).\
-            join(Organization.organization_type).\
-            join(Project.activities)
+        base_query = base_query.join(MouApplication.mou_detail). \
+            join(MouDetail.project). \
+            join(Project.organization). \
+            join(Organization.organization_type)
 
         if calculate_budget:
-            base_query = base_query.outerjoin(budget_subquery, Activity.uuid == budget_subquery.c.activity_id)
+            base_query = base_query.outerjoin(budget_subquery, Project.uuid == budget_subquery.c.project_id)
 
-        base_query = base_query.join(Activity.domains).\
-            join(Activity.input_details)
+        # Additional joins for filtering and search
+        base_query = base_query.join(Project.activities). \
+            join(Activity.domains). \
+            join(Activity.input_details). \
+            join(InputDetail.input). \
+            join(InputDetail.input_category). \
+            join(ActivityDomain.domain_intervention). \
+            join(ActivityDomain.sub_domain). \
+            join(ActivityDomain.sub_domain_function). \
+            join(ActivityDomain.sub_function). \
+            join(Project.funding_source). \
+            join(Project.funding_unit). \
+            join(Project.budget_type)
 
         # Group by
         group_by_columns = [
@@ -297,6 +311,8 @@ async def get_mou_applications(
             Organization.name,
             OrganizationType.name
         ]
+        if calculate_budget:
+            group_by_columns.append(budget_subquery.c.total_budget)
         base_query = base_query.group_by(*group_by_columns)
 
         # Apply filters
@@ -353,16 +369,42 @@ async def get_mou_applications(
         if application_status:
             filters.append(MouApplication.status.in_(application_status))
 
+        # Add date range filter
+        filters.append(MouApplication.created_at >= start_date)
+        filters.append(MouApplication.created_at <= end_date)
+
+        # Add search functionality
+        if search:
+            search_filter = or_(
+                Organization.name.ilike(f"%{search}%"),
+                Activity.name.ilike(f"%{search}%"),
+                Input.name.ilike(f"%{search}%"),
+                InputCategory.name.ilike(f"%{search}%"),
+                DomainIntervention.name.ilike(f"%{search}%"),
+                SubDomain.name.ilike(f"%{search}%"),
+                SubDomainFunction.name.ilike(f"%{search}%"),
+                SubFunction.name.ilike(f"%{search}%"),
+                FundingSource.name.ilike(f"%{search}%"),
+                FundingUnit.name.ilike(f"%{search}%"),
+                BudgetType.name.ilike(f"%{search}%")
+            )
+            filters.append(search_filter)
+
         # Apply all filters to the base query
         for filter_condition in filters:
             base_query = base_query.filter(filter_condition)
+
+        count_query = select(func.count(distinct(MouApplication.uuid))).select_from(
+            base_query.with_only_columns(MouApplication.uuid).subquery()
+        )
+        total_items = (await db.execute(count_query)).scalar_one()
 
         # Apply sorting
         if sort_by:
             if sort_by == 'status':
                 order_by = MouApplication.status.desc() if order == 'desc' else MouApplication.status.asc()
             elif sort_by == 'budget':
-                order_by = func.sum(budget_subquery.c.total_budget).desc() if order == 'desc' else func.sum(budget_subquery.c.total_budget).asc()
+                order_by = budget_subquery.c.total_budget.desc() if order == 'desc' else budget_subquery.c.total_budget.asc()
             elif sort_by == 'created_at':
                 order_by = MouApplication.created_at.desc() if order == 'desc' else MouApplication.created_at.asc()
             else:
@@ -372,11 +414,6 @@ async def get_mou_applications(
 
         base_query = base_query.order_by(order_by)
 
-        # Count query
-        count_query = select(func.count()).select_from(base_query.subquery())
-        total_items = (await db.execute(count_query)).scalar_one()
-
-        # Paginated query
         paginated_query = (
             base_query
             .offset((page - 1) * page_size)
@@ -1164,25 +1201,16 @@ async def update_related_mou_application(
     elif isinstance(entity, Project):
         mou_details = entity.mou_details
     elif isinstance(entity, Party):
-        print('IS INSTANCE OF PARTY ::::::::;;')
         mou_details = [entity.mou_detail]
-        print('MOU DETAILS :::::::::::', mou_details)
     else:
         return
 
-    print('************************* CHECKING MOU DETAILS *************************')
     for mou_detail in mou_details:
-        print('********************** MOU DETAIL **********************')
         mou_application = mou_detail.mou_application
-        print('********************** MOU APPLICATION **********************')
         print(mou_application)
         if mou_application:
-            print('^^^^^^^^^^^^^^^^^ IF IS TRUE ^^^^^^^^^^^^^^^^^')
             mou_application.status = MouApplicationStatus.MODIFIED
-            print('MOU APPLICATION STATUS', mou_application.status)
             file_path, filename = await generate_mou_action_plan(mou_application, db)
-            print('FILE PATH ::::::::::::::::::::', file_path)
-            print('FILE NAME ::::::::::::::::::::', filename)
             existing_document = await db.execute(
                 select(Document).where(
                     Document.mou_application_id == mou_application.uuid,
@@ -1208,7 +1236,6 @@ async def update_related_mou_application(
 
             mou_application.last_updated_at = datetime.utcnow()
             mou_application.last_updated_by = mou_application.created_by
-
             await notify_moh_staff(
                 db,
                 email_handler,

@@ -7,9 +7,11 @@ from sqlmodel import select
 
 from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
+from api.dependencies.email_notification_handler import get_email_notification_handler
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
 from db.models import Party, MouDetail, DocumentType, Document, User, UserRole
+from notification.handlers import EmailNotificationHandler
 from schemas.mou_detail import MouDetailRead
 from utils.files import handle_upload_file
 from utils.functions import parse_uuids
@@ -86,7 +88,8 @@ async def update_mou_detail(
         memo_describing_the_long_term_objective: UploadFile = None,
         strategic_plan: UploadFile = None,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)
 ):
     try:
         query = select(MouDetail).where(MouDetail.uuid == uuid)
@@ -143,7 +146,7 @@ async def update_mou_detail(
         await db.commit()
         await db.refresh(mou_detail)
 
-        await update_related_mou_application(mou_detail, db)
+        await update_related_mou_application(mou_detail, db, email_handler)
         return mou_detail
     except Exception as e:
         await db.rollback()
