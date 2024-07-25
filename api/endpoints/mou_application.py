@@ -84,6 +84,46 @@ async def create_mou_application(
         await db.commit()
         await db.refresh(excel_document)
 
+        # Generate draft MOU document
+        organization = new_mou_application.mou_detail.project.organization
+        template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+
+        docx_buffer, pdf_buffer = await generate_mou_doc(new_mou_application, template_path)
+
+        draft_docx_filename = f"DRAFT_MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        draft_docx_filepath, draft_docx_filename = await save_mou_doc_to_disk(docx_buffer, draft_docx_filename, 'docx')
+
+        draft_pdf_filename = f"DRAFT_MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        draft_pdf_filepath, draft_pdf_filename = await save_mou_doc_to_disk(pdf_buffer, draft_pdf_filename, 'pdf')
+
+        draft_docx_document = Document(
+            name=f"Draft MOU Application - {new_mou_application.id} (DOCX)",
+            description="Draft Memorandum of understanding document",
+            document_type=DocumentType.ADDITIONAL_DOCUMENT,
+            path=draft_docx_filepath,
+            filename=draft_docx_filename,
+            mou_application=new_mou_application,
+            created_by=user
+        )
+
+        draft_pdf_document = Document(
+            name=f"Draft MOU Application - {new_mou_application.id}",
+            description="Draft Memorandum of understanding document",
+            document_type=DocumentType.ADDITIONAL_DOCUMENT,
+            path=draft_pdf_filepath,
+            filename=draft_pdf_filename,
+            mou_application=new_mou_application,
+            created_by=user
+        )
+
+        db.add(draft_docx_document)
+        db.add(draft_pdf_document)
+
+        await db.commit()
+        await db.refresh(excel_document)
+        await db.refresh(draft_docx_document)
+        await db.refresh(draft_pdf_document)
+
         await notify_partner_coordinators(db, str(new_mou_application.id), created_by=user, email_handler=email_handler)
 
         return new_mou_application
