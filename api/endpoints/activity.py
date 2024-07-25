@@ -8,6 +8,7 @@ from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
+from api.dependencies.email_notification_handler import get_email_notification_handler
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
 from db.models import OperationalZone, ActivityDomain
@@ -15,6 +16,7 @@ from db.models.activity import Activity
 from db.models.input_detail import InputDetail
 from db.models.pagination import PaginatedResponse
 from db.models.user import User, UserRole
+from notification.handlers import EmailNotificationHandler
 from schemas.activity import ActivityRead, ActivityCreate, ActivityList, OperationalZoneRead, ActivityDomainDetail, \
     ActivityUpdate, OperationalZoneUpdate, ActivityDomainUpdate
 from schemas.input_detail import InputDetailRead, InputDetailUpdate
@@ -145,7 +147,8 @@ async def update_activity(
         uuid: uuid.UUID,
         activity_update: ActivityCreate,
         db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        current_user: User = Depends(get_current_user),
+        email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)
 ):
     try:
         query = select(Activity).options(
@@ -207,7 +210,7 @@ async def update_activity(
 
         await db.commit()
         await db.refresh(activity)
-        await update_related_mou_application(activity, db)
+        await update_related_mou_application(activity, db, email_handler)
         return activity
 
     except Exception as e:
