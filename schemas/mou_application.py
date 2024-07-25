@@ -78,6 +78,10 @@ class MouApplicationProjectRead(BaseModel):
     project_name: str
     status: MouApplicationStatus
     comment: Optional[str] = None
+    project_id: uuid.UUID
+    mou_detail_id: uuid.UUID
+    party_ids: List[uuid.UUID]
+    modification_entities: Optional[List[Union[ModificationEntity, None]]] = None
 
     class Config:
         from_attributes = True

@@ -12,14 +12,14 @@ from api.dependencies.access_control import partner_access, admin_access, moh_st
 from api.dependencies.auth import get_current_user
 from api.dependencies.email_notification_handler import get_email_notification_handler
 from db.database import get_db
-from db.models import Project, MouApplication, MouDetail, Mou, MouComment
+from db.models import Project, MouApplication, MouDetail, Mou, MouComment, Party
 from db.models.organization import Organization
 from db.models.document import Document, DocumentType
 from db.models.pagination import PaginatedResponse
 from db.models.user import User, UserRole
 from helpers.exceptions import handle_integrity_error
 from notification.handlers import EmailNotificationHandler
-from notification.services import notify_new_user
+from notification.services import notify_new_user, notify_new_organization
 from schemas.activity import ActivityRead
 from schemas.mou import MouRead
 from schemas.mou_application import MouApplicationProjectRead
@@ -288,15 +288,21 @@ async def get_organization_mou_applications(
                 MouApplication.uuid,
                 MouApplication.created_at,
                 MouApplication.status,
+                MouApplication.modification_entity,
+                Project.uuid.label('project_id'),
                 Project.name.label('project_name'),
+                MouDetail.uuid.label('mou_detail_id'),
+                func.array_agg(Party.uuid.distinct()).label('party_ids'),
                 func.coalesce(func.nullif(func.string_agg(MouComment.content, '; '), ''), None).label('comment')
             )
             .join(MouApplication.mou_detail)
             .join(MouDetail.project)
             .join(Project.organization)
+            .outerjoin(MouDetail.parties)
             .outerjoin(MouApplication.comments)
             .filter(Organization.uuid == uuid)
-            .group_by(MouApplication.uuid, MouApplication.created_at, MouApplication.status, Project.name)
+            .group_by(MouApplication.uuid, MouApplication.created_at, MouApplication.status,
+                      MouApplication.modification_entity, Project.uuid, Project.name, MouDetail.uuid)
         )
 
         # Apply role-based filtering
@@ -320,7 +326,11 @@ async def get_organization_mou_applications(
                 reference_number=f"{app.created_at:%Y%m%d}-{app.uuid.int % 1000000:06d}",
                 project_name=app.project_name,
                 status=app.status,
-                comment=app.comment
+                comment=app.comment,
+                project_id=app.project_id,
+                mou_detail_id=app.mou_detail_id,
+                party_ids=app.party_ids,
+                modification_entities=app.modification_entity
             )
             for app in mou_applications
         ]
