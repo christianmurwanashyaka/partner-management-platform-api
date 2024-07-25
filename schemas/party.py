@@ -9,6 +9,7 @@ class PartyBase(BaseModel):
     signatory: str = Field(..., description="Signatory of the party")
     position: Optional[str] = None
     duration: Optional[str] = None
+    reason_for_extended_duration: Optional[str] = None
 
     class Config:
         from_attributes: True
