@@ -142,7 +142,7 @@ async def create_organization(
 
         await db.commit()
         await notify_new_user(db, email_handler, db_user, new_organization)
-        await notify_new_organization(db, email_handler, new_organization)
+        await notify_new_organization(db, email_handler, db_user, new_organization)
 
     except IntegrityError as e:
         await handle_integrity_error(e, db)
@@ -352,8 +352,8 @@ async def get_organization_mou_applications(
 @router.get('/{organization_uuid}/projects', response_model=PaginatedResponse[ProjectList])
 async def get_organization_projects(
         organization_uuid: str,
-        page: int = 1,
-        page_size: int = 100,
+        page: int = Query(1, ge=1),
+        page_size: int = Query(100, ge=1, le=1000),
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
@@ -367,14 +367,14 @@ async def get_organization_projects(
         organization = result.scalar_one_or_none()
 
         if not organization:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Organization not found')
 
         # Access control based on user role
         if current_user.role not in ['admin', 'moh_staff']:
             if current_user.role == 'partner' and organization.created_by != current_user.email:
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these projects')
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these projects')
             elif current_user.role != 'partner':
-                raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these projects')
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these projects')
 
         # Sort projects by created_at before creating ProjectList objects
         sorted_projects = sorted(organization.projects, key=lambda x: x.created_at, reverse=True)
@@ -384,17 +384,19 @@ async def get_organization_projects(
             ProjectList(
                 uuid=project.uuid,
                 name=project.name,
+                description=project.description,
                 duration=project.duration,
                 currency=project.currency,
-                budget=project.budget,
-                fiscal_years=project.fiscal_years
+                fiscal_year_budgets=project.fiscal_year_budgets
             )
             for project in sorted_projects
         ]
 
         # Paginate the results
         total_items = len(projects)
-        projects_paginated = projects[(page - 1) * page_size: page * page_size]
+        start_index = (page - 1) * page_size
+        end_index = start_index + page_size
+        projects_paginated = projects[start_index:end_index]
 
         total_pages = (total_items + page_size - 1) // page_size
         paginated_response = PaginatedResponse(

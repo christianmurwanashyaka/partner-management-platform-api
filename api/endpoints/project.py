@@ -29,18 +29,23 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Either funding_source_id or other_funding_source must be provided"
         )
-    if len(project.budget) != len(project.fiscal_years):
+
+    calculated_total_budget = sum(item.budget for item in project.fiscal_year_budgets)
+
+    if project.total_budget is not None and abs(project.total_budget - calculated_total_budget) > 0.01:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The number of budget entries must match the number of fiscal years"
+            detail="Provided total budget does not match the sum of fiscal year budgets"
         )
+
+    total_budget = project.total_budget if project.total_budget is not None else calculated_total_budget
 
     new_project = Project(
         name=project.name,
         description=project.description,
         budget_type_id=project.budget_type_id,
-        budget=project.budget,
-        fiscal_years=project.fiscal_years,
+        fiscal_year_budgets=[{"fiscal_year": item.fiscal_year, "budget": item.budget} for item in project.fiscal_year_budgets],
+        total_budget=total_budget,
         currency=project.currency,
         overall_goal=project.overall_goal,
         organization_id=project.organization_id,
@@ -64,7 +69,6 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
     try:
         await db.commit()
         await db.refresh(new_project)
-
     except Exception as e:
         await db.rollback()
         raise HTTPException(
@@ -88,23 +92,36 @@ async def update_project(
         ).where(Project.uuid == uuid)
 
         result = await db.execute(query)
-        project_list = result.scalars().unique().all()
+        project = result.scalars().unique().first()
 
-        if not project_list:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Project not found')
-
-        project = project_list[0]
+        if not project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Project not found')
 
         if project.created_by != current_user.email and current_user.role != UserRole.ADMIN:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='Not authorized to update this project')
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Not authorized to update this project')
 
         # Update the project fields
-        for key, value in project_update.dict(exclude_unset=True).items():
-            if key != 'goals':
+        update_data = project_update.dict(exclude_unset=True)
+
+        if 'fiscal_year_budgets' in update_data:
+            project.fiscal_year_budgets = [fby.dict() for fby in update_data['fiscal_year_budgets']]
+            calculated_total = sum(fby.budget for fby in update_data['fiscal_year_budgets'])
+
+            if 'total_budget' in update_data:
+                if abs(update_data['total_budget'] - calculated_total) > 0.01:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                        detail="Provided total budget does not match the sum of fiscal year budgets")
+            else:
+                project.total_budget = calculated_total
+        elif 'total_budget' in update_data:
+            project.total_budget = update_data['total_budget']
+
+        for key, value in update_data.items():
+            if key not in ['fiscal_year_budgets', 'total_budget', 'goals']:
                 setattr(project, key, value)
 
         # Update goals
-        if project_update.goals is not None:
+        if 'goals' in update_data:
             # Delete existing goals
             await db.execute(delete(Goal).where(Goal.project_id == project.uuid))
             # Add new goals
@@ -115,7 +132,7 @@ async def update_project(
                     description=goal.description,
                     created_by=current_user.email
                 )
-                for goal in project_update.goals
+                for goal in update_data['goals']
             ]
             db.add_all(new_goals)
 
@@ -125,6 +142,9 @@ async def update_project(
         await update_related_mou_application(project, db)
 
         return project
+    except ValueError as ve:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -142,9 +162,8 @@ async def get_projects(
         if current_user.role not in ['admin', 'moh_staff', 'partner']:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
-        print('--------------------------------------------------------')
-        query = select(Project.uuid, Project.name, Project.duration, Project.currency, Project.budget, Project.fiscal_years)
-        print('-------------------------------------------------------- query :::::', query)
+        query = select(Project.uuid, Project.name, Project.duration, Project.currency, Project.fiscal_year_budgets)
+
         if current_user.role == 'partner':
             query = query.join(Organization).filter(Organization.created_by == current_user.email)
 
@@ -156,14 +175,13 @@ async def get_projects(
         total_items = await db.scalar(select(func.count()).select_from(query.subquery()))
 
         projects = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
-        print('PROJECTS :::::::::::::', projects)
+
         projects = [ProjectList(
             uuid=p.uuid,
             name=p.name,
             duration=p.duration,
             currency=p.currency,
-            budget=p.budget,
-            fiscal_years=p.fiscal_years
+            fiscal_year_budgets=p.fiscal_year_budgets,
         ) for p in projects.fetchall()]
 
         total_pages = (total_items + page_size - 1) // page_size
