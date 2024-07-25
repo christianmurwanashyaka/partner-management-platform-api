@@ -3,6 +3,7 @@ from typing import List, Optional, Union
 
 import uuid
 from pydantic import BaseModel, field_validator
+from pydantic_core.core_schema import ValidationInfo
 
 from db.models import Currency
 from schemas.activity import ActivityList
@@ -40,7 +41,7 @@ class ProjectCreate(BaseModel):
     description: Optional[str] = None
     budget_type_id: uuid.UUID
     fiscal_year_budgets: List[FiscalYearBudget]
-    total_budget: Optional[float] = float
+    total_budget: Optional[float] = None
     currency: str
     organization_id: uuid.UUID
     funding_unit_id: uuid.UUID
@@ -62,9 +63,10 @@ class ProjectCreate(BaseModel):
         return v
 
     @field_validator('total_budget')
-    def check_total_budget(cls, v, values):
-        if v is not None:
-            calculated_total = sum(item.budget for item in values.get('fiscal_year_budgets', []))
+    def check_total_budget(cls, v: Optional[float], info: ValidationInfo) -> Optional[float]:
+        fiscal_year_budgets = info.data.get('fiscal_year_budgets', [])
+        if v is not None and fiscal_year_budgets:
+            calculated_total = sum(item.budget for item in fiscal_year_budgets)
             if abs(v - calculated_total) > 0.01:
                 raise ValueError("Provided total budget does not match the sum of fiscal year budgets")
         return v
@@ -121,9 +123,10 @@ class ProjectUpdate(BaseModel):
     duration: Optional[str] = None
 
     @field_validator('total_budget')
-    def check_total_budget(cls, v, values):
-        if v is not None and 'fiscal_year_budgets' in values and values['fiscal_year_budgets'] is not None:
-            calculated_total = sum(item.budget for item in values['fiscal_year_budgets'])
+    def check_total_budget(cls, v: Optional[float], info: ValidationInfo) -> Optional[float]:
+        fiscal_year_budgets = info.data.get('fiscal_year_budgets')
+        if v is not None and fiscal_year_budgets is not None:
+            calculated_total = sum(item.budget for item in fiscal_year_budgets)
             if abs(v - calculated_total) > 0.01:
                 raise ValueError("Provided total budget does not match the sum of fiscal year budgets")
         return v

@@ -37,19 +37,6 @@ class Project(CommonBaseModel, table=True):
     goals: List['Goal'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     duration: str | None = Field(default=None, nullable=True, description="The duration of the project")
 
-    @field_validator('fiscal_year_budgets')
-    def check_fiscal_year_budgets(cls, v):
-        if not v:
-            raise ValueError("At least one fiscal year budget must be provided")
-        fiscal_years = set()
-        for item in v:
-            if 'fiscal_year' not in item or 'budget' not in item:
-                raise ValueError("Each fiscal year budget must have 'fiscal_year' and 'budget' keys")
-            if item['fiscal_year'] in fiscal_years:
-                raise ValueError(f"Duplicate fiscal year: {item['fiscal_year']}")
-            fiscal_years.add(item['fiscal_year'])
-        return v
-
 
 class Goal(CommonBaseModel, table=True):
     __tablename__ = 'goal'
