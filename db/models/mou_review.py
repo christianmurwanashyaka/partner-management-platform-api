@@ -18,9 +18,9 @@ class MouReview(CommonBaseModel, table=True):
     __tablename__ = 'mou_review'
     
     decision: MouReviewDecision = Field(description='Decision made during the review')
-    current_review_id: uuid.UUID = Field(foreign_key='user.uuid')
+    current_review_id: uuid.UUID = Field(foreign_key='user.uuid', index=True)
     current_reviewer: 'User' = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
-    mou_application_id: uuid.UUID = Field(foreign_key='mou_application.uuid')
+    mou_application_id: uuid.UUID = Field(foreign_key='mou_application.uuid', index=True)
     mou_application: 'MouApplication' = Relationship(back_populates='reviews', sa_relationship_kwargs={'lazy': 'selectin'})
     comments: List['MouComment'] = Relationship(back_populates='mou_review', sa_relationship_kwargs={'lazy': 'selectin'})
     processing_time: Optional[int] = Field(
