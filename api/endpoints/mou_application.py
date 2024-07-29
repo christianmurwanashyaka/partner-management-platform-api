@@ -1165,7 +1165,6 @@ async def get_mou_application_approvals_or_reviews(
 
             current_reviewer_read = None
             if current_reviewer:
-                print('CURRENT REVIEWER :::::::::::::::::', current_reviewer)
                 current_reviewer_read = UserProfileForApprovalOrReview(
                     uuid=current_reviewer.uuid,
                     first_name=current_reviewer.first_name,
@@ -1247,21 +1246,22 @@ async def update_related_mou_application(
 
     for mou_detail in mou_details:
         mou_application = mou_detail.mou_application
-        print(mou_application)
         if mou_application:
             mou_application.status = MouApplicationStatus.MODIFIED
             file_path, filename = await generate_mou_action_plan(mou_application, db)
-            existing_document = await db.execute(
+
+            existing_documents = await db.execute(
                 select(Document).where(
                     Document.mou_application_id == mou_application.uuid,
                     Document.document_type == DocumentType.ADDITIONAL_DOCUMENT
                 )
             )
-            existing_document = existing_document.scalar_one_or_none()
+            existing_documents = existing_documents.scalars().all()
 
-            if existing_document:
-                existing_document.path = file_path
-                existing_document.filename = filename
+            if existing_documents:
+                for doc in existing_documents:
+                    doc.path = file_path
+                    doc.filename = filename
             else:
                 new_document = Document(
                     name=f"MOU Application Action Plan - {mou_application.id}",
