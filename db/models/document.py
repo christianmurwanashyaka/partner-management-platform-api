@@ -28,12 +28,12 @@ class Document(CommonBaseModel, table=True):
     path: str
     filename: str
     registration: bool = Field(default=False)
-    organization_id: Optional[uuid.UUID] = Field(default=None, foreign_key='organization.uuid')
+    organization_id: Optional[uuid.UUID] = Field(default=None, foreign_key='organization.uuid', index=True)
     organization: Optional['Organization'] = Relationship(back_populates='documents', sa_relationship_kwargs={'lazy': 'selectin'})
-    mou_detail_id: Optional[uuid.UUID] = Field(default=None, foreign_key='mou_detail.uuid')
+    mou_detail_id: Optional[uuid.UUID] = Field(default=None, foreign_key='mou_detail.uuid', index=True)
     mou_detail: Optional['MouDetail'] = Relationship(back_populates='documents', sa_relationship_kwargs={'lazy': 'selectin'})
-    mou_application_id: Optional[uuid.UUID] = Field(default=None, foreign_key='mou_application.uuid')
+    mou_application_id: Optional[uuid.UUID] = Field(default=None, foreign_key='mou_application.uuid', index=True)
     mou_application: Optional['MouApplication'] = Relationship(back_populates='documents', sa_relationship_kwargs={'lazy': 'selectin'})
-    mou_id: Optional[uuid.UUID] = Field(default=None, foreign_key='mou.uuid')
+    mou_id: Optional[uuid.UUID] = Field(default=None, foreign_key='mou.uuid', index=True)
     mou: Optional['Mou'] = Relationship(back_populates='documents', sa_relationship_kwargs={'lazy': 'selectin'})
 
