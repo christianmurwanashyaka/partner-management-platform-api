@@ -1,3 +1,5 @@
+import uuid
+
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from uuid import UUID
@@ -84,3 +86,9 @@ class SignupResponse(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
+
+
+class AssignDomain(BaseModel):
+    user_uuid: uuid.UUID
+    domain_uuid: uuid.UUID
+    subdomain_uuid_list: Optional[List[uuid.UUID]] = None

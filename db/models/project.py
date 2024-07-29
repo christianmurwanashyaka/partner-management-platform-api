@@ -13,8 +13,8 @@ from sqlmodel import Field, Relationship
 class Project(CommonBaseModel, table=True):
     __tablename__ = 'project'
 
-    name: str = Field(..., description="Name of the project")
-    description: str | None = Field(default=None, nullable=True, description="Optional description of the project")
+    name: str = Field(..., description="Name of the project", index=True)
+    description: str | None = Field(default=None, nullable=True, description="Optional description of the project", index=True)
     budget_type_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='budget_type.uuid')
     budget_type: 'BudgetType' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     fiscal_year_budgets: List[dict] = Field(
@@ -23,11 +23,11 @@ class Project(CommonBaseModel, table=True):
     )
     currency: Currency = Field(default=Currency.RWF, description="Currency of the project's budget")
     total_budget: float = Field(default=0.0, description="Total budget of the project")
-    organization_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization.uuid')
+    organization_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization.uuid', index=True)
     organization: 'Organization' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
-    funding_unit_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='funding_unit.uuid')
+    funding_unit_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='funding_unit.uuid', index=True)
     funding_unit: 'FundingUnit' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
-    funding_source_id: Optional[uuid.UUID] = Field(default=None, foreign_key='funding_source.uuid')
+    funding_source_id: Optional[uuid.UUID] = Field(default=None, foreign_key='funding_source.uuid', index=True)
     funding_source: Optional['FundingSource'] = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
     other_funding_source: Optional[str] = Field(
         default=None, nullable=True, description="Name of the funding source if not in the predefined list")
@@ -43,5 +43,5 @@ class Goal(CommonBaseModel, table=True):
 
     name: str = Field(..., description="Name of the goal")
     description: str | None = Field(default=None, nullable=True, description="Optional description of the goal")
-    project_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='project.uuid')
+    project_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='project.uuid', index=True)
     project: Project = Relationship(back_populates='goals', sa_relationship_kwargs={'lazy': 'selectin'})

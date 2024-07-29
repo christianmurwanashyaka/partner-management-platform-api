@@ -34,3 +34,4 @@ class User(CommonBaseModel, table=True):
     level: Optional[MOHStaffLevel] = None
     phone_number: Optional[str] = None
     notifications: Optional[List['Notification']] = Relationship(back_populates='recipient', sa_relationship_kwargs={'lazy': 'selectin'})
+    domains: List['UserDomain'] = Relationship(back_populates='user', sa_relationship_kwargs={'lazy': 'selectin'})
