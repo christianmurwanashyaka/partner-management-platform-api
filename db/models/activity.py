@@ -8,12 +8,12 @@ from db.models.base import CommonBaseModel
 class Activity(CommonBaseModel, table=True):
     __tablename__ = 'activity'
 
-    project_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='project.uuid')
+    project_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='project.uuid', index=True)
     project: 'Project' = Relationship(back_populates='activities', sa_relationship_kwargs={'lazy': 'selectin'})
 
     start_date: datetime.date = Field(..., description="Start date of the project")
     end_date: datetime.date = Field(..., description="End date of the project")
-    name: str = Field(..., description='Name of the activity')
+    name: str = Field(..., description='Name of the activity', index=True)
     description: str | None = Field(default=None, nullable=True, description='Optional description of the activity')
     implementer: str = Field(..., description='Name of the implementer of the activity')
     implementer_unit: str = Field(..., description='Unit or group within the implementer organization')

@@ -32,7 +32,7 @@ class MouApplication(CommonBaseModel, table=True):
     __tablename__ = 'mou_application'
 
     status: MouApplicationStatus = Field(default=MouApplicationStatus.PENDING, description='Status of the MOU application')
-    mou_detail_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='mou_detail.uuid')
+    mou_detail_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='mou_detail.uuid', index=True)
     mou_detail: 'MouDetail' = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
     approvals: List['MouApproval'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
     reviews: List['MouReview'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
@@ -41,10 +41,10 @@ class MouApplication(CommonBaseModel, table=True):
     mou: Optional['Mou'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
     approval_or_review: List['MouApprovalOrReview'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
     current_reviewer_id: Optional[uuid.UUID] = Field(default=None, foreign_key='user.uuid',
-                                                     description='Current reviewer of the MOU application')
+                                                     description='Current reviewer of the MOU application', index=True)
     current_reviewer: Optional['User'] = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
-    next_level: Optional[MOHStaffLevel] = Field(default=None, description='Next level for the MOU application')
-    created_by: Optional[str] = Field(default=None, description='Email of the user who created the MOU application')
+    next_level: Optional[MOHStaffLevel] = Field(default=None, description='Next level for the MOU application', index=True)
+    created_by: Optional[str] = Field(default=None, description='Email of the user who created the MOU application', index=True)
     submitted_by: Optional[str] = Field(default=None, description='Name of the user who submitted the MOU application')
     last_decision_date: Optional[datetime] = Field(
         default=None,
