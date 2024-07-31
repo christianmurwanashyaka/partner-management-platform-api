@@ -1,6 +1,7 @@
 import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status
-from sqlalchemy import delete
+from sqlalchemy import delete, func
+from sqlalchemy.orm import joinedload, aliased
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
@@ -154,6 +155,70 @@ async def assign_domain(
         # Rollback the transaction in case of an error
         await db.rollback()
         # Return a generic error message to the client
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred. Please try again later. {str(e)}"
+        )
+
+
+@router.get('/{uuid}/domain')
+async def get_user_domain(
+        uuid: uuid.UUID,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        if current_user.role != UserRole.ADMIN:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to get user domain")
+
+        # Create aliases for the tables we'll be joining
+        user_domain_alias = aliased(UserDomain)
+        domain_alias = aliased(DomainIntervention)
+        subdomain_alias = aliased(SubDomain)
+
+        # Construct a single query that joins all necessary tables
+        query = (
+            select(User, user_domain_alias, domain_alias, subdomain_alias)
+            .join(user_domain_alias, User.uuid == user_domain_alias.user_id)
+            .join(domain_alias, user_domain_alias.domain_id == domain_alias.uuid)
+            .join(subdomain_alias, subdomain_alias.uuid == func.any(user_domain_alias.subdomain_ids))
+            .where(User.uuid == uuid)
+        )
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        if not rows:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User or domain assignment not found")
+
+        # Process the results
+        user = rows[0][0]  # User object
+        domain = rows[0][2]  # DomainIntervention object
+
+        # Use a dictionary to ensure uniqueness of subdomains
+        subdomains_dict = {str(row[3].uuid): row[3] for row in rows}
+        subdomains = list(subdomains_dict.values())
+
+        response = {
+            "user": {
+                "uuid": str(user.uuid),
+                "email": user.email,
+            },
+            "domain": {
+                "uuid": str(domain.uuid),
+                "name": domain.name,
+            },
+            "sub_domains": [
+                {"uuid": str(subdomain.uuid), "name": subdomain.name}
+                for subdomain in subdomains
+            ]
+        }
+
+        return response
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")  # For debugging
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred. Please try again later. {str(e)}"
