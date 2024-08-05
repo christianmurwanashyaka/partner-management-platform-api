@@ -52,4 +52,4 @@ class Organization(CommonBaseModel, table=True):
 
     parties: List['Party'] = Relationship(back_populates='', sa_relationship_kwargs={'lazy': 'selectin'})
 
-    users: List['User'] = Relationship(back_populates='Organization', sa_relationship_kwargs={'lazy': 'selectin'})
+    users: List['User'] = Relationship(back_populates='organization', sa_relationship_kwargs={'lazy': 'selectin'})
