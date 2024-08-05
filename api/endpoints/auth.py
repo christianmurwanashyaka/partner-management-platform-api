@@ -27,15 +27,33 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
         if user.level not in MOHStaffLevel:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail='Invalid level for MOH Staff')
 
+    if user.role in [UserRole.DATA_MANAGER, UserRole.DATA_REPORTER]:
+        if user.organization_uuid is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                                detail='Organization UUID is required for Data Managers and Data Reporters')
+
+        # Check if the organization exists
+
+        org_query = select(Organization).where(Organization.uuid == user.organization_uuid)
+        result = await db.execute(org_query)
+        organization = result.scalars().first()
+
+        if not organization:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
+
     hashed_password = get_password_hash(user.password)
     db_user = User(
         email=user.email,
         password=hashed_password,
         first_name=user.first_name,
         last_name=user.last_name,
+        phone_number=user.phone_number,
         role=user.role,
         level=user.level,
-        created_by=user.email
+        created_by=user.email,
+        partner_organization_name=user.partner_organization_name,
+        organization_uuid=user.organization_uuid if user.role in [UserRole.DATA_MANAGER,
+                                                                  UserRole.DATA_REPORTER] else None
     )
     db.add(db_user)
     await db.commit()
