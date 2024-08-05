@@ -34,11 +34,11 @@ class User(CommonBaseModel, table=True):
     last_name: str
     role: UserRole
     level: Optional[MOHStaffLevel] = None
-    phone_number: Optional[str] = None
+    phone_number    : Optional[str] = None
     organization_uuid: Optional[uuid.UUID] = Field(default=None, foreign_key='organization.uuid')
     organization: Optional['Organization'] = Relationship(
         back_populates="users", sa_relationship_kwargs={'lazy': 'selectin'})
     notifications: Optional[List['Notification']] = Relationship(
         back_populates='recipient', sa_relationship_kwargs={'lazy': 'selectin'})
-    notifications: Optional[List['Notification']] = Relationship(back_populates='recipient', sa_relationship_kwargs={'lazy': 'selectin'})
     domains: List['UserDomain'] = Relationship(back_populates='user', sa_relationship_kwargs={'lazy': 'selectin'})
+    partner_organization_name: Optional[str] = None

@@ -18,6 +18,8 @@ class UserCreate(UserBase):
     password: str
     phone_number: Optional[str] = None
     level: Optional[MOHStaffLevel] = None
+    partner_organization_name: Optional[str] = None
+    organization_uuid: Optional[uuid.UUID] = None
 
 
 class UserUpdate(BaseModel):
@@ -88,10 +90,13 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
-class AssignDomain(BaseModel):
-    user_uuid: uuid.UUID
+class DomainAssignment(BaseModel):
     domain_uuid: uuid.UUID
-    subdomain_uuid_list: Optional[List[uuid.UUID]] = None
+    subdomain_uuids: Optional[List[uuid.UUID]] = None
+
+class AssignDomains(BaseModel):
+    user_uuid: uuid.UUID
+    domain_assignments: List[DomainAssignment]
 
 
 class OrganizationUserCreate(UserBase):
