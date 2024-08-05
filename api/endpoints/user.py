@@ -3,7 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status, Query
 from sqlalchemy import delete, func, or_, distinct
-from sqlalchemy.orm import joinedload, aliased
+from sqlalchemy.orm import joinedload, aliased, selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.future import select
 
@@ -16,7 +16,7 @@ from db.models.user import User, UserRole, MOHStaffLevel
 from db.models.pagination import PaginatedResponse
 from db.models.user_domain import UserDomain
 from schemas.mou_application import MouApplicationOrganizationRead
-from schemas.user import UserProfile, UserCreate, SignupResponse, UserUpdate, AssignDomain
+from schemas.user import UserProfile, UserCreate, SignupResponse, UserUpdate, AssignDomains
 from helpers.db import check_if_exists, get_all_items, get_first_item
 from utils.security import get_password_hash
 
@@ -63,19 +63,19 @@ async def update_user(
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.post('/domain')
-async def assign_domain(
-        assign_domain_data: AssignDomain,
+@router.post('/domains')
+async def assign_domains(
+        assign_domains_data: AssignDomains,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
     try:
         # Check if the current user is an admin
         if current_user.role != UserRole.ADMIN:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to assign domain")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to assign domains")
 
         # Fetch the user to be assigned
-        user_query = select(User).where(User.uuid == assign_domain_data.user_uuid)
+        user_query = select(User).where(User.uuid == assign_domains_data.user_uuid)
         result = await db.execute(user_query)
         user = result.scalars().first()
 
@@ -89,145 +89,125 @@ async def assign_domain(
                 detail="Only MOH staff with technical department level can be assigned domains"
             )
 
-        # Fetch the domain to be assigned
-        domain_query = select(DomainIntervention).where(DomainIntervention.uuid == assign_domain_data.domain_uuid)
-        result = await db.execute(domain_query)
-        domain = result.scalars().first()
-
-        if not domain:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Domain not found")
-
-        # Fetch all subdomains of the domain
-        all_subdomains = await db.execute(select(SubDomain).where(SubDomain.domain_id == domain.uuid))
-        all_subdomains = all_subdomains.scalars().all()
-
-        # If subdomain_uuid_list is provided, validate and fetch those subdomains
-        if assign_domain_data.subdomain_uuid_list:
-            subdomains_query = select(SubDomain).where(SubDomain.uuid.in_(assign_domain_data.subdomain_uuid_list))
-            result = await db.execute(subdomains_query)
-            subdomains = result.scalars().all()
-
-            # Check if all provided subdomain UUIDs are valid
-            invalid_subdomains = set(assign_domain_data.subdomain_uuid_list) - {subdomain.uuid for subdomain in subdomains}
-            if invalid_subdomains:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid subdomain IDs: {', '.join(map(str, invalid_subdomains))}"
-                )
-
-            # Check if all subdomains belong to the specified domain
-            if any(subdomain.domain_id != domain.uuid for subdomain in subdomains):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="One or more subdomains do not belong to the specified domain"
-                )
-        else:
-            subdomains = all_subdomains
-
+        # Delete existing UserDomain entries for this user
         await db.execute(delete(UserDomain).where(UserDomain.user_id == user.uuid))
 
-        # Create a single UserDomain entry
-        user_domain = UserDomain(
-            user_id=user.uuid,
-            domain_id=domain.uuid,
-            created_by=current_user.email
-        )
+        assigned_domains = []
+        assigned_subdomains = []
 
-        # If specific subdomains are provided, assign them
-        if assign_domain_data.subdomain_uuid_list:
-            user_domain.subdomain_ids = assign_domain_data.subdomain_uuid_list
-        else:
-            # If no specific subdomains are provided, assign all subdomains of the domain
-            user_domain.subdomain_ids = [subdomain.uuid for subdomain in all_subdomains]
+        for assignment in assign_domains_data.domain_assignments:
+            # Fetch the domain with its subdomains
+            domain_query = select(DomainIntervention).options(selectinload(DomainIntervention.subdomains)).where(DomainIntervention.uuid == assignment.domain_uuid)
+            result = await db.execute(domain_query)
+            domain = result.scalars().first()
 
-        db.add(user_domain)
+            if not domain:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Domain {assignment.domain_uuid} not found")
+
+            # If no subdomains are specified, use all subdomains of the domain
+            if assignment.subdomain_uuids is None:
+                subdomain_uuids = [subdomain.uuid for subdomain in domain.subdomains]
+                subdomains = domain.subdomains
+            else:
+                # Fetch and validate specified subdomains
+                subdomains_query = select(SubDomain).where(SubDomain.uuid.in_(assignment.subdomain_uuids))
+                result = await db.execute(subdomains_query)
+                subdomains = result.scalars().all()
+
+                invalid_subdomains = set(assignment.subdomain_uuids) - {subdomain.uuid for subdomain in subdomains}
+                if invalid_subdomains:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid subdomain IDs for domain {domain.name}: {', '.join(map(str, invalid_subdomains))}"
+                    )
+
+                if any(subdomain.domain_id != domain.uuid for subdomain in subdomains):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"One or more subdomains do not belong to the domain {domain.name}"
+                    )
+
+                subdomain_uuids = assignment.subdomain_uuids
+
+            # Create UserDomain entry
+            user_domain = UserDomain(
+                user_id=user.uuid,
+                domain_id=domain.uuid,
+                subdomain_ids=subdomain_uuids,
+                created_by=current_user.email
+            )
+            db.add(user_domain)
+
+            assigned_domains.append(domain.name)
+            assigned_subdomains.extend([subdomain.name for subdomain in subdomains])
 
         await db.commit()
-        await db.refresh(user)
 
         return {
-            "message": "Domain and subdomains assigned successfully",
-            "assigned_domain": domain.name,
-            "assigned_subdomains": [subdomain.name for subdomain in subdomains]
+            "message": "Domains and subdomains assigned successfully",
+            "assigned_domains": assigned_domains,
+            "assigned_subdomains": assigned_subdomains
         }
 
     except HTTPException as http_exc:
-        # Re-raise HTTP exceptions as they are already properly formatted
         raise http_exc
 
     except Exception as e:
-        # Rollback the transaction in case of an error
         await db.rollback()
-        # Return a generic error message to the client
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred. Please try again later. {str(e)}"
         )
 
 
-@router.get('/{uuid}/domain')
-async def get_user_domain(
+@router.get('/{uuid}/domains')
+async def get_user_domains(
         uuid: uuid.UUID,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
-    try:
-        if current_user.role != UserRole.ADMIN:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to get user domain")
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to get user domains")
 
-        # Create aliases for the tables we'll be joining
-        user_domain_alias = aliased(UserDomain)
-        domain_alias = aliased(DomainIntervention)
-        subdomain_alias = aliased(SubDomain)
-
-        # Construct a single query that joins all necessary tables
-        query = (
-            select(User, user_domain_alias, domain_alias, subdomain_alias)
-            .join(user_domain_alias, User.uuid == user_domain_alias.user_id)
-            .join(domain_alias, user_domain_alias.domain_id == domain_alias.uuid)
-            .join(subdomain_alias, subdomain_alias.uuid == func.any(user_domain_alias.subdomain_ids))
-            .where(User.uuid == uuid)
+    query = (
+        select(User)
+        .options(
+            joinedload(User.domains)
+            .joinedload(UserDomain.domain_intervention)
+            .joinedload(DomainIntervention.subdomains)
         )
+        .where(User.uuid == uuid)
+    )
 
-        result = await db.execute(query)
-        rows = result.all()
+    result = await db.execute(query)
+    user = result.unique().scalar_one_or_none()
 
-        if not rows:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User or domain assignment not found")
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User or domain assignments not found")
 
-        # Process the results
-        user = rows[0][0]  # User object
-        domain = rows[0][2]  # DomainIntervention object
+    domains_list = []
+    for user_domain in user.domains:
+        domain = user_domain.domain_intervention
+        subdomains = [
+            {"uuid": str(subdomain.uuid), "name": subdomain.name}
+            for subdomain in domain.subdomains
+            if subdomain.uuid in user_domain.subdomain_ids
+        ]
+        domains_list.append({
+            "uuid": str(domain.uuid),
+            "name": domain.name,
+            "sub_domains": subdomains
+        })
 
-        # Use a dictionary to ensure uniqueness of subdomains
-        subdomains_dict = {str(row[3].uuid): row[3] for row in rows}
-        subdomains = list(subdomains_dict.values())
+    response = {
+        "user": {
+            "uuid": str(user.uuid),
+            "email": user.email,
+        },
+        "domains": domains_list
+    }
 
-        response = {
-            "user": {
-                "uuid": str(user.uuid),
-                "email": user.email,
-            },
-            "domain": {
-                "uuid": str(domain.uuid),
-                "name": domain.name,
-            },
-            "sub_domains": [
-                {"uuid": str(subdomain.uuid), "name": subdomain.name}
-                for subdomain in subdomains
-            ]
-        }
-
-        return response
-    except HTTPException as http_exc:
-        raise http_exc
-    except Exception as e:
-        print(f"Unexpected error: {str(e)}")  # For debugging
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred. Please try again later. {str(e)}"
-        )
-
+    return response
 
 @router.get('/{uuid}/domain/applications', response_model=PaginatedResponse[MouApplicationOrganizationRead])
 async def get_user_domain_applications(
