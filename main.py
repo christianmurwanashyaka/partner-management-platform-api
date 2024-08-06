@@ -9,9 +9,10 @@ from uvicorn.config import LOGGING_CONFIG
 
 from api.endpoints import auth, budget_type, organization_type, funding_source, funding_unit, domain_intervention, \
     input_category, sub_domain, input, organization, user, project, activity, party, mou_detail, mou_application, mou, \
-    files, sub_domain_function, sub_function, domain_data_entry, exchange_rates, statistics
+    files, sub_domain_function, sub_function, domain_data_entry, exchange_rates, statistics, report
 import uvicorn
 
+from core.config import settings
 from db.database import create_db_and_tables, async_session
 from utils.security import create_admin
 
@@ -61,12 +62,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# origins = ["http://localhost:5173", "http://173.249.42.7:4173", "https://ihris.hisprwanda.org:4173"]
-origins = ["http://localhost:5173"]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -95,6 +93,7 @@ app.include_router(statistics.router, prefix='/api/v1/statistics', tags=['Statis
 app.include_router(mou.router, prefix='/api/v1/mou', tags=['MOU'])
 app.include_router(files.router, prefix='/api/v1/files', tags=['Files'])
 app.include_router(domain_data_entry.router, prefix='/api/v1/domain_data_entry', tags=["Domain data entry"])
+app.include_router(report.router, prefix='/api/v1/report', tags=["Report"])
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=7001, reload=True)
