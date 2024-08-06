@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 from typing import Optional, List
 
@@ -16,7 +17,7 @@ class ActivityResponse(BaseModel):
     implementer_unit: str
     fiscal_year: str
     project_name: str
-    planned_budget: float
+    planned_budget: Optional[float] = None
     currency: Currency
 
     class Config:
@@ -29,3 +30,8 @@ class PaginatedActivityResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+class ActivityAssignment(BaseModel):
+    activity_uuid: List[uuid.UUID]
+
