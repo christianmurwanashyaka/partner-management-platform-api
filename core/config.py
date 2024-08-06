@@ -1,3 +1,5 @@
+from typing import List
+
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 import os
@@ -30,6 +32,9 @@ class Settings(BaseSettings):
     MAIL_STARTTLS: bool = True  # Changed from MAIL_TLS
     MAIL_SSL_TLS: bool = False  # Changed from MAIL_SSL
     USE_CREDENTIALS: bool = True
+
+    # CORS configuration
+    CORS_ORIGINS: List[str]
 
     class Config:
         env_file = env_path
