@@ -49,6 +49,7 @@ class Token(BaseToken):
     last_name: str
     role: str
     level: Optional[MOHStaffLevel] = None
+    uuid: uuid.UUID
 
 
 class TokenData(BaseModel):
@@ -105,3 +106,17 @@ class OrganizationUserCreate(UserBase):
     class Config:
         from_attributes = True
 
+
+class OrganizationUser(BaseModel):
+    uuid: uuid.UUID
+    email: EmailStr
+    first_name: str
+    last_name: str
+    role: UserRole
+    level: Optional[MOHStaffLevel] = None
+    phone_number: Optional[str] = None
+    organization_uuid: Optional[uuid.UUID] = None
+    partner_organization_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True

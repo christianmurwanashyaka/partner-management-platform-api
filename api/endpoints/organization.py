@@ -25,7 +25,7 @@ from schemas.mou import MouRead
 from schemas.mou_application import MouApplicationProjectRead
 from schemas.mou_detail import MouDetailRead
 from schemas.organization import OrganizationRead
-from schemas.user import OrganizationUserCreate
+from schemas.user import OrganizationUserCreate, OrganizationUser
 from helpers.db import check_if_exists, get_all_items, get_first_item
 from schemas.project import ProjectRead, ProjectList
 from utils.files import handle_upload_file
@@ -604,3 +604,39 @@ async def get_organization_mous(
         )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get('/{organization_uuid}/users', response_model=List[OrganizationUser])
+async def get_organization_users(organization_uuid: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    try:
+        # First, check if the organization exists
+        org_query = select(Organization).where(Organization.uuid == organization_uuid)
+        org_result = await db.execute(org_query)
+        organization = org_result.scalar_one_or_none()
+
+        if not organization:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        # Query for users associated with this organization
+        query = select(User).where(User.organization_uuid == organization_uuid)
+        result = await db.execute(query)
+        users = list(result.scalars().all())
+
+        # Check for the user who created the organization if not already included
+        creator_email = organization.created_by
+        if creator_email and not any(user.email == creator_email for user in users):
+            creator_query = select(User).where(User.email == creator_email)
+            creator_result = await db.execute(creator_query)
+            creator = creator_result.scalar_one_or_none()
+            if creator:
+                users.append(creator)
+
+        if not users:
+            raise HTTPException(status_code=404, detail="No users found for this organization")
+
+        return users
+    except HTTPException as he:
+        # Re-raise HTTP exceptions to maintain the correct status code
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
