@@ -80,6 +80,7 @@ async def login_for_access_token(
 
     access_token = create_access_token(data={"sub": user.email})
     return {
+        "uuid": user.uuid,
         "access_token": access_token,
         "token_type": "bearer",
         "first_name": user.first_name,
