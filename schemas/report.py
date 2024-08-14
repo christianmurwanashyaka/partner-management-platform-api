@@ -5,6 +5,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 
 from db.models import Currency
+from db.models.activity import ActivityStatus
 
 
 class ActivityResponse(BaseModel):
@@ -19,6 +20,7 @@ class ActivityResponse(BaseModel):
     project_name: str
     planned_budget: Optional[float] = None
     currency: Currency
+    status: Optional[ActivityStatus] = None
 
     class Config:
         from_attributes = True
@@ -33,5 +35,6 @@ class PaginatedActivityResponse(BaseModel):
 
 
 class ActivityAssignment(BaseModel):
+    user_uuid: uuid.UUID
     activity_uuid: List[uuid.UUID]
 
