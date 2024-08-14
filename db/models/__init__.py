@@ -3,6 +3,7 @@ from .organization_type import OrganizationType
 from .document import Document, DocumentType
 from .organization import Organization
 from .party import Party
+from .report import Report, ReportStatus
 from .exchange_rate import Currency, CurrencyExchangeRate
 from .funding_unit import FundingUnit
 from .funding_source import FundingSource
@@ -21,6 +22,9 @@ from .mou_comment import MouComment
 from .mou_review import MouReview, MouReviewDecision
 from .mou import Mou
 from .activity import Activity
+from .report_activity import ReportActivity, ReportActivityStatus
+from .accomplishment import Accomplishment
+from .comment import Comment
 from .user import User, UserRole, MOHStaffLevel
 from .notification import Notification
 from .pagination import PaginatedResponse

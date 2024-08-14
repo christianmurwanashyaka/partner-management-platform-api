@@ -52,6 +52,7 @@ class MouApplication(CommonBaseModel, table=True):
     )
     modification_entity: Optional[List[Union[ModificationEntity, None]]] = Field(default=None, sa_column=Column(ARRAY(String)), description='Entities that need modification if requested')
     partner_template_comment: Optional[str] = Field(default=None, description='Partner template comment')
+    report: Optional['Report'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
 
     @property
     def reference_number(self) -> str:
