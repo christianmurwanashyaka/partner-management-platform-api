@@ -36,6 +36,7 @@ class Project(CommonBaseModel, table=True):
     overall_goal: str = Field(..., description="The overall goal of the project")
     goals: List['Goal'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
     duration: str | None = Field(default=None, nullable=True, description="The duration of the project")
+    report: Optional['Report'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
 
 
 class Goal(CommonBaseModel, table=True):

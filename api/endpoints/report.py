@@ -190,3 +190,5 @@ async def get_data_reporter_activities(
     except Exception as e:
         print(f"An unexpected error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+
+
