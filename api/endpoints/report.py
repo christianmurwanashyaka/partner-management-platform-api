@@ -1,3 +1,4 @@
+import uuid
 from math import ceil
 
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -9,6 +10,7 @@ from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, UserRole, Activity, Project, MouDetail, MouApplication, MouApplicationStatus, InputDetail
 from db.models.activity import ActivityStatus
+from db.models.user_activity import UserActivity
 from schemas.report import ActivityResponse, PaginatedActivityResponse, ActivityAssignment
 
 router = APIRouter()
@@ -67,6 +69,7 @@ async def get_data_manager_activities(
         activities_data = result.all()
 
         print(f"Retrieved {len(activities_data)} activities")
+        print('ACTIVITIES DATA >>> ', activities_data)
 
         activities = []
         for activity, project_name, currency, planned_budget in activities_data:
@@ -100,7 +103,7 @@ async def get_data_manager_activities(
 
 @router.post('/data_manager/activities/assign')
 async def assign_activities_to_data_reporter(
-        activities: ActivityAssignment,
+        activity_assignment_data: ActivityAssignment,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
@@ -108,9 +111,15 @@ async def assign_activities_to_data_reporter(
         raise HTTPException(status_code=403, detail="Access denied. User must be a data manager.")
 
     try:
+        user_activities = [
+            UserActivity(user_uuid=activity_assignment_data.user_uuid, activity_uuid=activity_uuid, created_by=current_user.email) for activity_uuid in activity_assignment_data.activity_uuid
+        ]
+        db.add_all(user_activities)
+        await db.commit()
+
         stmt = (
             update(Activity)
-            .where(Activity.uuid.in_(activities.activity_uuid))
+            .where(Activity.uuid.in_(activity_assignment_data.activity_uuid))
             .values(status=ActivityStatus.READY_FOR_REPORT)
             .execution_options(synchronize_session=False)
         )
@@ -118,8 +127,8 @@ async def assign_activities_to_data_reporter(
         await db.commit()
 
         updated_count = result.rowcount
-        if updated_count != len(activities.activity_uuid):
-            print(f"Warning: only {updated_count} out of {len(activities.activity_uuid)} activities were updated.")
+        if updated_count != len(activity_assignment_data.activity_uuid):
+            print(f"Warning: only {updated_count} out of {len(activity_assignment_data.activity_uuid)} activities were updated.")
 
     except Exception as e:
         await db.rollback()
@@ -141,9 +150,11 @@ async def get_data_reporter_activities(
         query = (
             select(Activity, Project.name.label('project_name'), Project.currency)
             .join(Project, Activity.project_id == Project.uuid)
+            .join(UserActivity, Activity.uuid == UserActivity.activity_uuid)
             .where(
                 (Project.organization_id == current_user.organization_uuid) &
-                (Activity.status == ActivityStatus.READY_FOR_REPORT)
+                (Activity.status == ActivityStatus.READY_FOR_REPORT) &
+                (UserActivity.user_uuid == current_user.uuid)
             )
             .options(joinedload(Activity.project))
             .order_by(Activity.created_at.desc())

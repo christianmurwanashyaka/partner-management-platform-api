@@ -42,3 +42,4 @@ class User(CommonBaseModel, table=True):
         back_populates='recipient', sa_relationship_kwargs={'lazy': 'selectin'})
     domains: List['UserDomain'] = Relationship(back_populates='user', sa_relationship_kwargs={'lazy': 'selectin'})
     partner_organization_name: Optional[str] = None
+    activities: List['UserActivity'] = Relationship(back_populates='user', sa_relationship_kwargs={'lazy': 'selectin'})
