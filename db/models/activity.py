@@ -31,3 +31,4 @@ class Activity(CommonBaseModel, table=True):
     report_uuid: Optional[uuid.UUID] = Field(foreign_key='report.uuid', nullable=True, index=True)
     report: Optional['Report'] = Relationship(back_populates='activities', sa_relationship_kwargs={'lazy': 'selectin'})
     status: Optional[ActivityStatus] = Field(default=None, nullable=True, index=True)
+    users: List['UserActivity'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'selectin'})

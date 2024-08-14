@@ -92,35 +92,27 @@ async def login_for_access_token(
 
 @router.get("/users/me", response_model=UserProfile)
 async def get_user_profile(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    if current_user.role == UserRole.PARTNER:
-        query = select(Organization).where(Organization.created_by == current_user.email)
-        organizations = await get_items_by_criteria(db, query)
-        organization_summaries = [
-            UserOrganization(
-                uuid=org.uuid,
-                name=org.name,
-                email=org.email
-            )
-            for org in organizations
-        ]
-        return UserProfile(
-            uuid=current_user.uuid,
-            first_name=current_user.first_name,
-            last_name=current_user.last_name,
-            email=current_user.email,
-            role=current_user.role,
-            level=current_user.level,
-            organizations=organization_summaries
+    query = select(Organization).where(
+        (Organization.created_by == current_user.email) | (Organization.uuid == current_user.organization_uuid)
+    )
+    organizations = await get_items_by_criteria(db, query)
+    organization_summaries = [
+        UserOrganization(
+            uuid=org.uuid,
+            name=org.name,
+            email=org.email
         )
-    else:
-        return UserProfile(
-            uuid=current_user.uuid,
-            first_name=current_user.first_name,
-            last_name=current_user.last_name,
-            email=current_user.email,
-            role=current_user.role,
-            level=current_user.level
-        )
+        for org in organizations
+    ]
+    return UserProfile(
+        uuid=current_user.uuid,
+        first_name=current_user.first_name,
+        last_name=current_user.last_name,
+        email=current_user.email,
+        role=current_user.role,
+        level=current_user.level,
+        organizations=organization_summaries if organization_summaries else None
+    )
 
 
 @router.post('/{uuid}/reset-password-to-default', response_model=UserProfile, dependencies=[Depends(admin_access)])
