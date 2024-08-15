@@ -18,6 +18,3 @@ class Comment(CommonBaseModel, table=True):
 
     report_activity_uuid: Optional[uuid.UUID] = Field(foreign_key='report_activity.uuid', nullable=True, index=True)
     report_activity: Optional['ReportActivity'] = Relationship(back_populates='comments', sa_relationship_kwargs={'lazy': 'selectin'})
-
-    accomplishment_uuid: Optional[uuid.UUID] = Field(foreign_key='accomplishment.uuid', nullable=True, index=True)
-    accomplishment: Optional['Accomplishment'] = Relationship(back_populates='comments', sa_relationship_kwargs={'lazy': 'selectin'})

@@ -482,7 +482,7 @@ async def get_organization_activities(
         if current_user.role not in ['admin', 'moh_staff']:
             if current_user.role == 'partner' and organization.created_by != current_user.email:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these activities')
-            elif current_user.role != 'partner':
+            elif current_user.role in [UserRole.DATA_MANAGER, UserRole.DATA_REPORTER] and organization.uuid != current_user.organization_uuid:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these activities')
 
         # Gather all activities from the organization's projects and order by most recent

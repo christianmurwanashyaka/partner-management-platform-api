@@ -5,7 +5,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 
 from db.models import Currency
-from db.models.activity import ActivityStatus
+from db.models.activity import ActivityStatus, ActivityReportingStatus
 
 
 class ActivityResponse(BaseModel):
@@ -21,6 +21,7 @@ class ActivityResponse(BaseModel):
     planned_budget: Optional[float] = None
     currency: Currency
     status: Optional[ActivityStatus] = None
+    report_status: Optional[ActivityReportingStatus] = None
 
     class Config:
         from_attributes = True
