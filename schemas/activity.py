@@ -4,6 +4,7 @@ from typing import List, Optional
 import uuid
 from pydantic import BaseModel
 
+from db.models.activity import ActivityStatus, ActivityReportingStatus
 from schemas.domain_intervention import DomainInterventionList
 from schemas.input_detail import InputDetailCreate, InputDetailRead
 from schemas.sub_domain import SubDomainList
@@ -101,6 +102,8 @@ class ActivityRead(BaseModel):
     input_details: List[InputDetailRead]
     created_at: datetime
     created_by: str
+    status: Optional[ActivityStatus] = None
+    report_status: Optional[ActivityReportingStatus] = None
 
     class Config:
         from_attributes = True
