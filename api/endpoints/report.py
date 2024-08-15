@@ -9,7 +9,7 @@ from sqlalchemy.orm import joinedload
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, UserRole, Activity, Project, MouDetail, MouApplication, MouApplicationStatus, InputDetail
-from db.models.activity import ActivityStatus
+from db.models.activity import ActivityStatus, ActivityReportingStatus
 from db.models.user_activity import UserActivity
 from schemas.report import ActivityResponse, PaginatedActivityResponse, ActivityAssignment
 
@@ -26,8 +26,6 @@ async def get_data_manager_activities(
     try:
         if current_user.role != UserRole.DATA_MANAGER:
             raise HTTPException(status_code=403, detail="Access denied. User must be a data manager.")
-
-        print(f"Fetching approved activities for user {current_user.email}, page {page}, page_size {page_size}")
 
         budget_subquery = (
             select(
@@ -56,8 +54,6 @@ async def get_data_manager_activities(
         total_items = await db.execute(count_query)
         total_items = total_items.scalar()
 
-        print(f"Total items: {total_items}")
-
         total_pages = ceil(total_items / page_size)
 
         if page > total_pages and total_pages > 0:
@@ -67,9 +63,6 @@ async def get_data_manager_activities(
             query.offset((page - 1) * page_size).limit(page_size)
         )
         activities_data = result.all()
-
-        print(f"Retrieved {len(activities_data)} activities")
-        print('ACTIVITIES DATA >>> ', activities_data)
 
         activities = []
         for activity, project_name, currency, planned_budget in activities_data:
@@ -120,7 +113,7 @@ async def assign_activities_to_data_reporter(
         stmt = (
             update(Activity)
             .where(Activity.uuid.in_(activity_assignment_data.activity_uuid))
-            .values(status=ActivityStatus.READY_FOR_REPORT)
+            .values(report_status=ActivityReportingStatus.READY_FOR_REPORT)
             .execution_options(synchronize_session=False)
         )
         result = await db.execute(stmt)
@@ -132,7 +125,6 @@ async def assign_activities_to_data_reporter(
 
     except Exception as e:
         await db.rollback()
-        print(f"An error occured while assigning activities: {str(e)}")
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
     return {"message": f"{updated_count} activities assigned successfully"}
 
@@ -153,7 +145,7 @@ async def get_data_reporter_activities(
             .join(UserActivity, Activity.uuid == UserActivity.activity_uuid)
             .where(
                 (Project.organization_id == current_user.organization_uuid) &
-                (Activity.status == ActivityStatus.READY_FOR_REPORT) &
+                (Activity.report_status == ActivityReportingStatus.READY_FOR_REPORT) &
                 (UserActivity.user_uuid == current_user.uuid)
             )
             .options(joinedload(Activity.project))
@@ -195,11 +187,9 @@ async def get_data_reporter_activities(
         )
 
     except HTTPException as http_exc:
-        print(f"HTTP exception occurred: {http_exc.detail}")
         raise http_exc
 
     except Exception as e:
-        print(f"An unexpected error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
 
 

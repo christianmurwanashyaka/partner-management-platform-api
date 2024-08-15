@@ -251,45 +251,6 @@ async def get_activities(
     return paginated_response
 
 
-@router.patch('/{uuid}/operational_zones', response_model=ActivityRead, dependencies=[Depends(partner_access)])
-async def update_activity_operational_zones(
-        uuid: uuid.UUID,
-        operational_zones: List[OperationalZoneUpdate],
-        db: AsyncSession = Depends(get_db),
-        current_user: User = Depends(get_current_user)
-):
-    try:
-        query = select(Activity).where(Activity.uuid == uuid)
-        result = await db.execute(query)
-        activity = result.scalar_one_or_none()
-
-        if not activity:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Activity not found')
-
-        if activity.created_by != current_user.email and current_user.role != UserRole.ADMIN:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
-
-        await db.execute(delete(OperationalZone).where(OperationalZone.activity_id == uuid))
-
-        for zone_data in operational_zones:
-            new_zone = OperationalZone(
-                activity_id=uuid,
-                province=zone_data.province,
-                district=zone_data.district,
-                created_by=current_user.email
-            )
-            db.add(new_zone)
-
-        await db.commit()
-        await db.refresh(activity)
-
-        return activity
-
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
 @router.patch('/{uuid}/domains', response_model=ActivityRead, dependencies=[Depends(partner_access)])
 async def update_activity_domains(
         uuid: uuid.UUID,
@@ -394,6 +355,8 @@ async def get_activity(
         if current_user.role in ['admin', 'moh_staff']:
             return activity
         elif current_user.role == 'partner' and activity.created_by == current_user.email:
+            return activity
+        elif current_user.role in [UserRole.DATA_MANAGER, UserRole.DATA_REPORTER] and activity.project.organization_id == current_user.organization_uuid:
             return activity
         else:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this activity')
