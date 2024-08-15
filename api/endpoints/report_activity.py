@@ -7,7 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, UserRole, Activity, Report, ReportStatus, ReportActivity
-from db.models.activity import ActivityStatus
+from db.models.activity import ActivityStatus, ActivityReportingStatus
 from schemas.report_activity import ReportActivityCreate
 
 router = APIRouter()
@@ -23,7 +23,7 @@ async def report_activity(
     try:
         activity_query = select(Activity).options(joinedload(Activity.project)).where(
             (Activity.uuid == report_activity_data.activity_uuid) &
-            (Activity.status == ActivityStatus.READY_FOR_REPORT)
+            (Activity.report_status == ActivityReportingStatus.READY_FOR_REPORT)
         )
         result = await db.execute(activity_query)
         activity = result.scalar_one_or_none()
@@ -71,7 +71,8 @@ async def report_activity(
         await db.refresh(new_report_activity)
 
         # Update the Activity status
-        activity.status = ActivityStatus.REPORTED
+        activity.status = report_activity_data.status
+        activity.report_status = ActivityReportingStatus.REPORTED
         activity.report_uuid = report.uuid
 
         await db.commit()

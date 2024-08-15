@@ -3,6 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
+from sqlalchemy import Column, ARRAY, String
 from sqlmodel import Field, Relationship
 
 from db.models import CommonBaseModel
@@ -25,4 +26,4 @@ class ReportActivity(CommonBaseModel, table=True):
     actual_end_date: datetime = Field(default=None, nullable=True, description="The actual end date of the activity")
     comments: List['Comment'] = Relationship(back_populates='report_activity', sa_relationship_kwargs={'lazy': 'selectin'})
     status: ReportActivityStatus = Field(default=ReportActivityStatus.PENDING, index=True)
-    accomplishments: List['Accomplishment'] = Relationship(back_populates='report_activity', sa_relationship_kwargs={'lazy': 'selectin'})
+    accomplishments: Optional[List[str]] = Field(sa_column=Column(ARRAY(String)), description="List of accomplishments of the activity")
