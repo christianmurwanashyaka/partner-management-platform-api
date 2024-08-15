@@ -7,8 +7,14 @@ from db.models.base import CommonBaseModel
 
 
 class ActivityStatus(str, Enum):
-    READY_FOR_REPORT = "ready_for_report"
-    REPORTED = "reported"
+    NOT_STARTED = "not_started"
+    ON_GOING = "on_going"
+    COMPLETED = 'completed'
+
+
+class ActivityReportingStatus(str, Enum):
+    READY_FOR_REPORT = 'ready_for_report'
+    REPORTED = 'reported'
 
 
 class Activity(CommonBaseModel, table=True):
@@ -32,3 +38,4 @@ class Activity(CommonBaseModel, table=True):
     report: Optional['Report'] = Relationship(back_populates='activities', sa_relationship_kwargs={'lazy': 'selectin'})
     status: Optional[ActivityStatus] = Field(default=None, nullable=True, index=True)
     users: List['UserActivity'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'selectin'})
+    report_status: Optional[ActivityReportingStatus] = Field(default=None, nullable=True, index=True)

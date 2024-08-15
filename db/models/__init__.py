@@ -23,7 +23,6 @@ from .mou_review import MouReview, MouReviewDecision
 from .mou import Mou
 from .activity import Activity
 from .report_activity import ReportActivity, ReportActivityStatus
-from .accomplishment import Accomplishment
 from .comment import Comment
 from .user import User, UserRole, MOHStaffLevel
 from .notification import Notification
