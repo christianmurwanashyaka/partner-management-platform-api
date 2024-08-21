@@ -11,7 +11,7 @@ class Notification(CommonBaseModel, table=True):
     __tablename__ = 'notification'
 
     recipient_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='user.uuid', index=True)
-    recipient: 'User' = Relationship(back_populates='notifications', sa_relationship_kwargs={'lazy': 'selectin'})
+    recipient: 'User' = Relationship(back_populates='notifications', sa_relationship_kwargs={'lazy': 'noload'})
     subject: str = Field(..., description='Subject of the notification')
     from_email: EmailStr = Field(sa_column=sa.Column(sa.String))
     is_read: bool = Field(default=False, description='Read status of the notification')

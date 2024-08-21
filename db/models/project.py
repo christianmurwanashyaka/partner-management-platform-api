@@ -16,7 +16,7 @@ class Project(CommonBaseModel, table=True):
     name: str = Field(..., description="Name of the project", index=True)
     description: str | None = Field(default=None, nullable=True, description="Optional description of the project", index=True)
     budget_type_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='budget_type.uuid')
-    budget_type: 'BudgetType' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
+    budget_type: 'BudgetType' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'noload'})
     fiscal_year_budgets: List[dict] = Field(
         sa_column=Column(JSON),
         description="List of dictionaries containing fiscal year and budget for each year of the project"
@@ -24,19 +24,19 @@ class Project(CommonBaseModel, table=True):
     currency: Currency = Field(default=Currency.RWF, description="Currency of the project's budget")
     total_budget: float = Field(default=0.0, description="Total budget of the project")
     organization_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='organization.uuid', index=True)
-    organization: 'Organization' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
+    organization: 'Organization' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'noload'})
     funding_unit_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='funding_unit.uuid', index=True)
-    funding_unit: 'FundingUnit' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
+    funding_unit: 'FundingUnit' = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'noload'})
     funding_source_id: Optional[uuid.UUID] = Field(default=None, foreign_key='funding_source.uuid', index=True)
-    funding_source: Optional['FundingSource'] = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'selectin'})
+    funding_source: Optional['FundingSource'] = Relationship(back_populates='projects', sa_relationship_kwargs={'lazy': 'noload'})
     other_funding_source: Optional[str] = Field(
         default=None, nullable=True, description="Name of the funding source if not in the predefined list")
-    activities: List['Activity'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
-    mou_details: List['MouDetail'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
+    activities: List['Activity'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'noload'})
+    mou_details: List['MouDetail'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'noload'})
     overall_goal: str = Field(..., description="The overall goal of the project")
-    goals: List['Goal'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
+    goals: List['Goal'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'noload'})
     duration: str | None = Field(default=None, nullable=True, description="The duration of the project")
-    report: Optional['Report'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'selectin'})
+    report: Optional['Report'] = Relationship(back_populates='project', sa_relationship_kwargs={'lazy': 'noload'})
 
 
 class Goal(CommonBaseModel, table=True):
@@ -45,4 +45,4 @@ class Goal(CommonBaseModel, table=True):
     name: str = Field(..., description="Name of the goal")
     description: str | None = Field(default=None, nullable=True, description="Optional description of the goal")
     project_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='project.uuid', index=True)
-    project: Project = Relationship(back_populates='goals', sa_relationship_kwargs={'lazy': 'selectin'})
+    project: Project = Relationship(back_populates='goals', sa_relationship_kwargs={'lazy': 'noload'})

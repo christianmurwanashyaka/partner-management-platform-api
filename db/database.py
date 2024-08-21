@@ -20,17 +20,17 @@ async_engine = create_async_engine(DATABASE_URL)
 async_session = sessionmaker(async_engine, expire_on_commit=False, class_=AsyncSession)
 
 
-# @event.listens_for(Engine, "before_cursor_execute")
-# def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-#     conn.info.setdefault('query_start_time', []).append(time.time())
-#     print(f"Start Query: {statement}")
-#
-#
-# @event.listens_for(Engine, "after_cursor_execute")
-# def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-#     total = time.time() - conn.info['query_start_time'].pop(-1)
-#     print(f"Query Complete!")
-#     print(f"Total Time: {total}")
+@event.listens_for(Engine, "before_cursor_execute")
+def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    conn.info.setdefault('query_start_time', []).append(time.time())
+    print(f"Start Query: {statement}")
+
+
+@event.listens_for(Engine, "after_cursor_execute")
+def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    total = time.time() - conn.info['query_start_time'].pop(-1)
+    print(f"Query Complete!")
+    print(f"Total Time: {total}")
 
 
 async def get_db():

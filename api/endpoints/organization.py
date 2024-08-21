@@ -12,7 +12,7 @@ from api.dependencies.access_control import partner_access, admin_access, moh_st
 from api.dependencies.auth import get_current_user
 from api.dependencies.email_notification_handler import get_email_notification_handler
 from db.database import get_db
-from db.models import Project, MouApplication, MouDetail, Mou, MouComment, Party
+from db.models import Project, MouApplication, MouDetail, Mou, MouComment, Party, OrganizationType
 from db.models.organization import Organization
 from db.models.document import Document, DocumentType
 from db.models.pagination import PaginatedResponse
@@ -255,7 +255,7 @@ async def update_organization(
 
 @router.get('/', response_model=PaginatedResponse[OrganizationRead], dependencies=[Depends(moh_staff_access)])
 async def get_organizations(page: int = 1, page_size: int = 100, db: AsyncSession = Depends(get_db)):
-    return await get_all_items(db, Organization, page=page, page_size=page_size)
+    return await get_all_items(db, Organization, page=page, page_size=page_size, related="organization_type")
 
 
 @router.get('/{uuid}', response_model=OrganizationRead)

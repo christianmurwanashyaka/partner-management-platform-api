@@ -33,16 +33,16 @@ class MouApplication(CommonBaseModel, table=True):
 
     status: MouApplicationStatus = Field(default=MouApplicationStatus.PENDING, description='Status of the MOU application')
     mou_detail_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='mou_detail.uuid', index=True)
-    mou_detail: 'MouDetail' = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
-    approvals: List['MouApproval'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
-    reviews: List['MouReview'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
-    comments: List['MouComment'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
-    documents: List['Document'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
-    mou: Optional['Mou'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
-    approval_or_review: List['MouApprovalOrReview'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
+    mou_detail: 'MouDetail' = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'noload'})
+    approvals: List['MouApproval'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'noload'})
+    reviews: List['MouReview'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'noload'})
+    comments: List['MouComment'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'noload'})
+    documents: List['Document'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'noload'})
+    mou: Optional['Mou'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'noload'})
+    approval_or_review: List['MouApprovalOrReview'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'noload'})
     current_reviewer_id: Optional[uuid.UUID] = Field(default=None, foreign_key='user.uuid',
                                                      description='Current reviewer of the MOU application', index=True)
-    current_reviewer: Optional['User'] = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
+    current_reviewer: Optional['User'] = Relationship(sa_relationship_kwargs={'lazy': 'noload'})
     next_level: Optional[MOHStaffLevel] = Field(default=None, description='Next level for the MOU application', index=True)
     created_by: Optional[str] = Field(default=None, description='Email of the user who created the MOU application', index=True)
     submitted_by: Optional[str] = Field(default=None, description='Name of the user who submitted the MOU application')
@@ -52,7 +52,7 @@ class MouApplication(CommonBaseModel, table=True):
     )
     modification_entity: Optional[List[Union[ModificationEntity, None]]] = Field(default=None, sa_column=Column(ARRAY(String)), description='Entities that need modification if requested')
     partner_template_comment: Optional[str] = Field(default=None, description='Partner template comment')
-    report: Optional['Report'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'selectin'})
+    report: Optional['Report'] = Relationship(back_populates='mou_application', sa_relationship_kwargs={'lazy': 'noload'})
 
     @property
     def reference_number(self) -> str:

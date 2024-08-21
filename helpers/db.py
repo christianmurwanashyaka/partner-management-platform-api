@@ -43,7 +43,15 @@ async def check_if_exists(model, db: AsyncSession, **kwargs):
         return False
 
 
-async def get_all_items(db: AsyncSession, model: Any, *, page: int = 1, page_size: int = 100, include: Optional[list] = None):
+async def get_all_items(
+    db: AsyncSession,
+    model: Any,
+    *,
+    page: int = 1,
+    page_size: int = 100,
+    include: Optional[list] = None,
+    related: Optional[str] = None
+):
     """
     Retrieves paginated items of a specific model from the database.
 
@@ -66,6 +74,9 @@ async def get_all_items(db: AsyncSession, model: Any, *, page: int = 1, page_siz
     if include:
         for field in include:
             query = query.options(selectinload(getattr(model, field)))
+
+    if related:
+        query = query.options(selectinload(getattr(model, related)))  # Eagerly load related table
 
     items = (await db.execute(query)).scalars().all()
 
