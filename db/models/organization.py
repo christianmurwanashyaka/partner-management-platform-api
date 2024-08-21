@@ -41,16 +41,16 @@ class Organization(CommonBaseModel, table=True):
     )
     organization_type: 'OrganizationType' = Relationship(
         back_populates='organizations',
-        sa_relationship_kwargs={'lazy': 'selectin'}
+        sa_relationship_kwargs={'lazy': 'noload'}
     )
     documents: List[Document] = Relationship(
         back_populates='organization',
-        sa_relationship_kwargs={'lazy': 'selectin'}
+        sa_relationship_kwargs={'lazy': 'noload'}
     )
 
-    projects: List['Project'] = Relationship(back_populates='', sa_relationship_kwargs={'lazy': 'selectin'})
+    projects: List['Project'] = Relationship(back_populates='', sa_relationship_kwargs={'lazy': 'noload'})
 
-    parties: List['Party'] = Relationship(back_populates='', sa_relationship_kwargs={'lazy': 'selectin'})
+    parties: List['Party'] = Relationship(back_populates='', sa_relationship_kwargs={'lazy': 'noload'})
 
-    users: List['User'] = Relationship(back_populates='organization', sa_relationship_kwargs={'lazy': 'selectin'})
-    reports: List['Report'] = Relationship(back_populates='organization', sa_relationship_kwargs={'lazy': 'selectin'})
+    users: List['User'] = Relationship(back_populates='organization', sa_relationship_kwargs={'lazy': 'noload'})
+    reports: List['Report'] = Relationship(back_populates='organization', sa_relationship_kwargs={'lazy': 'noload'})

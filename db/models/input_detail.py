@@ -8,13 +8,13 @@ class InputDetail(CommonBaseModel, table=True):
     __tablename__ = 'input_detail'
 
     activity_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='activity.uuid', index=True)
-    activity: 'Activity' = Relationship(back_populates='input_details', sa_relationship_kwargs={'lazy': 'selectin'})
+    activity: 'Activity' = Relationship(back_populates='input_details', sa_relationship_kwargs={'lazy': 'noload'})
 
     input_category_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='input_category.uuid', index=True)
-    input_category: 'InputCategory' = Relationship(back_populates='input_details', sa_relationship_kwargs={'lazy': 'selectin'})
+    input_category: 'InputCategory' = Relationship(back_populates='input_details', sa_relationship_kwargs={'lazy': 'noload'})
 
     input_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='input.uuid', index=True)
-    input: 'Input' = Relationship(back_populates='input_details', sa_relationship_kwargs={'lazy': 'selectin'})
+    input: 'Input' = Relationship(back_populates='input_details', sa_relationship_kwargs={'lazy': 'noload'})
 
     budget: float = Field(..., description='Budget for the selected input')
     district: str = Field(..., description='District for the input detail')

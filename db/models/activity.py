@@ -21,7 +21,7 @@ class Activity(CommonBaseModel, table=True):
     __tablename__ = 'activity'
 
     project_id: uuid.UUID = Field(default=uuid.UUID, foreign_key='project.uuid', index=True)
-    project: 'Project' = Relationship(back_populates='activities', sa_relationship_kwargs={'lazy': 'selectin'})
+    project: 'Project' = Relationship(back_populates='activities', sa_relationship_kwargs={'lazy': 'noload'})
 
     start_date: datetime.date = Field(..., description="Start date of the project", index=True)
     end_date: datetime.date = Field(..., description="End date of the project", index=True)
@@ -31,11 +31,11 @@ class Activity(CommonBaseModel, table=True):
     implementer_unit: str = Field(..., description='Unit or group within the implementer organization', index=True)
     fiscal_year: str = Field(..., description='Fiscal year of the activity', index=True)
 
-    domains: List['ActivityDomain'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'selectin'})
-    input_details: List['InputDetail'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'selectin'})
-    operational_zones: List['OperationalZone'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'selectin'})
+    domains: List['ActivityDomain'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'noload'})
+    input_details: List['InputDetail'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'noload'})
+    operational_zones: List['OperationalZone'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'noload'})
     report_uuid: Optional[uuid.UUID] = Field(foreign_key='report.uuid', nullable=True, index=True)
-    report: Optional['Report'] = Relationship(back_populates='activities', sa_relationship_kwargs={'lazy': 'selectin'})
+    report: Optional['Report'] = Relationship(back_populates='activities', sa_relationship_kwargs={'lazy': 'noload'})
     status: Optional[ActivityStatus] = Field(default=None, nullable=True, index=True)
-    users: List['UserActivity'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'selectin'})
+    users: List['UserActivity'] = Relationship(back_populates='activity', sa_relationship_kwargs={'lazy': 'noload'})
     report_status: Optional[ActivityReportingStatus] = Field(default=None, nullable=True, index=True)
