@@ -37,9 +37,9 @@ class User(CommonBaseModel, table=True):
     phone_number    : Optional[str] = None
     organization_uuid: Optional[uuid.UUID] = Field(default=None, foreign_key='organization.uuid')
     organization: Optional['Organization'] = Relationship(
-        back_populates="users", sa_relationship_kwargs={'lazy': 'selectin'})
+        back_populates="users", sa_relationship_kwargs={'lazy': 'noload'})
     notifications: Optional[List['Notification']] = Relationship(
-        back_populates='recipient', sa_relationship_kwargs={'lazy': 'selectin'})
-    domains: List['UserDomain'] = Relationship(back_populates='user', sa_relationship_kwargs={'lazy': 'selectin'})
+        back_populates='recipient', sa_relationship_kwargs={'lazy': 'noload'})
+    domains: List['UserDomain'] = Relationship(back_populates='user', sa_relationship_kwargs={'lazy': 'noload'})
     partner_organization_name: Optional[str] = None
-    activities: List['UserActivity'] = Relationship(back_populates='user', sa_relationship_kwargs={'lazy': 'selectin'})
+    activities: List['UserActivity'] = Relationship(back_populates='user', sa_relationship_kwargs={'lazy': 'noload'})
