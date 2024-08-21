@@ -18,10 +18,10 @@ class MouApproval(CommonBaseModel, table=True):
 
     decision: MouApprovalDecision = Field(description='Decision made on the MOU Application')
     current_approver_id: uuid.UUID = Field(foreign_key='user.uuid', index=True)
-    current_approver: 'User' = Relationship(sa_relationship_kwargs={'lazy': 'selectin'})
+    current_approver: 'User' = Relationship(sa_relationship_kwargs={'lazy': 'noload'})
     mou_application_id: uuid.UUID = Field(foreign_key='mou_application.uuid', index=True)
-    mou_application: 'MouApplication' = Relationship(back_populates='approvals', sa_relationship_kwargs={'lazy': 'selectin'})
-    comments: List['MouComment'] = Relationship(back_populates='mou_approval', sa_relationship_kwargs={'lazy': 'selectin'})
+    mou_application: 'MouApplication' = Relationship(back_populates='approvals', sa_relationship_kwargs={'lazy': 'noload'})
+    comments: List['MouComment'] = Relationship(back_populates='mou_approval', sa_relationship_kwargs={'lazy': 'noload'})
     processing_time: Optional[int] = Field(
         default=None,
         description='Processing time from decision to decision'

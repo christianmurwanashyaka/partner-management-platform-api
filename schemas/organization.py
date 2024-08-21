@@ -29,7 +29,7 @@ class OrganizationRead(BaseModel):
 
     rgb_number: Optional[str] = None
 
-    organization_type: OrganizationTypeRead
+    organization_type: Optional[OrganizationTypeRead] = None
     documents: List[DocumentRead] = []
 
 

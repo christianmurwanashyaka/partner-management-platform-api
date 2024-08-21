@@ -8,12 +8,68 @@ from sqlalchemy.orm import joinedload
 
 from api.dependencies.auth import get_current_user
 from db.database import get_db
-from db.models import User, UserRole, Activity, Project, MouDetail, MouApplication, MouApplicationStatus, InputDetail
+from db.models import User, UserRole, Activity, Project, MouDetail, MouApplication, MouApplicationStatus, InputDetail, \
+    PaginatedResponse
 from db.models.activity import ActivityStatus, ActivityReportingStatus
 from db.models.user_activity import UserActivity
+from schemas.project import ProjectList
 from schemas.report import ActivityResponse, PaginatedActivityResponse, ActivityAssignment
 
 router = APIRouter()
+
+
+@router.get('/data_manager/projects', response_model=PaginatedResponse[ProjectList])
+async def get_data_manager_projects(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        if current_user.role != UserRole.DATA_MANAGER:
+            raise HTTPException(status_code=403, detail="Access denied. User must be a data manager.")
+
+        # Join tables and apply filters
+        query = (
+            select(Project)
+            .join(MouDetail, Project.uuid == MouDetail.project_id)
+            .join(MouApplication, MouDetail.uuid == MouApplication.mou_detail_id)
+            .where(
+                Project.organization_id == current_user.organization_uuid,
+                MouApplication.status == MouApplicationStatus.APPROVED
+            )
+        )
+
+        # Paginate the results
+        results = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+        projects = results.scalars().all()
+
+        # Convert to dictionaries
+        projects = [ ProjectList(
+                        uuid=project.uuid,
+                        name=project.name,
+                        description=project.description,
+                        duration=project.duration,
+                        currency=project.currency,
+                        fiscal_year_budgets=project.fiscal_year_budgets,
+                        total_budget=project.total_budget
+                    ) for project in projects
+                ]
+
+        # Calculate total count
+        total_count = await db.execute(select(func.count()).select_from(query))
+        total_count = total_count.scalar()
+        total_pages = (total_count + page_size - 1) // page_size
+
+        return PaginatedResponse(
+            data=projects,
+            page=page,
+            page_size=page_size,
+            total_items=total_count,
+            total_pages=total_pages
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get('/data_manager/activities', response_model=PaginatedActivityResponse)
