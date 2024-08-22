@@ -10,6 +10,7 @@ from schemas.activity import ActivityList
 from schemas.budget_type import BudgetTypeRead
 from schemas.funding_source import FundingSourceRead
 from schemas.funding_unit import FundingUnitRead
+from schemas.report import ReportProjectActivityRead
 
 
 class GoalCreate(BaseModel):
@@ -83,6 +84,7 @@ class ProjectList(BaseModel):
     currency: Currency
     duration: Optional[str] = None
     total_budget: float
+    activities: Optional[List[ReportProjectActivityRead]] = None
 
     class Config:
         from_attributes = True
@@ -92,18 +94,18 @@ class ProjectRead(BaseModel):
     uuid: uuid.UUID
     name: str
     description: Optional[str] = None
-    budget_type: BudgetTypeRead
-    funding_unit: FundingUnitRead
+    budget_type: Optional[BudgetTypeRead] = None
+    funding_unit: Optional[FundingUnitRead] = None
     funding_source: Optional[FundingSourceRead] = None
     other_funding_source: Optional[str] = None
-    fiscal_year_budgets: List[FiscalYearBudget]
-    total_budget: float
-    currency: str
-    created_at: datetime
-    created_by: str
-    overall_goal: str
-    goals: List[GoalRead]
-    activities: List[ActivityList] = []
+    fiscal_year_budgets: Optional[List[FiscalYearBudget]] = None
+    total_budget: Optional[float] = None
+    currency: Optional[str] = None
+    created_at: Optional[datetime] = None
+    created_by: Optional[str] = None
+    overall_goal: Optional[str] = None
+    goals: Optional[List[GoalRead]] = None
+    activities: Optional[List[ActivityList]] = None
     duration: Optional[str] = None
 
     class Config:

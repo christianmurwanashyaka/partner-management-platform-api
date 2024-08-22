@@ -10,7 +10,7 @@ from api.dependencies.auth import get_current_user
 from api.dependencies.email_notification_handler import get_email_notification_handler
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
-from db.models import Activity, MouDetail, MouApplication, MouApplicationStatus
+from db.models import Activity, MouDetail, MouApplication, MouApplicationStatus, InputDetail
 from db.models.organization import Organization
 from db.models.pagination import PaginatedResponse
 from db.models.project import Project, Goal
@@ -216,7 +216,10 @@ async def get_project_activities(
              .offset((page - 1) * page_size)
              .limit(page_size))
 
-    query = query.options(selectinload(Activity.input_details))
+    query = query.options(
+        selectinload(Activity.input_details).selectinload(InputDetail.input_category),
+        selectinload(Activity.input_details).selectinload(InputDetail.input)
+    )
     activities = await db.execute(query)
     activities_list = activities.scalars().all()
 

@@ -4,7 +4,7 @@ from math import ceil
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from api.dependencies.auth import get_current_user
 from db.database import get_db
@@ -13,7 +13,7 @@ from db.models import User, UserRole, Activity, Project, MouDetail, MouApplicati
 from db.models.activity import ActivityStatus, ActivityReportingStatus
 from db.models.user_activity import UserActivity
 from schemas.project import ProjectList
-from schemas.report import ActivityResponse, PaginatedActivityResponse, ActivityAssignment
+from schemas.report import ActivityResponse, PaginatedActivityResponse, ActivityAssignment, ReportProjectActivityRead
 
 router = APIRouter()
 
@@ -34,6 +34,9 @@ async def get_data_manager_projects(
             select(Project)
             .join(MouDetail, Project.uuid == MouDetail.project_id)
             .join(MouApplication, MouDetail.uuid == MouApplication.mou_detail_id)
+            .options(
+                selectinload(Project.activities),
+            )
             .where(
                 Project.organization_id == current_user.organization_uuid,
                 MouApplication.status == MouApplicationStatus.APPROVED
@@ -52,7 +55,9 @@ async def get_data_manager_projects(
                         duration=project.duration,
                         currency=project.currency,
                         fiscal_year_budgets=project.fiscal_year_budgets,
-                        total_budget=project.total_budget
+                        total_budget=project.total_budget,
+                        activities = [ReportProjectActivityRead(uuid=activity.uuid,
+                         name=activity.name) for activity in project.activities]  # Add this line
                     ) for project in projects
                 ]
 

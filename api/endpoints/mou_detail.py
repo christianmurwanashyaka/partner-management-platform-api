@@ -185,7 +185,7 @@ async def get_mou_details(request: Request, db: AsyncSession = Depends(get_db), 
 @router.get('/{uuid}', response_model=MouDetailRead)
 async def get_mou_detail(uuid: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        query = select(MouDetail).filter(MouDetail.uuid == uuid)
+        query = select(MouDetail).options(selectinload(MouDetail.project)).filter(MouDetail.uuid == uuid)
         mou_detail = await db.execute(query)
         mou_detail = mou_detail.scalar_one_or_none()
 
