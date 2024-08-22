@@ -1,6 +1,8 @@
 from datetime import datetime
 
 import uuid
+from typing import Optional
+
 from pydantic import BaseModel
 
 from schemas.mou_application import MouApplicationRead
@@ -11,7 +13,6 @@ class MouCommentRead(BaseModel):
     uuid: uuid.UUID
     content: str
     user: UserProfile
-    mou_application: MouApplicationRead
     created_at: datetime
     created_by: str
 
