@@ -1107,7 +1107,10 @@ async def get_application_comments(
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this MOU application')
 
         # Fetch the comments related to the MOU application
-        comments_query = select(MouComment).where(MouComment.mou_application_id == uuid)
+        comments_query = select(MouComment).options(
+            selectinload(MouComment.user),
+            selectinload(MouComment.mou_application).selectinload(MouApplication.mou_detail)
+        ).where(MouComment.mou_application_id == uuid)
         comments_result = await db.execute(comments_query)
         comments = comments_result.scalars().all()
 
