@@ -39,3 +39,10 @@ class ActivityAssignment(BaseModel):
     user_uuid: uuid.UUID
     activity_uuid: List[uuid.UUID]
 
+
+class ReportProjectActivityRead(BaseModel):
+    uuid: uuid.UUID
+    name: str
+
+    class Config:
+        from_attributes = True
