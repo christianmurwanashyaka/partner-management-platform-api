@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status
 from sqlalchemy import func, delete
 from sqlalchemy.future import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
@@ -372,7 +372,10 @@ async def get_activity_input_details(
         page_size: int = 100,
         db: AsyncSession = Depends(get_db)
 ):
-    query = (select(InputDetail)
+    query = (select(InputDetail).options(
+        selectinload(InputDetail.input),
+        selectinload(InputDetail.input_category),
+    )
              .where(InputDetail.activity_id == uuid)
              .order_by(InputDetail.created_at.desc())
              .offset((page - 1) * page_size)
@@ -405,6 +408,12 @@ async def get_activity_domains(
         db: AsyncSession = Depends(get_db)
 ):
     query = (select(ActivityDomain)
+    .options(
+        selectinload(ActivityDomain.domain_intervention),
+        selectinload(ActivityDomain.sub_domain),
+        selectinload(ActivityDomain.sub_domain_function),
+        selectinload(ActivityDomain.sub_function)
+    )
              .where(ActivityDomain.activity_id == uuid)
              .order_by(ActivityDomain.created_at.desc())
              .offset((page - 1) * page_size)
