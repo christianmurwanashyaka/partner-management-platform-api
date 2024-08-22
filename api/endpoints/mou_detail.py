@@ -3,6 +3,7 @@ from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, Request, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
 from api.dependencies.access_control import partner_access
@@ -10,7 +11,7 @@ from api.dependencies.auth import get_current_user
 from api.dependencies.email_notification_handler import get_email_notification_handler
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
-from db.models import Party, MouDetail, DocumentType, Document, User, UserRole
+from db.models import Party, MouDetail, DocumentType, Document, User, UserRole, Project
 from notification.handlers import EmailNotificationHandler
 from schemas.mou_detail import MouDetailRead
 from utils.files import handle_upload_file
@@ -157,9 +158,18 @@ async def update_mou_detail(
 async def get_mou_details(request: Request, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         if current_user.role in ['admin', 'moh_staff']:
-            query = select(MouDetail)
+            query = select(MouDetail).options(
+                selectinload(MouDetail.project).selectinload(Project.funding_unit),
+                selectinload(MouDetail.project).selectinload(Project.budget_type),
+                selectinload(MouDetail.documents),
+                selectinload(MouDetail.parties)
+            )
         elif current_user.role == 'partner':
-            query = select(MouDetail).where(MouDetail.created_by == current_user.email)
+            query = select(MouDetail).options(
+                selectinload(MouDetail.project),
+                selectinload(MouDetail.documents),
+                selectinload(MouDetail.parties)
+            ).where(MouDetail.created_by == current_user.email)
         else:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
