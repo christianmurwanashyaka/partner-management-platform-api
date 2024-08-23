@@ -8,7 +8,6 @@ import os
 env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 env_path = os.path.normpath(env_path)
 
-print(f"Loading .env from: {env_path}")
 load_dotenv(dotenv_path=env_path)
 
 
