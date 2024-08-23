@@ -144,8 +144,10 @@ async def create_organization(
             db.add(notified_constitution_bylaws_doc)
 
         await db.commit()
+        print('DB USER', db_user)
+        print('NEW ORGANIZATION', new_organization)
         await notify_new_user(db, email_handler, db_user, new_organization)
-        await notify_new_organization(db, email_handler, db_user, new_organization)
+        # await notify_new_organization(db, email_handler, db_user, new_organization)
 
     except IntegrityError as e:
         await handle_integrity_error(e, db)
@@ -511,85 +513,6 @@ async def get_organization_activities(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-# @router.get('/{uuid}/mou_details', response_model=PaginatedResponse[MouDetailRead])
-# async def get_organization_mou_details(
-#         uuid: str,
-#         page: int = 1,
-#         page_size: int = 100,
-#         db: AsyncSession = Depends(get_db),
-#         current_user: User = Depends(get_current_user)
-# ):
-#     try:
-#         # Check if the organization exists and get its MOU details
-#         # organization_query = (select(Organization)
-#         #                               .options(
-#         #             selectinload(Organization.projects),  # Load projects
-#         #             selectinload(Organization.projects).selectinload(Project.mou_details),  # Load MOU details within projects
-#         #             selectinload(Organization.projects).selectinload(Project.mou_details).selectinload(MouDetail.parties),
-#         #             # Load parties within MOU details
-#         #             selectinload(Organization.projects).selectinload(Project.mou_details).selectinload(MouDetail.documents)
-#         #             # Load documents within MOU details
-#         #         )
-#         #                               .filter(Organization.uuid == uuid))
-#         # organization_query = (select(Organization)
-#         #                       .options(
-#         #     selectinload(Organization.projects))
-#         #                       .filter(Organization.uuid == uuid))
-#
-#         # Fetch the organization with lazy loading
-#         organization_query = select(Organization).filter(Organization.uuid == uuid)
-#         organization_result = await db.execute(organization_query)
-#         organization = organization_result.unique().scalar_one_or_none()
-#
-#         if not organization:
-#             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
-#
-#         # Access control based on user role
-#         if current_user.role not in ['admin', 'moh_staff']:
-#             if current_user.role == 'partner' and organization.created_by != current_user.email:
-#                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these MOU details')
-#             elif current_user.role != 'partner':
-#                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access these MOU details')
-#
-#         # Gather all MOU details from the organization's projects and order by most recent
-#         projects_query = select(Project).filter(Project.organization_id == uuid)
-#         projects_result = await db.execute(projects_query)
-#         projects = projects_result.scalars().all()
-#
-#         print('PROJECTS: ', projects)
-#
-#         mou_details = []
-#         for project in projects:
-#             project_mou_details = (
-#                 select(MouDetail)
-#                 .options(
-#                     selectinload(MouDetail.parties),
-#                     selectinload(MouDetail.documents)
-#                 )
-#                 .filter(MouDetail.project_id == project.uuid)
-#             )
-#             project_mou_details_result = await db.execute(project_mou_details)
-#             project_mou_details_list = project_mou_details_result.scalars().all()
-#             mou_details.extend(project_mou_details_list)
-#
-#         total_items = len(mou_details)
-#         mou_details_paginated = mou_details[(page - 1) * page_size:page * page_size]
-#
-#         total_pages = (total_items + page_size - 1) // page_size
-#         paginated_response = PaginatedResponse(
-#             page=page,
-#             page_size=page_size,
-#             total_items=total_items,
-#             total_pages=total_pages,
-#             data=mou_details_paginated
-#         )
-#
-#         return paginated_response
-#
-#     except Exception as e:
-#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
 @router.get('/{uuid}/mou_details', response_model=PaginatedResponse[MouDetailRead])
 async def get_organization_mou_details(
         uuid: str,
@@ -672,53 +595,6 @@ async def get_organization_mou_details(
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-# @router.get('/{organization_uuid}/mous', response_model=PaginatedResponse[MouRead])
-# async def get_organization_mous(
-#         organization_uuid: uuid.UUID,
-#         page: int = 1,
-#         page_size: int = 10,
-#         db: AsyncSession = Depends(get_db),
-#         current_user: User = Depends(get_current_user)
-# ):
-#     try:
-#         # Check if the organization exists
-#         organization_query = select(Organization).where(Organization.uuid == organization_uuid)
-#         organization_result = await db.execute(organization_query)
-#         organization = organization_result.scalar_one_or_none()
-#
-#         if not organization:
-#             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
-#
-#         # Authorization check
-#         if current_user.role != 'partner' or organization.created_by != current_user.email:
-#             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this resource')
-#
-#         # Fetch the total number of MOUs related to the organization
-#         total_items_query = select(func.count(Mou.uuid)).join(MouApplication).join(MouDetail).where(
-#             MouDetail.project.has(Project.organization_id == organization_uuid)
-#         )
-#         total_items = (await db.execute(total_items_query)).scalar_one()
-#
-#         # Fetch the paginated MOUs related to the organization
-#         query = select(Mou).join(MouApplication).join(MouDetail).where(
-#             MouDetail.project.has(Project.organization_id == organization_uuid)
-#         ).options(joinedload(Mou.documents)).offset((page - 1) * page_size).limit(page_size)
-#         result = await db.execute(query)
-#         mous = result.scalars().unique().all()
-#
-#         print('MOUS: ', mous)
-#
-#         total_pages = (total_items + page_size - 1) // page_size
-#         return PaginatedResponse(
-#             page=page,
-#             page_size=page_size,
-#             total_items=total_items,
-#             total_pages=total_pages,
-#             data=mous
-#         )
-#     except Exception as e:
-#         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @router.get('/{organization_uuid}/mous', response_model=PaginatedResponse[BasicMouRead])
 async def get_organization_mous(
