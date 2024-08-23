@@ -1,5 +1,6 @@
 import mimetypes
-from typing import List
+import uuid
+from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -8,6 +9,39 @@ from db.models import Notification, UserRole, User, MOHStaffLevel, MouApplicatio
 import logging
 from .handlers import EmailNotificationHandler
 from core.config import settings
+
+
+async def create_and_send_notification(
+    db: AsyncSession,
+    email_handler: EmailNotificationHandler,
+    recipient_id: uuid.UUID,
+    subject: str,
+    message: str,
+    created_by: str,
+    attachment: Optional[tuple] = None
+):
+    # Create the notification
+    notification = Notification(
+        recipient_id=recipient_id,
+        subject=subject,
+        from_email=settings.MAIL_FROM,
+        message=message,
+        is_read=False,
+        created_by=created_by
+    )
+
+    db.add(notification)
+    await db.commit()
+    await db.refresh(notification)
+
+    # Load the recipient
+    recipient_query = select(User).where(User.uuid == notification.recipient_id)
+    result = await db.execute(recipient_query)
+    recipient = result.scalar_one_or_none()
+    notification.recipient = recipient
+
+    # Send the notification
+    await email_handler.send_notification(notification, attachment)
 
 
 async def notify_partner_coordinators(db: AsyncSession, application_id: str, created_by: str, email_handler: EmailNotificationHandler):
@@ -20,22 +54,14 @@ async def notify_partner_coordinators(db: AsyncSession, application_id: str, cre
     partner_coordinators = result.scalars().all()
 
     for coordinator in partner_coordinators:
-        notification = Notification(
+        await create_and_send_notification(
+            db=db,
+            email_handler=email_handler,
             recipient_id=coordinator.uuid,
             subject="New MOU Application Submitted",
-            from_email=settings.MAIL_FROM,
             message=f"A new MOU application (ID: {application_id}) has been submitted and requires your review.",
-            is_read=False,  # Set is_read here when creating the notification
-            created_by=created_by
+            created_by=created_by,
         )
-
-        # Save the notification to the database
-        db.add(notification)
-        await db.commit()
-        await db.refresh(notification)
-
-        # Send the email notification
-        await email_handler.send_notification(notification)
 
 
 async def notify_moh_staff(
@@ -54,22 +80,14 @@ async def notify_moh_staff(
     moh_staff = result.scalars().all()
 
     for staff in moh_staff:
-        notification = Notification(
+        await create_and_send_notification(
+            db=db,
+            email_handler=email_handler,
             recipient_id=staff.uuid,
             subject=subject,
-            from_email=settings.MAIL_FROM,
             message=message,
-            is_read=False,
             created_by=created_by
         )
-
-        # Save the notification to the database
-        db.add(notification)
-        await db.commit()
-        await db.refresh(notification)
-
-        # Send the email notification
-        await email_handler.send_notification(notification)
 
 
 async def notify_partner(
@@ -100,19 +118,6 @@ async def notify_partner(
         logging.error(f"Partner UUID not found for email: {partner_email}")
         return
 
-    notification = Notification(
-        recipient_id=partner_uuid,
-        from_email=settings.MAIL_FROM,
-        subject=subject,
-        message=message,
-        is_read=False,
-        created_by=created_by
-    )
-
-    db.add(notification)
-    await db.commit()
-    await db.refresh(notification)
-
     # Prepare attachment if provided
     attachment = None
     if attachment_path and attachment_filename:
@@ -122,7 +127,15 @@ async def notify_partner(
         attachment = (attachment_filename, content, content_type)
 
     # Send the email with or without attachment
-    await email_handler.send_notification(notification, attachment)
+    await create_and_send_notification(
+        db=db,
+        email_handler=email_handler,
+        recipient_id=partner_uuid,
+        subject=subject,
+        message=message,
+        created_by=created_by,
+        attachment=attachment
+    )
 
 
 async def notify_new_user(db: AsyncSession, email_handler: EmailNotificationHandler, user: User, organization: Organization):
@@ -150,20 +163,14 @@ async def notify_new_user(db: AsyncSession, email_handler: EmailNotificationHand
     The System Team
     """
 
-    notification = Notification(
+    await create_and_send_notification(
+        db=db,
+        email_handler=email_handler,
         recipient_id=user.uuid,
         subject=subject,
-        from_email=settings.MAIL_FROM,
         message=message,
-        is_read=False,
         created_by=user.email
     )
-
-    db.add(notification)
-    await db.commit()
-    await db.refresh(notification)
-
-    await email_handler.send_notification(notification)
 
 
 async def notify_new_organization(db: AsyncSession, email_handler: EmailNotificationHandler, user: User, organization: Organization):
@@ -186,17 +193,13 @@ async def notify_new_organization(db: AsyncSession, email_handler: EmailNotifica
     The System Team
     """
 
-    notification = Notification(
-        recipient_id=user.uuid,  # Using the existing user's UUID
+    await create_and_send_notification(
+        db=db,
+        email_handler=email_handler,
+        recipient_id=user.uuid,
         subject=subject,
-        from_email=settings.MAIL_FROM,
         message=message,
-        is_read=False,
         created_by=user.email
     )
 
-    db.add(notification)
-    await db.commit()
-    await db.refresh(notification)
 
-    await email_handler.send_notification(notification)

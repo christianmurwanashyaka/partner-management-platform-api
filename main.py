@@ -1,8 +1,12 @@
+import os
 from contextlib import asynccontextmanager
 import logging
+from datetime import datetime
+from logging.handlers import TimedRotatingFileHandler
+
 from sqlalchemy.engine import Engine
 from sqlalchemy import event
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import time
 from uvicorn.config import LOGGING_CONFIG
@@ -16,39 +20,48 @@ from core.config import settings
 from db.database import create_db_and_tables, async_session
 from utils.security import create_admin
 
-LOGGING_CONFIG["loggers"] = {
-    "uvicorn.error": {"level": "INFO"},
-    "uvicorn.access": {"level": "INFO"},
-}
 
-# Configure logging with timestamp for FastAPI request logs
-access_logger = logging.getLogger("uvicorn.access")
-access_logger.setLevel(logging.INFO)
+# Create logs directories if they don't exist
+api_log_dir = "logs/api"
+sql_log_dir = "logs/sql"
+os.makedirs(api_log_dir, exist_ok=True)
+os.makedirs(sql_log_dir, exist_ok=True)
 
-# Remove any default handlers to prevent duplicate logging
-for handler in access_logger.handlers[:]:
-    access_logger.removeHandler(handler)
+# Get today's date
+log_file_date = datetime.now().strftime("%d_%m_%Y")
 
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-handler = logging.StreamHandler()
-handler.setFormatter(formatter)
-access_logger.addHandler(handler)
+# Set up API log file handler with rotation at midnight
+api_log_file_path = os.path.join(api_log_dir, f"{log_file_date}.txt")
+api_file_handler = TimedRotatingFileHandler(api_log_file_path, when="midnight")
+api_file_handler.suffix = "%d_%m_%Y.txt"
+api_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
 
-logger = logging.getLogger(__name__)
-logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+# Set up SQL log file handler with rotation at midnight
+sql_log_file_path = os.path.join(sql_log_dir, f"{log_file_date}.txt")
+sql_file_handler = TimedRotatingFileHandler(sql_log_file_path, when="midnight")
+sql_file_handler.suffix = "%d_%m_%Y.txt"
+sql_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s\n\n', datefmt='%Y-%m-%d %H:%M:%S'))
 
+# Configure the API logger
+api_logger = logging.getLogger("api_logger")
+api_logger.setLevel(logging.INFO)
+api_logger.addHandler(api_file_handler)
+
+# Configure the SQL logger
+sql_logger = logging.getLogger("sqlalchemy.engine")
+sql_logger.setLevel(logging.INFO)
+sql_logger.addHandler(sql_file_handler)
 
 @event.listens_for(Engine, "before_cursor_execute")
 def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
     conn.info.setdefault('query_start_time', []).append(time.time())
 
-
 @event.listens_for(Engine, "after_cursor_execute")
 def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
     total = time.time() - conn.info['query_start_time'].pop(-1)
     if total > 0.2:
-        logger.warn("Long running query: %s" % statement)
-        logger.warn("Total time: %f", total)
+        sql_logger.warning(f"Long running query: {statement}")
+        sql_logger.warning(f"Total time: {total:.2f} seconds")
 
 
 @asynccontextmanager
@@ -69,6 +82,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Custom middleware to log each request
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+
+    # Log the request details
+    api_logger.info(
+        f"Endpoint: {request.url.path} | Method: {request.method} | Status Code: {response.status_code} | Process Time: {process_time:.2f} sec")
+
+    return response
+
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(budget_type.router, prefix='/api/v1/budget_type', tags=["Budget Type"])
