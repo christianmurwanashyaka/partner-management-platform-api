@@ -13,7 +13,8 @@ from db.models import User, UserRole, Activity, Project, MouDetail, MouApplicati
 from db.models.activity import ActivityStatus, ActivityReportingStatus
 from db.models.user_activity import UserActivity
 from schemas.project import ProjectList
-from schemas.report import ActivityResponse, PaginatedActivityResponse, ActivityAssignment, ReportProjectActivityRead
+from schemas.report import ActivityResponse, PaginatedActivityResponse, ActivityAssignment, ReportProjectActivityRead, \
+    ProjectActivitiesResponse, PaginatedProjectActivitiesResponse
 
 router = APIRouter()
 
@@ -190,7 +191,7 @@ async def assign_activities_to_data_reporter(
     return {"message": f"{updated_count} activities assigned successfully"}
 
 
-@router.get('/data-reporter/activities', response_model=PaginatedActivityResponse)
+@router.get('/data-reporter/activities', response_model=PaginatedProjectActivitiesResponse)
 async def get_data_reporter_activities(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -200,8 +201,9 @@ async def get_data_reporter_activities(
     try:
         if current_user.role != UserRole.DATA_REPORTER:
             raise HTTPException(status_code=403, detail="Access denied. User must be a data reporter.")
+
         query = (
-            select(Activity, Project.name.label('project_name'), Project.currency)
+            select(Activity, Project.name.label('project_name'), Project.uuid.label('project_uuid'), Project.currency)
             .join(Project, Activity.project_id == Project.uuid)
             .join(UserActivity, Activity.uuid == UserActivity.activity_uuid)
             .where(
@@ -209,7 +211,6 @@ async def get_data_reporter_activities(
                 (Activity.report_status == ActivityReportingStatus.READY_FOR_REPORT) &
                 (UserActivity.user_uuid == current_user.uuid)
             )
-            .options(joinedload(Activity.project))
             .order_by(Activity.created_at.desc())
         )
 
@@ -227,20 +228,32 @@ async def get_data_reporter_activities(
         )
         activities_data = result.all()
 
-        activities = []
-        for activity, project_name, currency in activities_data:
+        # Group activities by project
+        grouped_activities = {}
+        for activity, project_name, project_uuid, currency in activities_data:
             activity_dict = activity.__dict__
             activity_dict['uuid'] = str(activity_dict['uuid'])  # Convert UUID to string
-            activities.append(
+
+            if project_uuid not in grouped_activities:
+                grouped_activities[project_uuid] = {
+                    'project_name': project_name,
+                    'project_uuid': str(project_uuid),
+                    'activities': []
+                }
+
+            grouped_activities[project_uuid]['activities'].append(
                 ActivityResponse(
-                    **{**activity_dict,
-                       'project_name': project_name,
-                       'currency': currency}
+                    **{**activity_dict, 'currency': currency}
                 )
             )
 
-        return PaginatedActivityResponse(
-            items=activities,
+        items = [
+            ProjectActivitiesResponse(**project_data)
+            for project_data in grouped_activities.values()
+        ]
+
+        return PaginatedProjectActivitiesResponse(
+            items=items,
             total_items=total_items,
             page=page,
             page_size=page_size,
@@ -252,5 +265,3 @@ async def get_data_reporter_activities(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
-
-

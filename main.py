@@ -91,6 +91,7 @@ async def log_requests(request: Request, call_next):
     response = await call_next(request)
     process_time = time.time() - start_time
 
+    # print('REQ:', request.__dict__)
     # Log the request details
     api_logger.info(
         f"Endpoint: {request.url.path} | Method: {request.method} | Status Code: {response.status_code} | Process Time: {process_time:.2f} sec")
