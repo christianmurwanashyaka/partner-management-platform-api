@@ -12,14 +12,14 @@ class ActivityResponse(BaseModel):
     uuid: str
     name: str
     description: Optional[str] = None
-    start_date: date
-    end_date: date
-    implementer: str
-    implementer_unit: str
-    fiscal_year: str
-    project_name: str
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    implementer: Optional[str] = None
+    implementer_unit: Optional[str] = None
+    fiscal_year: Optional[str] = None
+    project_name: Optional[str] = None
     planned_budget: Optional[float] = None
-    currency: Currency
+    currency: Optional[Currency] = None
     status: Optional[ActivityStatus] = None
     report_status: Optional[ActivityReportingStatus] = None
 
@@ -46,3 +46,17 @@ class ReportProjectActivityRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ProjectActivitiesResponse(BaseModel):
+    project_name: str
+    project_uuid: str
+    activities: Optional[List[ActivityResponse]] = None
+
+
+class PaginatedProjectActivitiesResponse(BaseModel):
+    items: List[ProjectActivitiesResponse]
+    total_items: int
+    page: int
+    page_size: int
+    total_pages: int
