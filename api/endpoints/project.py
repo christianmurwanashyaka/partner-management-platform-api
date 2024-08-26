@@ -160,6 +160,17 @@ async def update_project(
 
         await update_related_mou_application(project, db, email_handler)
 
+        budget_type = (
+            await db.execute(select(BudgetType).where(BudgetType.uuid == project.budget_type_id))).scalars().first()
+        funding_unit = (
+            await db.execute(select(FundingUnit).where(FundingUnit.uuid == project.funding_unit_id))).scalars().first()
+        funding_source = (await db.execute(
+            select(FundingSource).where(FundingSource.uuid == project.funding_source_id))).scalars().first()
+
+        project.budget_type = budget_type
+        project.funding_unit = funding_unit
+        project.funding_source = funding_source
+
         return project
     except ValueError as ve:
         await db.rollback()
