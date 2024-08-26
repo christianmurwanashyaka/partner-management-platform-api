@@ -14,6 +14,7 @@ from db.database import get_db
 from db.models import Party, MouDetail, DocumentType, Document, User, UserRole, Project
 from notification.handlers import EmailNotificationHandler
 from schemas.mou_detail import MouDetailRead
+from schemas.project import ProjectRead
 from utils.files import handle_upload_file
 from utils.functions import parse_uuids
 
@@ -69,14 +70,24 @@ async def create_mou_detail(
         await db.commit()
         await db.refresh(new_mou_detail)
 
+        query = select(MouDetail).options(selectinload(MouDetail.project)).where(MouDetail.uuid == new_mou_detail.uuid)
+        results = await db.execute(query)
+        mou_detail_to_return = results.scalar_one_or_none()
+
+        if mou_detail_to_return is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Mou Detail not loaded")
+        if mou_detail_to_return.project is None:
+            project = await db.execute(select(Project).where(Project.uuid == mou_detail_to_return.project_id))
+            mou_detail_to_return.project = project.scalar_one_or_none()
+        if mou_detail_to_return.project is None:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Project not loaded")
+        return mou_detail_to_return
     except Exception as e:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-
-    return new_mou_detail
 
 
 @router.patch('/{uuid}', response_model=MouDetailRead, dependencies=[Depends(partner_access)])
