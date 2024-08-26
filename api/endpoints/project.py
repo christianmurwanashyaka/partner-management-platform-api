@@ -10,7 +10,8 @@ from api.dependencies.auth import get_current_user
 from api.dependencies.email_notification_handler import get_email_notification_handler
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
-from db.models import Activity, MouDetail, MouApplication, MouApplicationStatus, InputDetail
+from db.models import Activity, MouDetail, MouApplication, MouApplicationStatus, InputDetail, BudgetType, FundingUnit, \
+    FundingSource
 from db.models.organization import Organization
 from db.models.pagination import PaginatedResponse
 from db.models.project import Project, Goal
@@ -70,14 +71,29 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
 
     try:
         await db.commit()
-        await db.refresh(new_project)
+
+        # Manually query related objects using `select`
+        budget_type = (
+            await db.execute(select(BudgetType).where(BudgetType.uuid == new_project.budget_type_id))).scalars().first()
+        funding_unit = (await db.execute(
+            select(FundingUnit).where(FundingUnit.uuid == new_project.funding_unit_id))).scalars().first()
+        funding_source = (await db.execute(
+            select(FundingSource).where(FundingSource.uuid == new_project.funding_source_id))).scalars().first()
+        goals = (await db.execute(select(Goal).where(Goal.project_id == new_project.uuid))).scalars().all()
+
+        # Add related objects to the project instance
+        new_project.budget_type = budget_type
+        new_project.funding_unit = funding_unit
+        new_project.funding_source = funding_source
+        new_project.goals = goals
+
+        return new_project
     except Exception as e:
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-    return new_project
 
 
 @router.patch('/{uuid}', response_model=ProjectRead, dependencies=[Depends(partner_access)])
