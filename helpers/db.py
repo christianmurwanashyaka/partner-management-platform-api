@@ -11,7 +11,7 @@ from typing import Any, Optional
 
 from db.models import MouReview, MouApproval, MouApplication, Project, BudgetType, FundingUnit, FundingSource, Goal, \
     Activity, ActivityDomain, InputDetail, DomainIntervention, SubDomain, InputCategory, Input, Party, MouDetail, \
-    Document
+    Document, Organization
 from db.models.domain import SubDomainFunction, SubFunction
 from db.models.pagination import PaginatedResponse
 from schemas.activity import ActivityRead, ActivityDomainDetail
@@ -300,3 +300,31 @@ async def load_full_activity_entities(db: AsyncSession, activity: Activity):
 
     # Convert to response model
     return ActivityRead.from_orm(activity)
+
+
+async def load_application_related_entities(db: AsyncSession, mou_application: MouApplication):
+    print('mou_detail', mou_application.mou_detail)
+    print('mou_application documents', mou_application.documents)
+    print('mou_application_reference_number', mou_application.reference_number)
+    print('mou_application_comments', mou_application.comments)
+    print('mou_application_submitted_by', mou_application.submitted_by)
+    print('mou_application_last_decision_date', mou_application.last_decision_date)
+    print('mou_application_modification_entity', mou_application.modification_entity)
+
+    project_query = select(Project).where(Project.uuid == mou_application.mou_detail.project_id)
+    project = (await db.execute(project_query)).scalar_one_or_none()
+
+    mou_application.mou_detail.project = project
+
+    print('PROJECT: ', project)
+
+    organization_query = select(Organization).where(Organization.uuid == project.organization_id)
+    organization = (await db.execute(organization_query)).scalar_one_or_none()
+
+    print('ORGANIZATION: ', organization)
+
+    mou_application.organization = organization
+
+    print('mou_application_organization', mou_application.organization)
+
+    print('mou_application_status', mou_application.status)
