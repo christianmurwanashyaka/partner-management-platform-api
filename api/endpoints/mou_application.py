@@ -1239,19 +1239,21 @@ async def update_related_mou_application(
     if isinstance(entity, Activity):
         mou_details = entity.project.mou_details
     elif isinstance(entity, MouDetail):
-        mou_details = [entity]
+        mou_details = [entity] if entity is not None else []
     elif isinstance(entity, Project):
-        mou_details = entity.mou_details
+        mou_details = [md for md in entity.mou_details if md is not None]
     elif isinstance(entity, Party):
-        mou_details = [entity.mou_detail]
+        mou_details = [entity.mou_detail] if entity.mou_detail is not None else []
     else:
         return
 
-    if not mou_details:
+    if not mou_details or len(mou_details) == 0:
         return
 
     for mou_detail in mou_details:
         mou_application = mou_detail.mou_application
+        if not mou_application:
+            return
         if mou_application:
             mou_application.status = MouApplicationStatus.MODIFIED
             file_path, filename = await generate_mou_action_plan(mou_application, db)
