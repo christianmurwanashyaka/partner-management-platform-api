@@ -12,6 +12,7 @@ from api.dependencies.email_notification_handler import get_email_notification_h
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
 from db.models import Party, MouDetail, DocumentType, Document, User, UserRole, Project
+from helpers.db import load_mou_detail_related_entities
 from notification.handlers import EmailNotificationHandler
 from schemas.mou_detail import MouDetailRead
 from schemas.project import ProjectRead
@@ -68,9 +69,12 @@ async def create_mou_detail(
         await upload_document(strategic_plan, DocumentType.STRATEGIC_PLAN)
 
         await db.commit()
-        await db.refresh(new_mou_detail)
 
-        query = select(MouDetail).options(selectinload(MouDetail.project)).where(MouDetail.uuid == new_mou_detail.uuid)
+        query = select(MouDetail).options(
+            selectinload(MouDetail.project),
+            selectinload(MouDetail.parties),
+            selectinload(MouDetail.documents),
+        ).where(MouDetail.uuid == new_mou_detail.uuid)
         results = await db.execute(query)
         mou_detail_to_return = results.scalar_one_or_none()
 
@@ -156,10 +160,11 @@ async def update_mou_detail(
         await upload_document(strategic_plan, DocumentType.STRATEGIC_PLAN)
 
         await db.commit()
-        await db.refresh(mou_detail)
 
         await update_related_mou_application(mou_detail, db, email_handler)
-        return mou_detail
+
+        mou_detail_to_return = await load_mou_detail_related_entities(db, mou_detail)
+        return mou_detail_to_return
     except Exception as e:
         await db.rollback()
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -196,7 +201,11 @@ async def get_mou_details(request: Request, db: AsyncSession = Depends(get_db), 
 @router.get('/{uuid}', response_model=MouDetailRead)
 async def get_mou_detail(uuid: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        query = select(MouDetail).options(selectinload(MouDetail.project)).filter(MouDetail.uuid == uuid)
+        query = select(MouDetail).options(
+            selectinload(MouDetail.project),
+            selectinload(MouDetail.documents),
+            selectinload(MouDetail.parties)
+        ).filter(MouDetail.uuid == uuid)
         mou_detail = await db.execute(query)
         mou_detail = mou_detail.scalar_one_or_none()
 
