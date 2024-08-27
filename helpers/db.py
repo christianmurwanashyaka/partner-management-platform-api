@@ -9,8 +9,12 @@ from sqlalchemy.sql import Selectable
 from sqlalchemy.orm import selectinload, aliased, contains_eager, outerjoin
 from typing import Any, Optional
 
-from db.models import MouReview, MouApproval, MouApplication
+from db.models import MouReview, MouApproval, MouApplication, Project, BudgetType, FundingUnit, FundingSource, Goal, \
+    Activity, ActivityDomain, InputDetail, DomainIntervention, SubDomain, InputCategory, Input
+from db.models.domain import SubDomainFunction, SubFunction
 from db.models.pagination import PaginatedResponse
+from schemas.activity import ActivityRead, ActivityDomainDetail
+from schemas.input_detail import InputDetailRead
 
 
 async def get_first_item(db: AsyncSession, query: Selectable):
@@ -159,3 +163,124 @@ async def get_most_recent_decision_time(db: AsyncSession, mou_application_id: uu
 
     # If there are both reviews and approvals, return the most recent of the two
     return max(last_review_time, last_approval_time)
+
+
+async def load_project_related_objects(db: AsyncSession, project: Project, load_goals: bool = False) -> None:
+    budget_type = (
+        await db.execute(select(BudgetType).where(BudgetType.uuid == project.budget_type_id))
+    ).scalars().first()
+
+    funding_unit = (
+        await db.execute(select(FundingUnit).where(FundingUnit.uuid == project.funding_unit_id))
+    ).scalars().first()
+
+    funding_source = (
+        await db.execute(select(FundingSource).where(FundingSource.uuid == project.funding_source_id))
+    ).scalars().first()
+
+    project.budget_type = budget_type
+    project.funding_unit = funding_unit
+    project.funding_source = funding_source
+
+    if load_goals:
+        goals = (
+            await db.execute(select(Goal).where(Goal.project_id == project.uuid))
+        ).scalars().all()
+        project.goals = goals
+
+
+async def load_activity_related_entities(db: AsyncSession, activity: Activity):
+    domains_query = select(ActivityDomain).where(
+        ActivityDomain.activity_id == activity.uuid
+    ).options(
+        selectinload(ActivityDomain.domain_intervention),
+        selectinload(ActivityDomain.sub_domain),
+        selectinload(ActivityDomain.sub_domain_function),
+        selectinload(ActivityDomain.sub_function)
+    )
+    activity.domains = (await db.execute(domains_query)).scalars().all()
+
+    input_details_query = select(InputDetail).where(
+        InputDetail.activity_id == activity.uuid
+    ).options(
+        selectinload(InputDetail.input_category),
+        selectinload(InputDetail.input)
+    )
+    activity.input_details = (await db.execute(input_details_query)).scalars().all()
+
+    return ActivityRead.from_orm(activity)
+
+
+async def load_full_activity_entities(db: AsyncSession, activity: Activity):
+    # Query Activity Domains with related entities
+    domains_query = (
+        select(ActivityDomain)
+        .where(ActivityDomain.activity_id == activity.uuid)
+        .options(
+            selectinload(ActivityDomain.domain_intervention),
+            selectinload(ActivityDomain.sub_domain),
+            selectinload(ActivityDomain.sub_domain_function),
+            selectinload(ActivityDomain.sub_function)
+        )
+    )
+    activity.domains = (await db.execute(domains_query)).scalars().all()
+
+    # For each domain, ensure that related entities are loaded using select queries
+    for activity_domain in activity.domains:
+        if activity_domain.domain_intervention_id:
+            activity_domain.domain_intervention = (
+                await db.execute(
+                    select(DomainIntervention).where(DomainIntervention.uuid == activity_domain.domain_intervention_id)
+                )
+            ).scalar_one_or_none()
+
+        if activity_domain.sub_domain_id:
+            activity_domain.sub_domain = (
+                await db.execute(
+                    select(SubDomain).where(SubDomain.uuid == activity_domain.sub_domain_id)
+                )
+            ).scalar_one_or_none()
+
+        if activity_domain.sub_domain_function_id:
+            activity_domain.sub_domain_function = (
+                await db.execute(
+                    select(SubDomainFunction).where(SubDomainFunction.uuid == activity_domain.sub_domain_function_id)
+                )
+            ).scalar_one_or_none()
+
+        if activity_domain.sub_function_id:
+            activity_domain.sub_function = (
+                await db.execute(
+                    select(SubFunction).where(SubFunction.uuid == activity_domain.sub_function_id)
+                )
+            ).scalar_one_or_none()
+
+    # Query Input Details with related entities
+    input_details_query = (
+        select(InputDetail)
+        .where(InputDetail.activity_id == activity.uuid)
+        .options(
+            selectinload(InputDetail.input_category),
+            selectinload(InputDetail.input)
+        )
+    )
+    activity.input_details = (await db.execute(input_details_query)).scalars().all()
+
+    # For each input detail, ensure that related entities are loaded using select queries
+    for input_detail in activity.input_details:
+        if input_detail.input_category_id:
+            input_detail.input_category = (
+                await db.execute(
+                    select(InputCategory).where(InputCategory.uuid == input_detail.input_category_id)
+                )
+            ).scalar_one_or_none()
+
+        if input_detail.input_id:
+            input_detail.input = (
+                await db.execute(
+                    select(Input).where(Input.uuid == input_detail.input_id)
+                )
+            ).scalar_one_or_none()
+
+    # Convert to response model
+    return ActivityRead.from_orm(activity)

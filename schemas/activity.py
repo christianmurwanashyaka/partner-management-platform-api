@@ -71,6 +71,21 @@ class ActivityCreate(BaseModel):
     class Config:
         from_attributes = True
 
+class ActivityUpdate(BaseModel):
+    project_id: Optional[uuid.UUID] = None
+    description: Optional[str] = None
+    name: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    implementer: Optional[str] = None
+    implementer_unit: Optional[str] = None
+    fiscal_year: Optional[str] = None
+    domains: Optional[List[ActivityDomain]] = None
+    input_details: Optional[List[InputDetailCreate]] = None
+
+    class Config:
+        from_attributes = True
+
 
 class ActivityList(BaseModel):
     uuid: uuid.UUID
@@ -93,30 +108,17 @@ class ActivityRead(BaseModel):
     project_id: uuid.UUID
     name: str
     description: Optional[str] = None
-    implementer: str
-    implementer_unit: str
-    fiscal_year: str
-    start_date: date
-    end_date: date
-    domains: List[ActivityDomainDetail]
-    input_details: List[InputDetailRead]
-    created_at: datetime
-    created_by: str
-    status: Optional[ActivityStatus] = None
-    report_status: Optional[ActivityReportingStatus] = None
-
-    class Config:
-        from_attributes = True
-
-
-class ActivityUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
     implementer: Optional[str] = None
     implementer_unit: Optional[str] = None
     fiscal_year: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    domains: Optional[List[ActivityDomainDetail]] = None
+    input_details: Optional[List[InputDetailRead]] = None
+    created_at: Optional[datetime] = None
+    created_by: Optional[str] = None
+    status: Optional[ActivityStatus] = None
+    report_status: Optional[ActivityReportingStatus] = None
 
     class Config:
         from_attributes = True

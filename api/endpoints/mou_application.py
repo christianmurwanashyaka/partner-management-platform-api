@@ -1247,6 +1247,9 @@ async def update_related_mou_application(
     else:
         return
 
+    if not mou_details:
+        return
+
     for mou_detail in mou_details:
         mou_application = mou_detail.mou_application
         if mou_application:

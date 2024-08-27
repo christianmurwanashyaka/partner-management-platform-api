@@ -16,7 +16,7 @@ from db.models.organization import Organization
 from db.models.pagination import PaginatedResponse
 from db.models.project import Project, Goal
 from db.models.user import User, UserRole
-from helpers.db import get_all_items, get_items_by_criteria
+from helpers.db import get_all_items, get_items_by_criteria, load_project_related_objects
 from notification.handlers import EmailNotificationHandler
 from schemas.activity import ActivityList
 from schemas.project import ProjectRead, ProjectCreate, ProjectUpdate, ProjectList
@@ -72,20 +72,7 @@ async def create_project(request: Request, project: ProjectCreate, db: AsyncSess
     try:
         await db.commit()
 
-        # Manually query related objects using `select`
-        budget_type = (
-            await db.execute(select(BudgetType).where(BudgetType.uuid == new_project.budget_type_id))).scalars().first()
-        funding_unit = (await db.execute(
-            select(FundingUnit).where(FundingUnit.uuid == new_project.funding_unit_id))).scalars().first()
-        funding_source = (await db.execute(
-            select(FundingSource).where(FundingSource.uuid == new_project.funding_source_id))).scalars().first()
-        goals = (await db.execute(select(Goal).where(Goal.project_id == new_project.uuid))).scalars().all()
-
-        # Add related objects to the project instance
-        new_project.budget_type = budget_type
-        new_project.funding_unit = funding_unit
-        new_project.funding_source = funding_source
-        new_project.goals = goals
+        await load_project_related_objects(db, new_project, load_goals=True)
 
         return new_project
     except Exception as e:
@@ -160,16 +147,7 @@ async def update_project(
 
         await update_related_mou_application(project, db, email_handler)
 
-        budget_type = (
-            await db.execute(select(BudgetType).where(BudgetType.uuid == project.budget_type_id))).scalars().first()
-        funding_unit = (
-            await db.execute(select(FundingUnit).where(FundingUnit.uuid == project.funding_unit_id))).scalars().first()
-        funding_source = (await db.execute(
-            select(FundingSource).where(FundingSource.uuid == project.funding_source_id))).scalars().first()
-
-        project.budget_type = budget_type
-        project.funding_unit = funding_unit
-        project.funding_source = funding_source
+        await load_project_related_objects(db, project)
 
         return project
     except ValueError as ve:
@@ -286,8 +264,10 @@ async def get_project(
 
         # Access control based on user role
         if current_user.role in ['admin', 'moh_staff']:
+            await load_project_related_objects(db, project, load_goals=True)
             return project
         elif current_user.role == 'partner' and project.organization.created_by == current_user.email:
+            await load_project_related_objects(db, project, load_goals=True)
             return project
         else:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this project')
