@@ -11,11 +11,12 @@ from api.dependencies.auth import get_current_user
 from api.dependencies.email_notification_handler import get_email_notification_handler
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
-from db.models import OperationalZone, ActivityDomain
+from db.models import OperationalZone, ActivityDomain, Project
 from db.models.activity import Activity
 from db.models.input_detail import InputDetail
 from db.models.pagination import PaginatedResponse
 from db.models.user import User, UserRole
+from helpers.db import load_activity_related_entities, load_full_activity_entities
 from notification.handlers import EmailNotificationHandler
 from schemas.activity import ActivityRead, ActivityCreate, ActivityList, OperationalZoneRead, ActivityDomainDetail, \
     ActivityUpdate, OperationalZoneUpdate, ActivityDomainUpdate
@@ -79,6 +80,7 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
     new_activity = Activity(
         project_id=activity.project_id,
         name=activity.name,
+        description=activity.description,
         implementer=activity.implementer,
         implementer_unit=activity.implementer_unit,
         fiscal_year=activity.fiscal_year,
@@ -89,8 +91,6 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
     db.add(new_activity)
     await db.commit()
     await db.refresh(new_activity)
-
-    print(f"New activity created with UUID: {new_activity.uuid}")
 
     try:
         # Handle domains
@@ -104,8 +104,6 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
                 sub_function_id=domain.sub_function_id,
                 created_by=user
             )
-            print(
-                f"Creating activity domain with UUID: {new_activity_domain.uuid}, activity_id: {new_activity_domain.activity_id}")
             activity_domains.append(new_activity_domain)
         db.add_all(activity_domains)
 
@@ -121,17 +119,14 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
                 province=input_detail_data.province,
                 created_by=user
             )
-            print(
-                f"Creating input detail with UUID: {new_input_detail.uuid}, activity_id: {new_input_detail.activity_id}")
             input_details.append(new_input_detail)
         db.add_all(input_details)
 
         await db.commit()
 
-        # Additional logging to verify related entities
-        print(f"Activity domains added: {activity_domains}")
-        print(f"Input details added: {input_details}")
+        new_activity_read = await load_activity_related_entities(db, new_activity)
 
+        return new_activity_read
     except Exception as e:
         await db.rollback()
         raise HTTPException(
@@ -139,13 +134,11 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
             detail=f"Failed to create related entities: {str(e)}"
         )
 
-    return new_activity
-
 
 @router.patch('/{uuid}', response_model=ActivityRead, dependencies=[Depends(partner_access)])
 async def update_activity(
         uuid: uuid.UUID,
-        activity_update: ActivityCreate,
+        activity_update: ActivityUpdate,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user),
         email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)
@@ -209,9 +202,24 @@ async def update_activity(
             db.add_all(new_input_details)
 
         await db.commit()
-        await db.refresh(activity)
-        await update_related_mou_application(activity, db, email_handler)
-        return activity
+
+        activity_to_update = (await db.execute(
+            select(Activity)
+            .options(joinedload(Activity.project))
+            .where(Activity.uuid == uuid)
+        )).scalars().first()
+
+        if activity_to_update:
+            project = await db.execute(
+                select(Project).where(Project.uuid == activity_to_update.project_id)
+            )
+            activity_to_update.project = project.scalars().first()
+
+        await update_related_mou_application(activity_to_update, db, email_handler)
+
+        activity_to_return = await load_full_activity_entities(db, activity_to_update)
+
+        return activity_to_return
 
     except Exception as e:
         await db.rollback()
@@ -351,13 +359,15 @@ async def get_activity(
         if not activity:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Activity not found')
 
+        activity_to_return = await load_activity_related_entities(db, activity)
+
         # Access control based on user role
         if current_user.role in ['admin', 'moh_staff']:
-            return activity
+            return activity_to_return
         elif current_user.role == 'partner' and activity.created_by == current_user.email:
-            return activity
+            return activity_to_return
         elif current_user.role in [UserRole.DATA_MANAGER, UserRole.DATA_REPORTER] and activity.project.organization_id == current_user.organization_uuid:
-            return activity
+            return activity_to_return
         else:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to access this activity')
 
