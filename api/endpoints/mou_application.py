@@ -84,11 +84,21 @@ async def create_mou_application(
         await db.commit()
         await db.refresh(excel_document)
 
-        # Generate draft MOU document
-        organization = new_mou_application.mou_detail.project.organization
-        template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+        mou_detail_query = select(MouDetail).where(MouDetail.uuid == new_mou_application.mou_detail_id)
+        mou_detail = (await db.execute(mou_detail_query)).scalar_one_or_none()
 
-        docx_buffer, pdf_buffer = await generate_mou_doc(new_mou_application, template_path)
+        project_query = select(Project).options(
+            selectinload(Project.organization),
+        ).where(Project.uuid == mou_detail.project_id)
+        project = (await db.execute(project_query)).scalar_one_or_none()
+
+        organization_type_query = select(OrganizationType).where(OrganizationType.uuid == project.organization.organization_type_id)
+        organization_type = (await db.execute(organization_type_query)).scalar_one_or_none()
+
+        # Generate draft MOU document
+        template_path = 'mou_templates/mou_international.docx' if organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+
+        docx_buffer, pdf_buffer = await generate_mou_doc(new_mou_application, template_path, db)
 
         draft_docx_filename = f"DRAFT_MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
         draft_docx_filepath, draft_docx_filename = await save_mou_doc_to_disk(docx_buffer, draft_docx_filename, 'docx')
@@ -125,7 +135,7 @@ async def create_mou_application(
         await db.refresh(draft_pdf_document)
 
         await notify_partner_coordinators(db, str(new_mou_application.id), created_by=user, email_handler=email_handler)
-
+        print('RUNNING UP THE HILL')
         return new_mou_application
 
     except Exception as e:
@@ -855,7 +865,7 @@ async def add_approval(
                 organization = mou_application.mou_detail.project.organization
                 template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
 
-                docx_buffer, pdf_buffer = await generate_mou_doc(mou_application, template_path)
+                docx_buffer, pdf_buffer = await generate_mou_doc(mou_application, template_path, db)
 
                 docx_filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
                 docx_filepath, docx_filename = await save_mou_doc_to_disk(docx_buffer, docx_filename, 'docx')

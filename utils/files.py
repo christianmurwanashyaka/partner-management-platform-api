@@ -19,7 +19,8 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
 from db.database import get_db
-from db.models import Activity, ActivityDomain, InputDetail, MouApplication, MouDetail, Project
+from db.models import Activity, ActivityDomain, InputDetail, MouApplication, MouDetail, Project, OrganizationType, \
+    Party, Goal
 
 
 async def handle_upload_file(file: UploadFile):
@@ -39,11 +40,25 @@ async def handle_upload_file(file: UploadFile):
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
 
-async def generate_mou_doc(mou_application, template_path):
+async def generate_mou_doc(mou_application, template_path, db: AsyncSession = Depends(get_db)):
     doc = Document(template_path)
 
-    organization = mou_application.mou_detail.project.organization
-    project = mou_application.mou_detail.project
+    mou_detail_query = select(MouDetail).where(MouDetail.uuid == mou_application.mou_detail_id)
+    mou_detail = (await db.execute(mou_detail_query)).scalar_one_or_none()
+
+    parties_query = select(Party).where(Party.mou_detail_id == mou_detail.uuid)
+    parties = (await db.execute(parties_query)).scalars().all()
+
+    project_query = select(Project).where(Project.uuid == mou_detail.project_id).options(selectinload(Project.organization))
+    project = (await db.execute(project_query)).scalar_one_or_none()
+
+    activities_query = select(Activity).where(Activity.project_id == project.uuid).options(selectinload(Activity.domains))
+    activities = (await db.execute(activities_query)).scalars().all()
+
+    goals_query = select(Goal).where(Goal.project_id == project.uuid)
+    goals = (await db.execute(goals_query)).scalars().all()
+
+    organization = project.organization
     current_date = datetime.now().strftime("%d/%m/%Y")
 
     def get_attr_or_none(obj, attr):
@@ -68,7 +83,7 @@ async def generate_mou_doc(mou_application, template_path):
     responsibilities_str = ""
     party_signatory = ""
     party_position = "CEO"  # Default value
-    for party in mou_application.mou_detail.parties:
+    for party in parties:
         if party.organization_id:
             responsibilities_str = "\n".join(
                 [f"{idx + 1}. {responsibility}" for idx, responsibility in enumerate(party.responsibilities)])
@@ -166,7 +181,7 @@ async def generate_mou_doc(mou_application, template_path):
     for paragraph in doc.paragraphs:
         if '{PROJECT_GOALS}' in paragraph.text:
             paragraph.text = paragraph.text.replace('{PROJECT_GOALS}', '')
-            for goal in project.goals:
+            for goal in goals:
                 goal_paragraph = paragraph.insert_paragraph_before(goal.name)
                 goal_paragraph.style = doc.styles['List Number']
                 set_font(goal_paragraph)
@@ -230,28 +245,48 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
     for cell in ws[1]:
         cell.font = bold_font
     query = select(MouApplication).options(
-        selectinload(MouApplication.mou_detail).selectinload(MouDetail.project).selectinload(Project.organization)
+        selectinload(MouApplication.mou_detail)
     ).where(MouApplication.uuid == mou_application.uuid)
 
     result = await db.execute(query)
     mou_application = result.scalar_one_or_none()
 
+    mou_detail_query = select(MouDetail).where(MouDetail.uuid == mou_application.mou_detail_id)
+    mou_detail = (await db.execute(mou_detail_query)).scalar_one_or_none()
+
+    project_query = select(Project).options(
+        selectinload(Project.funding_source),
+        selectinload(Project.funding_unit),
+        selectinload(Project.organization),
+        selectinload(Project.budget_type),
+    ).where(Project.uuid == mou_detail.project_id)
+    project = (await db.execute(project_query)).scalar_one_or_none()
+
     if not mou_application:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MouApplication not found')
 
-    project = mou_application.mou_detail.project
     funding_source = project.other_funding_source if project.other_funding_source else (project.funding_source.name if project.funding_source else "N/A")
     organization = project.organization
+    organization_type_query = select(OrganizationType).where(OrganizationType.uuid == organization.organization_type_id)
+    organization_type = (await db.execute(organization_type_query)).scalar_one_or_none()
 
     # Fetching activities and their related data
     project_activities_query = select(Activity).where(Activity.project_id == project.uuid)
     activities = (await db.execute(project_activities_query)).scalars().all()
 
     for activity in activities:
-        activity_domains_query = select(ActivityDomain).where(ActivityDomain.activity_id == activity.uuid)
+        activity_domains_query = select(ActivityDomain).where(ActivityDomain.activity_id == activity.uuid).options(
+            selectinload(ActivityDomain.domain_intervention),
+            selectinload(ActivityDomain.sub_domain),
+            selectinload(ActivityDomain.sub_domain_function),
+            selectinload(ActivityDomain.sub_function),
+        )
         activity_domains = (await db.execute(activity_domains_query)).scalars().all()
 
-        input_details_query = select(InputDetail).where(InputDetail.activity_id == activity.uuid)
+        input_details_query = select(InputDetail).where(InputDetail.activity_id == activity.uuid).options(
+            selectinload(InputDetail.input_category),
+            selectinload(InputDetail.input),
+        )
         input_details = (await db.execute(input_details_query)).scalars().all()
 
         for input_detail in input_details:
@@ -268,7 +303,7 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
 
                 data = [
                     organization.name,
-                    organization.organization_type.name,
+                    organization_type.name,
                     project.name,
                     domain_name,
                     sub_domain_name,
