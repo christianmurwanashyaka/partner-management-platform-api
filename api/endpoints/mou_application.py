@@ -19,17 +19,19 @@ from db.models import User, MouDetail, MouApplication, Document, DocumentType, U
 from db.models.domain import SubDomainFunction, SubFunction
 from db.models.mou_approval_or_review import MouApprovalOrReview, MouApprovalOrReviewDecision
 from db.models.mou_review import MouReviewDecision
-from helpers.db import get_first_item, get_most_recent_decision_time
+from helpers.db import get_first_item, get_most_recent_decision_time, load_application_related_entities
 from notification.handlers import EmailNotificationHandler
 from notification.services import notify_partner_coordinators, notify_moh_staff, notify_partner
 from schemas.activity import ActivityDomainDetail
 from schemas.approval_and_review import CombinedApprovalOrReviewRead
 from schemas.comment import MouCommentRead
+from schemas.document import DocumentRead
 from schemas.mou_application import MouApplicationRead, MouApplicationCreate, SimpleOrganizationRead, \
     MouApplicationOrganizationRead, MouApplicationBasicCommentRead
 from schemas.mou_approval import MouApprovalRead, MouApprovalCreate
 from schemas.mou_approval_or_review import MouApprovalOrReviewRead, MouApprovalOrReviewCreate, \
     UserProfileForApprovalOrReview, MouApprovalOrReviewCommentRead
+from schemas.mou_detail import MouDetailRead
 from schemas.mou_review import MouReviewRead, MouReviewCreate
 from schemas.user import UserProfile
 from utils.files import generate_mou_action_plan, generate_mou_doc, save_mou_doc_to_disk
@@ -84,11 +86,21 @@ async def create_mou_application(
         await db.commit()
         await db.refresh(excel_document)
 
-        # Generate draft MOU document
-        organization = new_mou_application.mou_detail.project.organization
-        template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+        mou_detail_query = select(MouDetail).where(MouDetail.uuid == new_mou_application.mou_detail_id)
+        mou_detail = (await db.execute(mou_detail_query)).scalar_one_or_none()
 
-        docx_buffer, pdf_buffer = await generate_mou_doc(new_mou_application, template_path)
+        project_query = select(Project).options(
+            selectinload(Project.organization),
+        ).where(Project.uuid == mou_detail.project_id)
+        project = (await db.execute(project_query)).scalar_one_or_none()
+
+        organization_type_query = select(OrganizationType).where(OrganizationType.uuid == project.organization.organization_type_id)
+        organization_type = (await db.execute(organization_type_query)).scalar_one_or_none()
+
+        # Generate draft MOU document
+        template_path = 'mou_templates/mou_international.docx' if organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+
+        docx_buffer, pdf_buffer = await generate_mou_doc(new_mou_application, template_path, db)
 
         draft_docx_filename = f"DRAFT_MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
         draft_docx_filepath, draft_docx_filename = await save_mou_doc_to_disk(docx_buffer, draft_docx_filename, 'docx')
@@ -125,8 +137,49 @@ async def create_mou_application(
         await db.refresh(draft_pdf_document)
 
         await notify_partner_coordinators(db, str(new_mou_application.id), created_by=user, email_handler=email_handler)
+        new_mou_application.mou_detail = mou_detail
 
-        return new_mou_application
+        parties_query = select(Party).where(Party.mou_detail_id == mou_detail.uuid)
+        parties = (await db.execute(parties_query)).scalars().all()
+
+        project_query = select(Project).where(Project.uuid == mou_detail.project_id).options(
+            selectinload(Project.organization))
+        project = (await db.execute(project_query)).scalar_one_or_none()
+
+        documents_query = select(Document).where(Document.mou_detail_id == mou_detail.uuid)
+        documents = (await db.execute(documents_query)).scalars().all()
+
+        if project is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Project not found')
+
+        mou_detail_read = MouDetailRead(
+            uuid=mou_detail.uuid,
+            project=project,
+            parties=parties,
+            documents=documents  # Add documents if needed
+        )
+
+        organization = SimpleOrganizationRead(
+            uuid=project.organization.uuid,
+            name=project.organization.name,
+            email=project.organization.email,
+            website=project.organization.website,
+            organization_type=organization_type.name  # Extract the name attribute
+        )
+
+        response_data = MouApplicationRead(
+            uuid=new_mou_application.uuid,
+            status=new_mou_application.status,
+            mou_detail=mou_detail_read,
+            documents=[DocumentRead.from_orm(doc) for doc in new_mou_application.documents],
+            comments=[],
+            reference_number=new_mou_application.reference_number,
+            submitted_by=new_mou_application.submitted_by,
+            last_decision_date=new_mou_application.last_decision_date,
+            modification_entity=new_mou_application.modification_entity,
+            organization=organization
+        )
+        return response_data
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -855,7 +908,7 @@ async def add_approval(
                 organization = mou_application.mou_detail.project.organization
                 template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
 
-                docx_buffer, pdf_buffer = await generate_mou_doc(mou_application, template_path)
+                docx_buffer, pdf_buffer = await generate_mou_doc(mou_application, template_path, db)
 
                 docx_filename = f"MOU_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
                 docx_filepath, docx_filename = await save_mou_doc_to_disk(docx_buffer, docx_filename, 'docx')
@@ -1239,16 +1292,21 @@ async def update_related_mou_application(
     if isinstance(entity, Activity):
         mou_details = entity.project.mou_details
     elif isinstance(entity, MouDetail):
-        mou_details = [entity]
+        mou_details = [entity] if entity is not None else []
     elif isinstance(entity, Project):
-        mou_details = entity.mou_details
+        mou_details = [md for md in entity.mou_details if md is not None]
     elif isinstance(entity, Party):
-        mou_details = [entity.mou_detail]
+        mou_details = [entity.mou_detail] if entity.mou_detail is not None else []
     else:
+        return
+
+    if not mou_details or len(mou_details) == 0:
         return
 
     for mou_detail in mou_details:
         mou_application = mou_detail.mou_application
+        if not mou_application:
+            return
         if mou_application:
             mou_application.status = MouApplicationStatus.MODIFIED
             file_path, filename = await generate_mou_action_plan(mou_application, db)
