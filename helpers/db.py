@@ -10,11 +10,13 @@ from sqlalchemy.orm import selectinload, aliased, contains_eager, outerjoin
 from typing import Any, Optional
 
 from db.models import MouReview, MouApproval, MouApplication, Project, BudgetType, FundingUnit, FundingSource, Goal, \
-    Activity, ActivityDomain, InputDetail, DomainIntervention, SubDomain, InputCategory, Input
+    Activity, ActivityDomain, InputDetail, DomainIntervention, SubDomain, InputCategory, Input, Party, MouDetail, \
+    Document
 from db.models.domain import SubDomainFunction, SubFunction
 from db.models.pagination import PaginatedResponse
 from schemas.activity import ActivityRead, ActivityDomainDetail
 from schemas.input_detail import InputDetailRead
+from schemas.mou_detail import MouDetailRead
 
 
 async def get_first_item(db: AsyncSession, query: Selectable):
@@ -209,6 +211,20 @@ async def load_activity_related_entities(db: AsyncSession, activity: Activity):
     activity.input_details = (await db.execute(input_details_query)).scalars().all()
 
     return ActivityRead.from_orm(activity)
+
+async def load_mou_detail_related_entities(db: AsyncSession, mou_detail: MouDetail):
+    parties_query = select(Party).where(
+        Party.mou_detail_id == mou_detail.uuid
+    )
+    mou_detail.parties = (await db.execute(parties_query)).scalars().all()
+
+    project_query = select(Project).where(Project.uuid == mou_detail.project_id)
+    mou_detail.project = (await db.execute(project_query)).scalar_one_or_none()
+
+    documents_query = select(Document).where(Document.mou_detail_id == mou_detail.uuid)
+    mou_detail.documents = (await db.execute(documents_query)).scalars().all()
+
+    return MouDetailRead.from_orm(mou_detail)
 
 
 async def load_full_activity_entities(db: AsyncSession, activity: Activity):
