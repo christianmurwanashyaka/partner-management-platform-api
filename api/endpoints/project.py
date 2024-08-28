@@ -11,7 +11,7 @@ from api.dependencies.email_notification_handler import get_email_notification_h
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
 from db.models import Activity, MouDetail, MouApplication, MouApplicationStatus, InputDetail, BudgetType, FundingUnit, \
-    FundingSource
+    FundingSource, ActivityDomain
 from db.models.organization import Organization
 from db.models.pagination import PaginatedResponse
 from db.models.project import Project, Goal
@@ -223,7 +223,11 @@ async def get_project_activities(
 
     query = query.options(
         selectinload(Activity.input_details).selectinload(InputDetail.input_category),
-        selectinload(Activity.input_details).selectinload(InputDetail.input)
+        selectinload(Activity.input_details).selectinload(InputDetail.input),
+        selectinload(Activity.domains).selectinload(ActivityDomain.domain_intervention),
+        selectinload(Activity.domains).selectinload(ActivityDomain.sub_domain),
+        selectinload(Activity.domains).selectinload(ActivityDomain.sub_domain_function),
+        selectinload(Activity.domains).selectinload(ActivityDomain.sub_function),
     )
     activities = await db.execute(query)
     activities_list = activities.scalars().all()
