@@ -572,9 +572,6 @@ async def get_mou_application(
         mou_detail_documents_query = select(Document).where(Document.mou_detail_id == mou_application.mou_detail_id)
         mou_detail_documents = (await db.execute(mou_detail_documents_query)).scalars().all()
 
-        comments_query = select(MouComment).where(MouComment.mou_application_id == mou_application.uuid).options(selectinload(MouComment.user))
-        comments = (await db.execute(comments_query)).scalars().all()
-
         all_documents = organization_documents + application_documents + mou_detail_documents
         formatted_documents = [
             {
@@ -585,6 +582,11 @@ async def get_mou_application(
             }
             for doc in all_documents
         ]
+
+
+        comments_query = select(MouComment).where(MouComment.mou_application_id == mou_application.uuid).options(selectinload(MouComment.user))
+        comments = (await db.execute(comments_query)).scalars().all()
+
         formatted_comments = [
             {
                 'comment': comment.content,
