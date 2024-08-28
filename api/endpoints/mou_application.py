@@ -572,6 +572,9 @@ async def get_mou_application(
         mou_detail_documents_query = select(Document).where(Document.mou_detail_id == mou_application.mou_detail_id)
         mou_detail_documents = (await db.execute(mou_detail_documents_query)).scalars().all()
 
+        comments_query = select(MouComment).where(MouComment.mou_application_id == mou_application.uuid).options(selectinload(MouComment.user))
+        comments = (await db.execute(comments_query)).scalars().all()
+
         all_documents = organization_documents + application_documents + mou_detail_documents
         formatted_documents = [
             {
@@ -581,6 +584,21 @@ async def get_mou_application(
                     doc.document_type)
             }
             for doc in all_documents
+        ]
+        formatted_comments = [
+            {
+                'comment': comment.content,
+                'created_at': comment.created_at,
+                'user': {
+                    "first_name": comment.user.first_name,
+                    "last_name": comment.user.last_name,
+                    "uuid": comment.user.uuid,
+                    "email": comment.user.email,
+                    "role": comment.user.role,
+                    "level": comment.user.level,
+                }
+            }
+            for comment in comments
         ]
 
         if current_user.role in ['admin', 'moh_staff'] or (current_user.role == 'partner' and mou_application.created_by == current_user.email):
@@ -595,6 +613,7 @@ async def get_mou_application(
                 "status": mou_application.status,
                 "documents": formatted_documents,
                 "partner_template_comment": mou_application.partner_template_comment,
+                'comments': formatted_comments,
             }
         else:
             raise HTTPException(
