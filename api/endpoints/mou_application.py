@@ -563,11 +563,14 @@ async def get_mou_application(
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
-        organization_documents = mou_application.mou_detail.project.organization.documents
+        organization_documents_query = select(Document).where(Document.organization_id == mou_application.mou_detail.project.organization.uuid)
+        organization_documents = (await db.execute(organization_documents_query)).scalars().all()
 
-        application_documents = mou_application.documents
+        application_documents_query = select(Document).where(Document.mou_application_id == mou_application.uuid)
+        application_documents = (await db.execute(application_documents_query)).scalars().all()
 
-        mou_detail_documents = mou_application.mou_detail.documents
+        mou_detail_documents_query = select(Document).where(Document.mou_detail_id == mou_application.mou_detail_id)
+        mou_detail_documents = (await db.execute(mou_detail_documents_query)).scalars().all()
 
         all_documents = organization_documents + application_documents + mou_detail_documents
         formatted_documents = [
