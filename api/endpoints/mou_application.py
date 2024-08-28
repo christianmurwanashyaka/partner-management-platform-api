@@ -1377,8 +1377,15 @@ async def update_related_mou_application(
 
     for mou_detail in mou_details:
         mou_application = mou_detail.mou_application
+
         if not mou_application:
-            return
+            application_query = (select(MouApplication)
+            .where(MouApplication.mou_detail_id == mou_detail.uuid)
+            .order_by(MouApplication.created_at.desc())
+            .limit(1)
+            )
+            mou_application = (await db.execute(application_query)).scalar_one_or_none()
+
         if mou_application:
             mou_application.status = MouApplicationStatus.MODIFIED
             file_path, filename = await generate_mou_action_plan(mou_application, db)
