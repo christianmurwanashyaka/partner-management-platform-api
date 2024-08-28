@@ -77,7 +77,7 @@ class MouApplicationProjectRead(BaseModel):
     reference_number: str
     project_name: str
     status: MouApplicationStatus
-    comment: Optional[str] = None
+    comments: Optional[List[dict]] = None
     project_id: uuid.UUID
     mou_detail_id: uuid.UUID
     party_ids: List[uuid.UUID]
