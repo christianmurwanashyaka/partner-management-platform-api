@@ -12,11 +12,12 @@ from api.dependencies.access_control import partner_access, admin_access, moh_st
 from api.dependencies.auth import get_current_user
 from api.dependencies.email_notification_handler import get_email_notification_handler
 from db.database import get_db
-from db.models import Project, MouApplication, MouDetail, Mou, MouComment, Party, OrganizationType
+from db.models import Project, MouApplication, MouDetail, Mou, MouComment, Party, OrganizationType, MOHStaffLevel
 from db.models.organization import Organization
 from db.models.document import Document, DocumentType
 from db.models.pagination import PaginatedResponse
 from db.models.user import User, UserRole
+from helpers.comments import filter_comments_for_partner
 from helpers.exceptions import handle_integrity_error
 from notification.handlers import EmailNotificationHandler
 from notification.services import notify_new_user, notify_new_organization
@@ -341,13 +342,27 @@ async def get_organization_mou_applications(
                 Project.name.label('project_name'),
                 MouDetail.uuid.label('mou_detail_id'),
                 func.array_agg(Party.uuid.distinct()).label('party_ids'),
-                func.coalesce(func.nullif(func.string_agg(MouComment.content, '; '), ''), None).label('comment')
+                func.json_agg(
+                    func.json_build_object(
+                        'comment', MouComment.content,
+                        'created_at', MouComment.created_at,
+                        'user', func.json_build_object(
+                            'first_name', User.first_name,
+                            'last_name', User.last_name,
+                            'uuid', User.uuid,
+                            'email', User.email,
+                            'role', User.role,
+                            'level', User.level
+                        )
+                    )
+                ).filter(MouComment.content.isnot(None)).label('comments')  # Corrected aggregation
             )
             .join(MouApplication.mou_detail)
             .join(MouDetail.project)
             .join(Project.organization)
             .outerjoin(MouDetail.parties)
             .outerjoin(MouApplication.comments)
+            .outerjoin(User, MouComment.user_id == User.uuid)  # Join User table
             .filter(Organization.uuid == uuid)
             .group_by(MouApplication.uuid, MouApplication.created_at, MouApplication.status,
                       MouApplication.modification_entity, Project.uuid, Project.name, MouDetail.uuid)
@@ -368,20 +383,23 @@ async def get_organization_mou_applications(
         result = await db.execute(query)
         mou_applications = result.all()
 
-        data = [
-            MouApplicationProjectRead(
-                uuid=app.uuid,
-                reference_number=f"{app.created_at:%Y%m%d}-{app.uuid.int % 1000000:06d}",
-                project_name=app.project_name,
-                status=app.status,
-                comment=app.comment,
-                project_id=app.project_id,
-                mou_detail_id=app.mou_detail_id,
-                party_ids=app.party_ids,
-                modification_entities=app.modification_entity
-            )
-            for app in mou_applications
-        ]
+        filtered_applications = []
+        if current_user.role == UserRole.PARTNER:
+            filtered_applications = await filter_comments_for_partner(db, mou_applications)
+        else:
+            for app in mou_applications:
+                filtered_app = MouApplicationProjectRead(
+                    uuid=app.uuid,
+                    reference_number=f"{app.created_at:%Y%m%d}-{app.uuid.int % 1000000:06d}",
+                    project_name=app.project_name,
+                    status=app.status,
+                    comments=app.comments,
+                    project_id=app.project_id,
+                    mou_detail_id=app.mou_detail_id,
+                    party_ids=app.party_ids,
+                    modification_entities=app.modification_entity
+                )
+                filtered_applications.append(filtered_app)
 
         total_pages = (total_items + page_size - 1) // page_size
 
@@ -390,7 +408,7 @@ async def get_organization_mou_applications(
             page_size=page_size,
             total_items=total_items,
             total_pages=total_pages,
-            data=data
+            data=filtered_applications
         )
 
     except Exception as e:

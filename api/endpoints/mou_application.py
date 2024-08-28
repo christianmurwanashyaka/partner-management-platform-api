@@ -563,11 +563,14 @@ async def get_mou_application(
         if not mou_application:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU application not found')
 
-        organization_documents = mou_application.mou_detail.project.organization.documents
+        organization_documents_query = select(Document).where(Document.organization_id == mou_application.mou_detail.project.organization.uuid)
+        organization_documents = (await db.execute(organization_documents_query)).scalars().all()
 
-        application_documents = mou_application.documents
+        application_documents_query = select(Document).where(Document.mou_application_id == mou_application.uuid)
+        application_documents = (await db.execute(application_documents_query)).scalars().all()
 
-        mou_detail_documents = mou_application.mou_detail.documents
+        mou_detail_documents_query = select(Document).where(Document.mou_detail_id == mou_application.mou_detail_id)
+        mou_detail_documents = (await db.execute(mou_detail_documents_query)).scalars().all()
 
         all_documents = organization_documents + application_documents + mou_detail_documents
         formatted_documents = [
@@ -578,6 +581,26 @@ async def get_mou_application(
                     doc.document_type)
             }
             for doc in all_documents
+        ]
+
+
+        comments_query = select(MouComment).where(MouComment.mou_application_id == mou_application.uuid).options(selectinload(MouComment.user))
+        comments = (await db.execute(comments_query)).scalars().all()
+
+        formatted_comments = [
+            {
+                'comment': comment.content,
+                'created_at': comment.created_at,
+                'user': {
+                    "first_name": comment.user.first_name,
+                    "last_name": comment.user.last_name,
+                    "uuid": comment.user.uuid,
+                    "email": comment.user.email,
+                    "role": comment.user.role,
+                    "level": comment.user.level,
+                }
+            }
+            for comment in comments
         ]
 
         if current_user.role in ['admin', 'moh_staff'] or (current_user.role == 'partner' and mou_application.created_by == current_user.email):
@@ -592,6 +615,7 @@ async def get_mou_application(
                 "status": mou_application.status,
                 "documents": formatted_documents,
                 "partner_template_comment": mou_application.partner_template_comment,
+                'comments': formatted_comments,
             }
         else:
             raise HTTPException(
@@ -639,7 +663,55 @@ async def start_review(
             message=f"An MOU application (ID: {mou_application.id}) has been set to 'Under Review' and requires your attention."
         )
 
-        return mou_application
+        mou_detail_query = select(MouDetail).where(MouDetail.uuid == mou_application.mou_detail_id)
+        mou_detail = (await db.execute(mou_detail_query)).scalar_one_or_none()
+
+        project_query = select(Project).options(selectinload(Project.organization)).where(
+            Project.uuid == mou_detail.project_id)
+        project = (await db.execute(project_query)).scalar_one_or_none()
+
+        project_organization = project.organization
+
+        organization_type_id = project_organization.organization_type_id
+
+        organization_type_query = select(OrganizationType).where(
+            OrganizationType.uuid == organization_type_id)
+        organization_type = (await db.execute(organization_type_query)).scalar_one_or_none()
+
+        parties_query = select(Party).where(Party.mou_detail_id == mou_detail.uuid)
+        parties = (await db.execute(parties_query)).scalars().all()
+
+        documents_query = select(Document).where(Document.mou_detail_id == mou_detail.uuid)
+        documents = (await db.execute(documents_query)).scalars().all()
+
+        mou_detail_read = MouDetailRead(
+            uuid=mou_detail.uuid,
+            project=project,
+            parties=parties,
+            documents=documents
+        )
+
+        organization = SimpleOrganizationRead(
+            uuid=project.organization.uuid,
+            name=project.organization.name,
+            email=project.organization.email,
+            website=project.organization.website,
+            organization_type=organization_type.name
+        )
+
+        response_data = MouApplicationRead(
+            uuid=mou_application.uuid,
+            status=mou_application.status,
+            mou_detail=mou_detail_read,
+            comments=[],
+            reference_number=mou_application.reference_number,
+            submitted_by=mou_application.submitted_by,
+            last_decision_date=mou_application.last_decision_date,
+            modification_entity=mou_application.modification_entity,
+            organization=organization
+        )
+
+        return response_data
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -1305,8 +1377,15 @@ async def update_related_mou_application(
 
     for mou_detail in mou_details:
         mou_application = mou_detail.mou_application
+
         if not mou_application:
-            return
+            application_query = (select(MouApplication)
+            .where(MouApplication.mou_detail_id == mou_detail.uuid)
+            .order_by(MouApplication.created_at.desc())
+            .limit(1)
+            )
+            mou_application = (await db.execute(application_query)).scalar_one_or_none()
+
         if mou_application:
             mou_application.status = MouApplicationStatus.MODIFIED
             file_path, filename = await generate_mou_action_plan(mou_application, db)
