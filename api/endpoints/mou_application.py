@@ -639,7 +639,55 @@ async def start_review(
             message=f"An MOU application (ID: {mou_application.id}) has been set to 'Under Review' and requires your attention."
         )
 
-        return mou_application
+        mou_detail_query = select(MouDetail).where(MouDetail.uuid == mou_application.mou_detail_id)
+        mou_detail = (await db.execute(mou_detail_query)).scalar_one_or_none()
+
+        project_query = select(Project).options(selectinload(Project.organization)).where(
+            Project.uuid == mou_detail.project_id)
+        project = (await db.execute(project_query)).scalar_one_or_none()
+
+        project_organization = project.organization
+
+        organization_type_id = project_organization.organization_type_id
+
+        organization_type_query = select(OrganizationType).where(
+            OrganizationType.uuid == organization_type_id)
+        organization_type = (await db.execute(organization_type_query)).scalar_one_or_none()
+
+        parties_query = select(Party).where(Party.mou_detail_id == mou_detail.uuid)
+        parties = (await db.execute(parties_query)).scalars().all()
+
+        documents_query = select(Document).where(Document.mou_detail_id == mou_detail.uuid)
+        documents = (await db.execute(documents_query)).scalars().all()
+
+        mou_detail_read = MouDetailRead(
+            uuid=mou_detail.uuid,
+            project=project,
+            parties=parties,
+            documents=documents
+        )
+
+        organization = SimpleOrganizationRead(
+            uuid=project.organization.uuid,
+            name=project.organization.name,
+            email=project.organization.email,
+            website=project.organization.website,
+            organization_type=organization_type.name
+        )
+
+        response_data = MouApplicationRead(
+            uuid=mou_application.uuid,
+            status=mou_application.status,
+            mou_detail=mou_detail_read,
+            comments=[],
+            reference_number=mou_application.reference_number,
+            submitted_by=mou_application.submitted_by,
+            last_decision_date=mou_application.last_decision_date,
+            modification_entity=mou_application.modification_entity,
+            organization=organization
+        )
+
+        return response_data
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
