@@ -1361,14 +1361,18 @@ async def update_related_mou_application(
         db: AsyncSession = Depends(get_db),
         email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)
 ):
+    print("***********************************************************************************")
     if isinstance(entity, Activity):
-        mou_details = entity.project.mou_details
+        mou_details_query = select(MouDetail).where(MouDetail.project_id == entity.project.uuid)
+        mou_details = (await db.execute(mou_details_query)).scalars().all()
     elif isinstance(entity, MouDetail):
         mou_details = [entity] if entity is not None else []
     elif isinstance(entity, Project):
-        mou_details = [md for md in entity.mou_details if md is not None]
+        mou_details_query = select(MouDetail).where(MouDetail.project_id == entity.uuid)
+        mou_details = (await db.execute(mou_details_query)).scalars().all()
     elif isinstance(entity, Party):
-        mou_details = [entity.mou_detail] if entity.mou_detail is not None else []
+        mou_detail_query = select(MouDetail).where(MouDetail.uuid == entity.mou_detail_id)
+        mou_details = (await db.execute(mou_detail_query)).scalars().all()
     else:
         return
 
@@ -1388,6 +1392,7 @@ async def update_related_mou_application(
 
         if mou_application:
             mou_application.status = MouApplicationStatus.MODIFIED
+            print('JUST MODIFIED THE STATUS OF THE MOU APPLICATION')
             file_path, filename = await generate_mou_action_plan(mou_application, db)
 
             existing_documents = await db.execute(
@@ -1416,6 +1421,7 @@ async def update_related_mou_application(
 
             mou_application.last_updated_at = datetime.utcnow()
             mou_application.last_updated_by = mou_application.created_by
+            print('ABOUT TO NOTIFY MOH STAFF')
             await notify_moh_staff(
                 db,
                 email_handler,
