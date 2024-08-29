@@ -20,7 +20,7 @@ from sqlmodel import select
 
 from db.database import get_db
 from db.models import Activity, ActivityDomain, InputDetail, MouApplication, MouDetail, Project, OrganizationType, \
-    Party, Goal
+    Party, Goal, FundingSource, FundingUnit, Organization, BudgetType
 
 
 async def handle_upload_file(file: UploadFile):
@@ -265,10 +265,23 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
     if not mou_application:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MouApplication not found')
 
-    funding_source = project.other_funding_source if project.other_funding_source else (project.funding_source.name if project.funding_source else "N/A")
-    organization = project.organization
+    funding_source_query = select(FundingSource).where(FundingSource.uuid == project.funding_source_id)
+    funding_source_result = (await db.execute(funding_source_query)).scalar_one_or_none()
+    funding_source = funding_source_result if funding_source_result else (project.other_funding_source if project.other_funding_source else "N/A")
+
+    budget_type_query = select(BudgetType).where(BudgetType.uuid == project.budget_type_id)
+    budget_type = (await db.execute(budget_type_query)).scalar_one_or_none()
+
+    funding_unit_query = select(FundingUnit).where(FundingUnit.uuid == project.funding_unit_id)
+    funding_unit_result = (await db.execute(funding_unit_query)).scalar_one_or_none()
+    funding_unit = funding_unit_result if funding_unit_result else 'N/A'
+
+    organization_query = select(Organization).where(Organization.uuid == project.organization_id)
+    organization = (await db.execute(organization_query)).scalar_one_or_none()
+
     organization_type_query = select(OrganizationType).where(OrganizationType.uuid == organization.organization_type_id)
     organization_type = (await db.execute(organization_type_query)).scalar_one_or_none()
+
 
     # Fetching activities and their related data
     project_activities_query = select(Activity).where(Activity.project_id == project.uuid)
@@ -290,16 +303,18 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
         input_details = (await db.execute(input_details_query)).scalars().all()
 
         for input_detail in input_details:
-            location = f"{input_detail.district}, {input_detail.province}"
-            input_category = input_detail.input_category.name
-            input_name = input_detail.input.name
-            budget = input_detail.budget
+            district = getattr(input_detail, 'district', 'N/A')
+            province = getattr(input_detail, 'province', 'N/A')
+            location = f"{district}, {province}"
+            input_category = getattr(getattr(input_detail, 'input_category', None), 'name', 'N/A')
+            input_name = getattr(getattr(input_detail, 'input', None), 'name', 'N/A')
+            budget = getattr(input_detail, 'budget', 'N/A')
 
             for domain in activity_domains:
-                domain_name = domain.domain_intervention.name
-                sub_domain_name = domain.sub_domain.name
-                sub_domain_function_name = domain.sub_domain_function.name if domain.sub_domain_function else "N/A"
-                sub_function_name = domain.sub_function.name if domain.sub_function else "N/A"
+                domain_name = getattr(getattr(domain, 'domain_intervention', None), 'name', 'N/A')
+                sub_domain_name = getattr(getattr(domain, 'sub_domain', None), 'name', 'N/A')
+                sub_domain_function_name = getattr(getattr(domain, 'sub_domain_function', None), 'name', 'N/A')
+                sub_function_name = getattr(getattr(domain, 'sub_function', None), 'name', 'N/A')
 
                 data = [
                     organization.name,
@@ -310,15 +325,15 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
                     sub_domain_function_name,
                     sub_function_name,
                     location,
-                    funding_source,
-                    project.funding_unit.name,
+                    funding_source.name,
+                    funding_unit.name,
                     activity.name,
                     activity.description,
                     input_category,
                     input_name,
                     budget,
                     project.currency,
-                    project.budget_type.name,
+                    budget_type.name,
                     activity.implementer,
                     activity.fiscal_year
                 ]
@@ -330,7 +345,6 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f'{timestamp}_action_plan_{mou_application.created_by}.xlsx'
         file_path = os.path.join(action_plans_directory, filename)
-
         wb.save(file_path)
         return file_path, filename
     except Exception as e:

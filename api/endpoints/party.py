@@ -7,9 +7,11 @@ from sqlalchemy.future import select
 
 from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
+from api.dependencies.email_notification_handler import get_email_notification_handler
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
 from db.models import Party, User, UserRole
+from notification.handlers import EmailNotificationHandler
 from schemas.party import PartyRead, PartyCreate, PartyUpdate
 
 router = APIRouter()
@@ -75,7 +77,7 @@ async def get_user_parties(request: Request, db: AsyncSession = Depends(get_db))
 
 
 @router.patch('/{uuid}', response_model=PartyRead, dependencies=[Depends(partner_access)])
-async def update_party(uuid: uuid.UUID, party_update: PartyUpdate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def update_party(uuid: uuid.UUID, party_update: PartyUpdate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user), email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)):
     try:
         query = select(Party).where(Party.uuid == uuid)
         result = await db.execute(query)
@@ -92,7 +94,7 @@ async def update_party(uuid: uuid.UUID, party_update: PartyUpdate, db: AsyncSess
 
         await db.commit()
         await db.refresh(party)
-        await update_related_mou_application(party, db)
+        await update_related_mou_application(party, db, email_handler)
 
         return party
     except Exception as e:
