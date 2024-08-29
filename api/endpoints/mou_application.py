@@ -975,10 +975,19 @@ async def add_approval(
         # Handle decisions in the approval stage
         if approval.decision == MouApprovalDecision.APPROVE:
             if current_user.level == MOHStaffLevel.MINISTER:
-                mou_application.status = MouApplicationStatus.APPROVED
-                mou_application.next_level = None
-                organization = mou_application.mou_detail.project.organization
-                template_path = 'mou_templates/mou_international.docx' if organization.organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
+                mou_detail_query = select(MouDetail).where(MouDetail.uuid == mou_application.mou_detail_id)
+                mou_detail = (await db.execute(mou_detail_query)).scalar_one_or_none()
+
+                project_query = select(Project).options(
+                    selectinload(Project.organization),
+                ).where(Project.uuid == mou_detail.project_id)
+                project = (await db.execute(project_query)).scalar_one_or_none()
+
+                organization_type_query = select(OrganizationType).where(
+                    OrganizationType.uuid == project.organization.organization_type_id)
+                organization_type = (await db.execute(organization_type_query)).scalar_one_or_none()
+
+                template_path = 'mou_templates/mou_international.docx' if organization_type.name.lower() == 'international ngo' else 'mou_templates/mou_local.docx'
 
                 docx_buffer, pdf_buffer = await generate_mou_doc(mou_application, template_path, db)
 
@@ -1014,6 +1023,9 @@ async def add_approval(
                 await db.refresh(new_docx_document)
                 await db.refresh(new_pdf_document)
 
+                mou_application.status = MouApplicationStatus.APPROVED
+                mou_application.next_level = None
+
                 new_mou = Mou(
                     mou_application_id=uuid,
                     mou_detail_id=mou_application.mou_detail_id,
@@ -1024,8 +1036,6 @@ async def add_approval(
                 db.add(new_mou)
                 await db.commit()
                 await db.refresh(new_mou)
-
-                print('MOU APPLICATION UUID', mou_application.uuid)
 
                 await notify_partner(
                     db,
@@ -1176,7 +1186,6 @@ async def get_mou_application_reviews(
 
             current_reviewer_read = None
             if current_reviewer:
-                print('CURRENT REVIEWER :::::::::::::', current_reviewer)
                 current_reviewer_read = UserProfileForApprovalOrReview(
                     uuid=current_reviewer.uuid,
                     first_name=current_reviewer.first_name,
@@ -1361,7 +1370,6 @@ async def update_related_mou_application(
         db: AsyncSession = Depends(get_db),
         email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)
 ):
-    print("***********************************************************************************")
     if isinstance(entity, Activity):
         mou_details_query = select(MouDetail).where(MouDetail.project_id == entity.project.uuid)
         mou_details = (await db.execute(mou_details_query)).scalars().all()
