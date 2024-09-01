@@ -11,8 +11,8 @@ from api.dependencies.auth import get_current_user
 from api.dependencies.email_notification_handler import get_email_notification_handler
 from api.endpoints.mou_application import update_related_mou_application
 from db.database import get_db
-from db.models import Party, MouDetail, DocumentType, Document, User, UserRole, Project
-from helpers.db import load_mou_detail_related_entities
+from db.models import Party, MouDetail, DocumentType, Document, User, UserRole, Project, FundingUnit
+from helpers.db import load_mou_detail_related_entities, load_project_related_objects
 from notification.handlers import EmailNotificationHandler
 from schemas.mou_detail import MouDetailRead
 from schemas.project import ProjectRead
@@ -211,6 +211,8 @@ async def get_mou_detail(uuid: uuid.UUID, db: AsyncSession = Depends(get_db), cu
 
         if not mou_detail:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU detail not found')
+
+        await load_project_related_objects(db, mou_detail.project)
 
         if current_user.role in ['admin', 'moh_staff']:
             return mou_detail
