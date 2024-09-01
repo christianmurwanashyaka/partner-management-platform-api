@@ -32,6 +32,9 @@ class OrganizationRead(BaseModel):
     organization_type: Optional[OrganizationTypeRead] = None
     documents: List[DocumentRead] = []
 
+    class Config:
+        from_attributes = True
+
 
 class OrganizationUpdate(BaseModel):
     name: Optional[str] = None
