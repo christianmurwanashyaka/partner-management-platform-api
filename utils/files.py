@@ -1,6 +1,8 @@
 import os
 from datetime import datetime
 from io import BytesIO
+import platform
+import subprocess
 from tempfile import NamedTemporaryFile
 
 from docx2pdf import convert
@@ -17,6 +19,8 @@ from openpyxl.styles import Font
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
+import pypandoc
+
 
 from db.database import get_db
 from db.models import Activity, ActivityDomain, InputDetail, MouApplication, MouDetail, Project, OrganizationType, \
@@ -197,20 +201,49 @@ async def generate_mou_doc(mou_application, template_path, db: AsyncSession = De
         tmp_docx_path = tmp_docx.name
 
     try:
-        with NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_pdf:
-            tmp_pdf_path = tmp_pdf.name
+        # Use different methods based on the OS
+        if platform.system() == 'Linux':
+            # Use LibreOffice or pypandoc for Linux
+            with NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_pdf:
+                tmp_pdf_path = tmp_pdf.name
 
-        convert(tmp_docx_path, tmp_pdf_path)
+            try:
+                convert_docx_to_pdf_linux(tmp_docx_path, tmp_pdf_path)
+                with open(tmp_pdf_path, 'rb') as pdf_file:
+                    pdf_buffer.write(pdf_file.read())
+                pdf_buffer.seek(0)
 
-        with open(tmp_pdf_path, 'rb') as pdf_file:
-            pdf_buffer.write(pdf_file.read())
-        pdf_buffer.seek(0)
+            finally:
+                os.unlink(tmp_pdf_path)
+
+        else:
+            # Use docx2pdf for Windows and Mac
+            with NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_pdf:
+                tmp_pdf_path = tmp_pdf.name
+
+            convert(tmp_docx_path, tmp_pdf_path)
+
+            with open(tmp_pdf_path, 'rb') as pdf_file:
+                pdf_buffer.write(pdf_file.read())
+            pdf_buffer.seek(0)
 
     finally:
         os.unlink(tmp_docx_path)
-        os.unlink(tmp_pdf_path)
 
     return docx_buffer, pdf_buffer
+
+
+def convert_docx_to_pdf_linux(docx_path: str, pdf_path: str):
+    """
+    Convert DOCX to PDF using LibreOffice or pypandoc on Linux.
+    """
+    try:
+        # Prefer LibreOffice
+        subprocess.run(['libreoffice', '--headless', '--convert-to', 'pdf', docx_path, '--outdir', os.path.dirname(pdf_path)], check=True)
+    except Exception as e:
+        print(f"LibreOffice conversion failed: {e}. Falling back to pypandoc.")
+        # Fallback to pypandoc
+        pypandoc.convert_file(docx_path, 'pdf', outputfile=pdf_path)
 
 
 async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(get_db)):
