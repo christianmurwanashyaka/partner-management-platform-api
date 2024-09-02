@@ -27,6 +27,7 @@ from schemas.mou import MouRead, BasicMouReadApplication, BasicMouRead
 from schemas.mou_application import MouApplicationProjectRead
 from schemas.mou_detail import MouDetailRead
 from schemas.organization import OrganizationRead
+from schemas.organization_type import OrganizationTypeRead
 from schemas.party import PartyRead
 from schemas.user import OrganizationUserCreate, OrganizationUser
 from helpers.db import check_if_exists, get_all_items, get_first_item
@@ -271,10 +272,25 @@ async def get_organization(uuid: str, db: AsyncSession = Depends(get_db), curren
     if not organization:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Organization not found')
 
+    organization_type_query = select(OrganizationType).where(OrganizationType.uuid == organization.organization_type_id)
+    organization_type = (await db.execute(organization_type_query)).scalar_one_or_none()
+
+    organization_response = OrganizationRead.from_orm(organization)
+
+    if organization_type:
+        organization_response.organization_type = OrganizationTypeRead.from_orm(organization_type)
+    else:
+        organization_response.organization_type = None
+
+    documents_query = select(Document).where(Document.organization_id == organization.uuid)
+    documents = (await db.execute(documents_query)).scalars().all()
+
+    organization_response.documents = [DocumentRead.from_orm(doc) for doc in documents]
+
     if current_user.role in ['admin', 'moh_staff']:
-        return organization
+        return organization_response
     elif current_user.role == 'partner' and organization.created_by == current_user.email:
-        return organization
+        return organization_response
     else:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
 
