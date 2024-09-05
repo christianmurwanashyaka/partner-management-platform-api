@@ -20,6 +20,8 @@ from db.models.domain import SubDomainFunction, SubFunction
 from db.models.mou_approval_or_review import MouApprovalOrReview, MouApprovalOrReviewDecision
 from db.models.mou_review import MouReviewDecision
 from helpers.db import get_first_item, get_most_recent_decision_time, load_application_related_entities
+from helpers.mou_application import PaginationParams, MouApplicationFilters, build_base_query, apply_filters, \
+    count_total_items, apply_sorting, prepare_response, AllApplicationsFilters, SortingParams, get_filters
 from notification.handlers import EmailNotificationHandler
 from notification.services import notify_partner_coordinators, notify_moh_staff, notify_partner
 from schemas.activity import ActivityDomainDetail
@@ -297,53 +299,32 @@ async def get_level_specific_mou_applications(
 
 @router.get('/', response_model=PaginatedResponse[MouApplicationOrganizationRead])
 async def get_mou_applications(
-        page: int = 1,
-        page_size: int = 100,
-        organization_uuids: Optional[List[str]] = Query(None),
-        funding_source_uuids: Optional[List[str]] = Query(None),
-        funding_unit_uuids: Optional[List[str]] = Query(None),
-        budget_type_uuids: Optional[List[str]] = Query(None),
-        domain_intervention_uuids: Optional[List[str]] = Query(None),
-        sub_domain_uuids: Optional[List[str]] = Query(None),
-        sub_domain_function_uuids: Optional[List[str]] = Query(None),
-        sub_function_uuids: Optional[List[str]] = Query(None),
-        input_category_uuids: Optional[List[str]] = Query(None),
-        input_uuids: Optional[List[str]] = Query(None),
-        districts: Optional[List[str]] = Query(None),
-        provinces: Optional[List[str]] = Query(None),
-        application_status: Optional[List[str]] = Query(None),
-        next_levels: Optional[List[str]] = Query(None),
-        start_date: Optional[datetime] = Query(
-            default=datetime(1970, 1, 1),
-            description="Filter applications created on or after this date"),
-        end_date: Optional[datetime] = Query(
-            default=datetime(9999, 12, 31),
-            description="Filter applications created on or before this date"),
-        sort_by: Optional[str] = Query(None, description="Field to sort by: status, budget, created_at"),
-        order: Optional[str] = Query("desc", description="Sort order: asc or desc"),
-        search: Optional[str] = Query(None, description="Search query for names"),
+        pagination: PaginationParams = Depends(PaginationParams),
+        filter_params: AllApplicationsFilters = Depends(get_filters),
+        sorting: SortingParams = Depends(SortingParams),
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
     try:
         # Parse URL-encoded, comma-separated UUIDs and strings
-        organization_uuids = parse_uuid_list(organization_uuids)
-        funding_source_uuids = parse_uuid_list(funding_source_uuids)
-        funding_unit_uuids = parse_uuid_list(funding_unit_uuids)
-        budget_type_uuids = parse_uuid_list(budget_type_uuids)
-        domain_intervention_uuids = parse_uuid_list(domain_intervention_uuids)
-        sub_domain_uuids = parse_uuid_list(sub_domain_uuids)
-        sub_domain_function_uuids = parse_uuid_list(sub_domain_function_uuids)
-        sub_function_uuids = parse_uuid_list(sub_function_uuids)
-        input_category_uuids = parse_uuid_list(input_category_uuids)
-        input_uuids = parse_uuid_list(input_uuids)
-        districts = parse_string_list(districts)
-        provinces = parse_string_list(provinces)
-        application_status = parse_string_list(application_status)
-        next_levels = parse_string_list(next_levels)
+        organization_uuids = parse_uuid_list(filter_params.organization_uuids)
+        funding_source_uuids = parse_uuid_list(filter_params.funding_source_uuids)
+        funding_unit_uuids = parse_uuid_list(filter_params.funding_unit_uuids)
+        budget_type_uuids = parse_uuid_list(filter_params.budget_type_uuids)
+        domain_intervention_uuids = parse_uuid_list(filter_params.domain_intervention_uuids)
+        sub_domain_uuids = parse_uuid_list(filter_params.sub_domain_uuids)
+        sub_domain_function_uuids = parse_uuid_list(filter_params.sub_domain_function_uuids)
+        sub_function_uuids = parse_uuid_list(filter_params.sub_function_uuids)
+        input_category_uuids = parse_uuid_list(filter_params.input_category_uuids)
+        input_uuids = parse_uuid_list(filter_params.input_uuids)
+        districts = parse_string_list(filter_params.districts)
+        provinces = parse_string_list(filter_params.provinces)
+        application_status = parse_string_list(filter_params.application_status)
+        print('APPLICATION STATUS: ', application_status)
+        next_levels = parse_string_list(filter_params.next_levels)
 
         # Determine if we need to calculate the budget
-        calculate_budget = sort_by == 'budget'
+        calculate_budget = sorting.sort_by == 'budget'
 
         # Base query
         base_query = select(
@@ -410,8 +391,11 @@ async def get_mou_applications(
 
         # Apply filters
         filters = []
+
         if current_user.role == 'partner':
             filters.append(MouApplication.created_by == current_user.email)
+
+        # Apply list filters properly
         if organization_uuids:
             filters.append(Project.organization_id.in_(organization_uuids))
         if funding_source_uuids:
@@ -436,6 +420,8 @@ async def get_mou_applications(
             filters.append(InputDetail.district.in_(districts))
         if provinces:
             filters.append(InputDetail.province.in_(provinces))
+        if application_status:
+            filters.append(MouApplication.status.in_(application_status))  # Correctly handle the list
         if next_levels:
             next_level_filter = []
             for level in next_levels:
@@ -459,32 +445,32 @@ async def get_mou_applications(
                 else:
                     next_level_filter.append(MouApplication.next_level == level)
             filters.append(or_(*next_level_filter))
-        if application_status:
-            filters.append(MouApplication.status.in_(application_status))
 
         # Add date range filter
-        filters.append(MouApplication.created_at >= start_date)
-        filters.append(MouApplication.created_at <= end_date)
+        filters.append(MouApplication.created_at >= filter_params.start_date)
+        filters.append(MouApplication.created_at <= filter_params.end_date)
 
         # Add search functionality
-        if search:
+        if filter_params.search:
             search_filter = or_(
-                Organization.name.ilike(f"%{search}%"),
-                Activity.name.ilike(f"%{search}%"),
-                Input.name.ilike(f"%{search}%"),
-                InputCategory.name.ilike(f"%{search}%"),
-                DomainIntervention.name.ilike(f"%{search}%"),
-                SubDomain.name.ilike(f"%{search}%"),
-                SubDomainFunction.name.ilike(f"%{search}%"),
-                SubFunction.name.ilike(f"%{search}%"),
-                FundingSource.name.ilike(f"%{search}%"),
-                FundingUnit.name.ilike(f"%{search}%"),
-                BudgetType.name.ilike(f"%{search}%")
+                Organization.name.ilike(f"%{filter_params.search}%"),
+                Activity.name.ilike(f"%{filter_params.search}%"),
+                Input.name.ilike(f"%{filter_params.search}%"),
+                InputCategory.name.ilike(f"%{filter_params.search}%"),
+                DomainIntervention.name.ilike(f"%{filter_params.search}%"),
+                SubDomain.name.ilike(f"%{filter_params.search}%"),
+                SubDomainFunction.name.ilike(f"%{filter_params.search}%"),
+                SubFunction.name.ilike(f"%{filter_params.search}%"),
+                FundingSource.name.ilike(f"%{filter_params.search}%"),
+                FundingUnit.name.ilike(f"%{filter_params.search}%"),
+                BudgetType.name.ilike(f"%{filter_params.search}%")
             )
             filters.append(search_filter)
 
+        print('FILTERS: ', filters)
         # Apply all filters to the base query
         for filter_condition in filters:
+            print('FILTER CONDITION: ', filter_condition)
             base_query = base_query.filter(filter_condition)
 
         count_query = select(func.count(distinct(MouApplication.uuid))).select_from(
@@ -493,13 +479,13 @@ async def get_mou_applications(
         total_items = (await db.execute(count_query)).scalar_one()
 
         # Apply sorting
-        if sort_by:
-            if sort_by == 'status':
-                order_by = MouApplication.status.desc() if order == 'desc' else MouApplication.status.asc()
-            elif sort_by == 'budget':
-                order_by = budget_subquery.c.total_budget.desc() if order == 'desc' else budget_subquery.c.total_budget.asc()
-            elif sort_by == 'created_at':
-                order_by = MouApplication.created_at.desc() if order == 'desc' else MouApplication.created_at.asc()
+        if sorting.sort_by:
+            if sorting.sort_by == 'status':
+                order_by = MouApplication.status.desc() if sorting.order == 'desc' else MouApplication.status.asc()
+            elif sorting.sort_by == 'budget':
+                order_by = budget_subquery.c.total_budget.desc() if sorting.order == 'desc' else budget_subquery.c.total_budget.asc()
+            elif sorting.sort_by == 'created_at':
+                order_by = MouApplication.created_at.desc() if sorting.order == 'desc' else MouApplication.created_at.asc()
             else:
                 order_by = MouApplication.created_at.desc()  # Default sorting
         else:
@@ -509,8 +495,8 @@ async def get_mou_applications(
 
         paginated_query = (
             base_query
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+            .offset((pagination.page - 1) * pagination.page_size)
+            .limit(pagination.page_size)
         )
 
         mou_applications = (await db.execute(paginated_query)).all()
@@ -531,10 +517,10 @@ async def get_mou_applications(
         ]
 
         return PaginatedResponse(
-            page=page,
-            page_size=page_size,
+            page=pagination.page,
+            page_size=pagination.page_size,
             total_items=total_items,
-            total_pages=(total_items + page_size - 1) // page_size,
+            total_pages=(total_items + pagination.page_size - 1) // pagination.page_size,
             data=response_data
         )
 
