@@ -126,4 +126,4 @@ app.include_router(report.router, prefix='/api/v1/report', tags=["Report"])
 app.include_router(report_activity.router, prefix='/api/v1/report_activity', tags=['Report Activity'])
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=7001, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=7001)
