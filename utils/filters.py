@@ -8,9 +8,15 @@ def parse_uuid_list(value: Optional[Union[str, List[str]]]) -> Optional[List[UUI
     if value is None:
         return None
 
+    # If it's already a list, process each item
     if isinstance(value, list):
-        # If it's already a list, process each item
-        decoded_values = [unquote(item) for item in value]
+        # Check if the list contains a single string that needs to be split
+        if len(value) == 1 and isinstance(value[0], str):
+            # Split the single string by commas
+            decoded_values = unquote(value[0]).split(',')
+        else:
+            # If the list is not just a single comma-separated string, process normally
+            decoded_values = [unquote(item) for item in value]
     else:
         # If it's a string, first URL-decode, then split by comma
         decoded_values = unquote(value).split(',')
@@ -30,8 +36,15 @@ def parse_uuid_list(value: Optional[Union[str, List[str]]]) -> Optional[List[UUI
 def parse_string_list(value: Optional[Union[str, List[str]]]) -> Optional[List[str]]:
     if value is None:
         return None
+    print('VALUE: ', value)
+    # If it's already a list, process each item
     if isinstance(value, list):
-        # If it's already a list, return it after stripping whitespace and decoding
+        # Check if the list contains a single string that needs to be split
+        if len(value) == 1 and isinstance(value[0], str):
+            # Split the single string by commas
+            return [item.strip() for item in unquote(value[0]).split(',') if item.strip()]
+        # Otherwise, process the list normally
         return [unquote(item.strip()) for item in value if item.strip()]
+
     # If it's a string, URL-decode and split by comma
     return [item.strip() for item in unquote(value).split(',') if item.strip()]

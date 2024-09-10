@@ -9,9 +9,10 @@ from sqlalchemy.orm import joinedload, selectinload
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, UserRole, Activity, Project, MouDetail, MouApplication, MouApplicationStatus, InputDetail, \
-    PaginatedResponse
+    PaginatedResponse, ActivityDomain
 from db.models.activity import ActivityStatus, ActivityReportingStatus
 from db.models.user_activity import UserActivity
+from helpers.activity import fetch_activities_for_projects
 from schemas.project import ProjectList
 from schemas.report import ActivityResponse, PaginatedActivityResponse, ActivityAssignment, ReportProjectActivityRead, \
     ProjectActivitiesResponse, PaginatedProjectActivitiesResponse
@@ -21,23 +22,20 @@ router = APIRouter()
 
 @router.get('/data_manager/projects', response_model=PaginatedResponse[ProjectList])
 async def get_data_manager_projects(
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        page: int = Query(1, ge=1, description="Page number"),
+        page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     try:
         if current_user.role != UserRole.DATA_MANAGER:
             raise HTTPException(status_code=403, detail="Access denied. User must be a data manager.")
 
-        # Join tables and apply filters
+        # Query for projects without loading activities
         query = (
             select(Project)
             .join(MouDetail, Project.uuid == MouDetail.project_id)
             .join(MouApplication, MouDetail.uuid == MouApplication.mou_detail_id)
-            .options(
-                selectinload(Project.activities),
-            )
             .where(
                 Project.organization_id == current_user.organization_uuid,
                 MouApplication.status == MouApplicationStatus.APPROVED
@@ -48,19 +46,22 @@ async def get_data_manager_projects(
         results = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
         projects = results.scalars().all()
 
+        # Fetch activities for all projects
+        activities_by_project = await fetch_activities_for_projects(db, projects)
+
         # Convert to dictionaries
-        projects = [ ProjectList(
-                        uuid=project.uuid,
-                        name=project.name,
-                        description=project.description,
-                        duration=project.duration,
-                        currency=project.currency,
-                        fiscal_year_budgets=project.fiscal_year_budgets,
-                        total_budget=project.total_budget,
-                        activities = [ReportProjectActivityRead(uuid=activity.uuid,
-                         name=activity.name) for activity in project.activities]  # Add this line
-                    ) for project in projects
-                ]
+        projects_list = [
+            ProjectList(
+                uuid=project.uuid,
+                name=project.name,
+                description=project.description,
+                duration=project.duration,
+                currency=project.currency,
+                fiscal_year_budgets=project.fiscal_year_budgets,
+                total_budget=project.total_budget,
+                activities=activities_by_project.get(project.uuid, [])
+            ) for project in projects
+        ]
 
         # Calculate total count
         total_count = await db.execute(select(func.count()).select_from(query))
@@ -68,7 +69,7 @@ async def get_data_manager_projects(
         total_pages = (total_count + page_size - 1) // page_size
 
         return PaginatedResponse(
-            data=projects,
+            data=projects_list,
             page=page,
             page_size=page_size,
             total_items=total_count,
@@ -206,6 +207,14 @@ async def get_data_reporter_activities(
             select(Activity, Project.name.label('project_name'), Project.uuid.label('project_uuid'), Project.currency)
             .join(Project, Activity.project_id == Project.uuid)
             .join(UserActivity, Activity.uuid == UserActivity.activity_uuid)
+            .options(
+                selectinload(Activity.input_details).selectinload(InputDetail.input_category),
+                selectinload(Activity.input_details).selectinload(InputDetail.input),
+                selectinload(Activity.domains).selectinload(ActivityDomain.domain_intervention),
+                selectinload(Activity.domains).selectinload(ActivityDomain.sub_domain),
+                selectinload(Activity.domains).selectinload(ActivityDomain.sub_domain_function),
+                selectinload(Activity.domains).selectinload(ActivityDomain.sub_function),
+            )
             .where(
                 (Project.organization_id == current_user.organization_uuid) &
                 (Activity.report_status == ActivityReportingStatus.READY_FOR_REPORT) &

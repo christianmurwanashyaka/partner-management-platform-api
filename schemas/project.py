@@ -84,7 +84,7 @@ class ProjectList(BaseModel):
     currency: Currency
     duration: Optional[str] = None
     total_budget: float
-    activities: Optional[List[ReportProjectActivityRead]] = None
+    activities: Optional[List[ActivityList]] = None
 
     class Config:
         from_attributes = True
