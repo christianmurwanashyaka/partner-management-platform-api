@@ -6,6 +6,8 @@ from pydantic import BaseModel
 
 from db.models import Currency
 from db.models.activity import ActivityStatus, ActivityReportingStatus
+from schemas.activity import ActivityDomainDetail
+from schemas.input_detail import InputDetailRead
 
 
 class ActivityResponse(BaseModel):
@@ -22,6 +24,8 @@ class ActivityResponse(BaseModel):
     currency: Optional[Currency] = None
     status: Optional[ActivityStatus] = None
     report_status: Optional[ActivityReportingStatus] = None
+    input_details: Optional[List[InputDetailRead]] = None
+    domains: Optional[List[ActivityDomainDetail]] = None
 
     class Config:
         from_attributes = True
