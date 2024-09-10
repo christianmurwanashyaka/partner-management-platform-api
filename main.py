@@ -1,79 +1,49 @@
-import os
+import traceback
 from contextlib import asynccontextmanager
-import logging
-from datetime import datetime
-from logging.handlers import TimedRotatingFileHandler
 
-from sqlalchemy.engine import Engine
-from sqlalchemy import event
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import time
-from uvicorn.config import LOGGING_CONFIG
+
+from starlette.concurrency import iterate_in_threadpool
 
 from api.endpoints import auth, budget_type, organization_type, funding_source, funding_unit, domain_intervention, \
     input_category, sub_domain, input, organization, user, project, activity, party, mou_detail, mou_application, mou, \
-    files, sub_domain_function, sub_function, domain_data_entry, exchange_rates, statistics, report, report_activity
+    files, sub_domain_function, sub_function, domain_data_entry, exchange_rates, statistics, report, report_activity, \
+    health
 import uvicorn
 
 from core.config import settings
+from core.logger import system_logger, api_logger
 from db.database import create_db_and_tables, async_session
 from utils.security import create_admin
 
 
-# Create logs directories if they don't exist
-api_log_dir = "logs/api"
-sql_log_dir = "logs/sql"
-os.makedirs(api_log_dir, exist_ok=True)
-os.makedirs(sql_log_dir, exist_ok=True)
-
-# Get today's date
-log_file_date = datetime.now().strftime("%d_%m_%Y")
-
-# Set up API log file handler with rotation at midnight
-api_log_file_path = os.path.join(api_log_dir, f"{log_file_date}.txt")
-api_file_handler = TimedRotatingFileHandler(api_log_file_path, when="midnight")
-api_file_handler.suffix = "%d_%m_%Y.txt"
-api_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
-
-# Set up SQL log file handler with rotation at midnight
-sql_log_file_path = os.path.join(sql_log_dir, f"{log_file_date}.txt")
-sql_file_handler = TimedRotatingFileHandler(sql_log_file_path, when="midnight")
-sql_file_handler.suffix = "%d_%m_%Y.txt"
-sql_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s\n\n', datefmt='%Y-%m-%d %H:%M:%S'))
-
-# Configure the API logger
-api_logger = logging.getLogger("api_logger")
-api_logger.setLevel(logging.INFO)
-api_logger.addHandler(api_file_handler)
-
-# Configure the SQL logger
-sql_logger = logging.getLogger("sqlalchemy.engine")
-sql_logger.setLevel(logging.INFO)
-sql_logger.addHandler(sql_file_handler)
-
-@event.listens_for(Engine, "before_cursor_execute")
-def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-    conn.info.setdefault('query_start_time', []).append(time.time())
-
-@event.listens_for(Engine, "after_cursor_execute")
-def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-    total = time.time() - conn.info['query_start_time'].pop(-1)
-    if total > 0.2:
-        sql_logger.warning(f"Long running query: {statement}")
-        sql_logger.warning(f"Total time: {total:.2f} seconds")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await create_db_and_tables()
-    async with async_session() as db:
-        await create_admin(db)
-    yield
-    print("Cleanup tasks go here")
+    # Startup
+    system_logger.info("Starting up the application")
+    try:
+        await create_db_and_tables()
+        async with async_session() as db:
+            await create_admin(db)
+    except Exception as e:
+        system_logger.error(f"Error during startup: {str(e)}\n{traceback.format_exc()}")
+        raise
 
+    yield
+
+    # Shutdown
+    system_logger.info("Shutting down the application")
+    try:
+        # Perform any cleanup tasks here
+        pass
+    except Exception as e:
+        system_logger.error(f"Error during shutdown: {str(e)}\n{traceback.format_exc()}")
 
 app = FastAPI(lifespan=lifespan)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -88,13 +58,45 @@ app.add_middleware(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
-    response = await call_next(request)
+
+    # Initialize variables to store response info
+    status_code = 500
+    response_body = ""
+    exception_info = None
+
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+
+        # If the request was unsuccessful, attempt to read and log the response body
+        if status_code >= 400:
+            response_body = [chunk async for chunk in response.body_iterator]
+            response.body_iterator = iterate_in_threadpool(iter(response_body))
+            response_body = b"".join(response_body).decode()
+
+    except Exception as e:
+        exception_info = f"Exception: {str(e)}\n{traceback.format_exc()}"
+        # Create a JSON response for the exception
+        response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
     process_time = time.time() - start_time
 
-    # print('REQ:', request.__dict__)
-    # Log the request details
-    api_logger.info(
-        f"Endpoint: {request.url.path} | Method: {request.method} | Status Code: {response.status_code} | Process Time: {process_time:.2f} sec")
+    # Prepare the log message
+    log_msg = f"Endpoint: {request.url.path} | Method: {request.method} | Status Code: {status_code} | Process Time: {process_time:.2f} sec"
+
+    # Add error details for unsuccessful requests
+    if status_code >= 400:
+        log_msg += f"\nResponse Body: {response_body}"
+    if exception_info:
+        log_msg += f"\n{exception_info}"
+
+    # Log at appropriate level based on status code
+    if status_code >= 500:
+        api_logger.error(log_msg)
+    elif status_code >= 400:
+        api_logger.warning(log_msg)
+    else:
+        api_logger.info(log_msg)
 
     return response
 
@@ -124,6 +126,12 @@ app.include_router(files.router, prefix='/api/v1/files', tags=['Files'])
 app.include_router(domain_data_entry.router, prefix='/api/v1/domain_data_entry', tags=["Domain data entry"])
 app.include_router(report.router, prefix='/api/v1/report', tags=["Report"])
 app.include_router(report_activity.router, prefix='/api/v1/report_activity', tags=['Report Activity'])
+app.include_router(health.router, prefix='/api/v1/health', tags=['Health'])
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=7001)
+    try:
+        uvicorn.run("main:app", host="0.0.0.0", port=7001, log_config=None)
+    except Exception as e:
+        system_logger.critical(f"Application crashed: {str(e)}\n{traceback.format_exc()}")
+        raise
+
