@@ -5,17 +5,16 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import time
-
+import uvicorn
 from starlette.concurrency import iterate_in_threadpool
 
 from api.endpoints import auth, budget_type, organization_type, funding_source, funding_unit, domain_intervention, \
     input_category, sub_domain, input, organization, user, project, activity, party, mou_detail, mou_application, mou, \
     files, sub_domain_function, sub_function, domain_data_entry, exchange_rates, statistics, report, report_activity, \
     health
-import uvicorn
 
 from core.config import settings
-from core.logger import system_logger, api_logger
+from core.logger import system_logger, api_logger, setup_exception_logging, setup_uvicorn_logging
 from db.database import create_db_and_tables, async_session
 from utils.security import create_admin
 
@@ -43,7 +42,6 @@ async def lifespan(app: FastAPI):
         system_logger.error(f"Error during shutdown: {str(e)}\n{traceback.format_exc()}")
 
 app = FastAPI(lifespan=lifespan)
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -100,7 +98,7 @@ async def log_requests(request: Request, call_next):
 
     return response
 
-
+# Include all the routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(budget_type.router, prefix='/api/v1/budget_type', tags=["Budget Type"])
 app.include_router(exchange_rates.router, prefix='/api/v1/currency_exchange_rate', tags=["Currency Exchange Rate"])
@@ -128,10 +126,18 @@ app.include_router(report.router, prefix='/api/v1/report', tags=["Report"])
 app.include_router(report_activity.router, prefix='/api/v1/report_activity', tags=['Report Activity'])
 app.include_router(health.router, prefix='/api/v1/health', tags=['Health'])
 
+
 if __name__ == "__main__":
+    setup_exception_logging()
+    setup_uvicorn_logging()
     try:
+        system_logger.info("Starting the application")
         uvicorn.run("main:app", host="0.0.0.0", port=7001, log_config=None)
+    except SystemExit as e:
+        system_logger.info(f"Application stopped with SystemExit: {e}")
+    except KeyboardInterrupt:
+        system_logger.info("Application stopped by user (KeyboardInterrupt)")
     except Exception as e:
         system_logger.critical(f"Application crashed: {str(e)}\n{traceback.format_exc()}")
-        raise
-
+    finally:
+        system_logger.info("Application shutdown complete")
