@@ -6,11 +6,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.auth import get_current_user
 from db.database import get_db
-from db.models import User, UserRole, Activity, Report, ReportStatus, ReportActivity
+from db.models import User, UserRole, Activity, Report, ReportStatus, ReportActivity, MouDetail, MouApplication
 from db.models.activity import ActivityStatus, ActivityReportingStatus
 from schemas.report_activity import ReportActivityCreate
 
 router = APIRouter()
+
 
 @router.post('/data-reporter/activity', response_model=dict)
 async def report_activity(
@@ -43,8 +44,15 @@ async def report_activity(
 
         project = activity.project
 
-        mou_detail = project.mou_details[0]  # Assuming there's only one mou_detail per project
-        mou_application_uuid = mou_detail.mou_application.uuid
+        mou_detail_query = select(MouDetail).where(MouDetail.project_id == project.uuid)
+        result = await db.execute(mou_detail_query)
+        mou_detail = result.scalars().all()[0]
+
+        mou_application_query = select(MouApplication).where(MouApplication.mou_detail_id == mou_detail.uuid)
+        result = await db.execute(mou_application_query)
+        mou_application = result.scalars().all()[0]
+
+        mou_application_uuid = mou_application.uuid
 
         if not report:
             report = Report(
