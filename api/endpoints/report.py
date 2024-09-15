@@ -247,6 +247,7 @@ async def get_data_reporter_activities(
                 grouped_activities[project_uuid] = {
                     'project_name': project_name,
                     'project_uuid': str(project_uuid),
+                    'project_currency': currency,
                     'activities': []
                 }
 

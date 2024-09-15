@@ -55,6 +55,7 @@ class ReportProjectActivityRead(BaseModel):
 class ProjectActivitiesResponse(BaseModel):
     project_name: str
     project_uuid: str
+    project_currency: Currency
     activities: Optional[List[ActivityResponse]] = None
 
 
