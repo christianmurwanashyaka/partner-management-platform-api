@@ -8,7 +8,7 @@ from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, CurrencyExchangeRate, Project, Currency, InputDetail, Activity, ActivityDomain, \
     Organization, FundingSource, FundingUnit, BudgetType, InputCategory, Input, DomainIntervention, SubDomain, \
-    MouApproval, MouReview, MOHStaffLevel, MouDetail, MouApplication, MouApplicationStatus
+    MouApproval, MouReview, MOHStaffLevel, MouDetail, MouApplication, MouApplicationStatus, ReportActivity, Report
 from db.models.domain import SubDomainFunction, SubFunction
 from utils.filters import parse_uuid_list, parse_string_list
 from utils.functions import format_time_difference
@@ -570,6 +570,83 @@ async def get_mou_applications_per_level(
         processed_statistics.sort(key=lambda x: x['number_of_applications'], reverse=True)
 
         return processed_statistics
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get('/budget-comparison')
+async def get_budget_comparison(
+        organization_uuids: Optional[List[str]] = Query(None),
+        project_uuids: Optional[List[str]] = Query(None),
+        fiscal_year: Optional[str] = Query(None),
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        # Base query
+        query = select(
+            Activity.uuid,
+            Activity.name,
+            func.sum(InputDetail.budget).label('planned_budget'),
+            ReportActivity.executed_budget
+        ).join(
+            InputDetail, Activity.uuid == InputDetail.activity_id
+        ).join(
+            Report, Activity.report_uuid == Report.uuid
+        ).join(
+            ReportActivity, (ReportActivity.report_uuid == Report.uuid) &
+                            (ReportActivity.report_uuid == Activity.report_uuid)
+        ).filter(
+            Activity.report_status == 'reported'
+        ).group_by(
+            Activity.uuid,
+            Activity.name,
+            ReportActivity.executed_budget
+        )
+
+        # Apply filters
+        if organization_uuids:
+            query = query.filter(Report.organization_uuid.in_(organization_uuids))
+        if project_uuids:
+            query = query.filter(Activity.project_id.in_(project_uuids))
+        if fiscal_year:
+            query = query.filter(Activity.fiscal_year == fiscal_year)
+
+        # Execute query
+        result = await db.execute(query)
+        activities = result.fetchall()
+
+        # Process results
+        comparison_data = []
+        total_planned = 0
+        total_executed = 0
+
+        for activity in activities:
+            planned = float(activity.planned_budget or 0)
+            executed = float(activity.executed_budget or 0)
+            total_planned += planned
+            total_executed += executed
+
+            comparison_data.append({
+                "activity_uuid": str(activity.uuid),
+                "activity_name": activity.name,
+                "planned_budget": planned,
+                "executed_budget": executed,
+                "difference": planned - executed,
+            })
+
+        return {
+            "activities": comparison_data,
+            "total_planned_budget": total_planned,
+            "total_executed_budget": total_executed,
+            "total_difference": total_planned - total_executed,
+            "filters_applied": {
+                "organizations": organization_uuids,
+                "projects": project_uuids,
+                "fiscal_year": fiscal_year
+            }
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
