@@ -5,6 +5,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 from db.models.activity import ActivityStatus
+from schemas.report import ActivityResponse, ProjectActivitiesResponse
 
 
 class ReportActivityCreate(BaseModel):
@@ -18,4 +19,17 @@ class ReportActivityCreate(BaseModel):
 
     class Config:
         from_attributes = True
-        
+
+
+class OrganizationProjectsResponse(BaseModel):
+    organization_name: str
+    organization_uuid: str
+    projects: List[ProjectActivitiesResponse]
+
+
+class PaginatedOrganizationProjectsResponse(BaseModel):
+    items: List[OrganizationProjectsResponse]
+    total_items: int
+    page: int
+    page_size: int
+    total_pages: int

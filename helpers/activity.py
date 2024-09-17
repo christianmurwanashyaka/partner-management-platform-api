@@ -18,6 +18,8 @@ def convert_activity_to_schema(activity: Activity) -> ActivityList:
         implementer=activity.implementer,
         implementer_unit=activity.implementer_unit,
         fiscal_year=activity.fiscal_year,
+        status=activity.status,
+        reporting_status=activity.report_status,
         input_details=[
             InputDetailRead(
                 uuid=input_detail.uuid,
