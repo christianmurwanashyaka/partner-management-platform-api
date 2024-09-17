@@ -71,6 +71,7 @@ class ActivityCreate(BaseModel):
     class Config:
         from_attributes = True
 
+
 class ActivityUpdate(BaseModel):
     project_id: Optional[uuid.UUID] = None
     description: Optional[str] = None
@@ -93,6 +94,8 @@ class ActivityList(BaseModel):
     name: str
     implementer: str
     implementer_unit: str
+    status: Optional[ActivityStatus] = None
+    reporting_status: Optional[ActivityReportingStatus] = None
     fiscal_year: str
     input_details: List[InputDetailRead]
     start_date: date

@@ -15,6 +15,7 @@ class UserRole(str, Enum):
     MOH_STAFF = "moh_staff"
     DATA_MANAGER = "data_manager"
     DATA_REPORTER = "data_reporter"
+    M_AND_E = 'm_and_e'
 
 
 class MOHStaffLevel(str, Enum):
@@ -34,7 +35,7 @@ class User(CommonBaseModel, table=True):
     last_name: str
     role: UserRole
     level: Optional[MOHStaffLevel] = None
-    phone_number    : Optional[str] = None
+    phone_number: Optional[str] = None
     organization_uuid: Optional[uuid.UUID] = Field(default=None, foreign_key='organization.uuid')
     organization: Optional['Organization'] = Relationship(
         back_populates="users", sa_relationship_kwargs={'lazy': 'noload'})

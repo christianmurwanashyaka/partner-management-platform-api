@@ -3,6 +3,7 @@ from typing import Optional, List, Dict
 from fastapi import APIRouter, Depends, status, Query, HTTPException
 from sqlalchemy import select, func, case, desc, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from api.dependencies.auth import get_current_user
 from db.database import get_db
@@ -584,34 +585,39 @@ async def get_budget_comparison(
         current_user: User = Depends(get_current_user)
 ):
     try:
+        # Create aliases for self-joining
+        ActivityAlias = aliased(Activity)
+
         # Base query
-        query = select(
-            Activity.uuid,
-            Activity.name,
+        query = (select(
+            ActivityAlias.uuid,
+            ActivityAlias.name,
             func.sum(InputDetail.budget).label('planned_budget'),
-            ReportActivity.executed_budget
+            func.sum(ReportActivity.executed_budget).label('executed_budget'),
+            Project.currency
+        ).select_from(ActivityAlias).join(
+            InputDetail, ActivityAlias.uuid == InputDetail.activity_id
         ).join(
-            InputDetail, Activity.uuid == InputDetail.activity_id
+            Report, ActivityAlias.report_uuid == Report.uuid
         ).join(
-            Report, Activity.report_uuid == Report.uuid
+            ReportActivity, ReportActivity.report_uuid == Report.uuid
         ).join(
-            ReportActivity, (ReportActivity.report_uuid == Report.uuid) &
-                            (ReportActivity.report_uuid == Activity.report_uuid)
+            Project, ActivityAlias.project_id == Project.uuid
         ).filter(
-            Activity.report_status == 'reported'
+            ActivityAlias.report_status == 'reported'
         ).group_by(
-            Activity.uuid,
-            Activity.name,
-            ReportActivity.executed_budget
-        )
+            ActivityAlias.uuid,
+            ActivityAlias.name,
+            Project.currency
+        ))
 
         # Apply filters
         if organization_uuids:
             query = query.filter(Report.organization_uuid.in_(organization_uuids))
         if project_uuids:
-            query = query.filter(Activity.project_id.in_(project_uuids))
+            query = query.filter(ActivityAlias.project_id.in_(project_uuids))
         if fiscal_year:
-            query = query.filter(Activity.fiscal_year == fiscal_year)
+            query = query.filter(ActivityAlias.fiscal_year == fiscal_year)
 
         # Execute query
         result = await db.execute(query)
@@ -634,6 +640,7 @@ async def get_budget_comparison(
                 "planned_budget": planned,
                 "executed_budget": executed,
                 "difference": planned - executed,
+                "currency": activity.currency
             })
 
         return {
