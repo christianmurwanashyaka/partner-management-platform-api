@@ -1,14 +1,19 @@
 from datetime import datetime
+from math import ceil
+
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy import select
-from sqlalchemy.orm import joinedload
+from sqlalchemy import select, func
+from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.auth import get_current_user
 from db.database import get_db
-from db.models import User, UserRole, Activity, Report, ReportStatus, ReportActivity, MouDetail, MouApplication
+from db.models import User, UserRole, Activity, Report, ReportStatus, ReportActivity, MouDetail, MouApplication, \
+    Organization, Project, InputDetail, ActivityDomain, MouApplicationStatus
 from db.models.activity import ActivityStatus, ActivityReportingStatus
-from schemas.report_activity import ReportActivityCreate
+from schemas.report import ActivityResponse, ProjectActivitiesResponse
+from schemas.report_activity import ReportActivityCreate, OrganizationProjectsResponse, \
+    PaginatedOrganizationProjectsResponse
 
 router = APIRouter()
 
@@ -94,3 +99,107 @@ async def report_activity(
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
 
 
+@router.get('/m-and-e/activities', response_model=PaginatedOrganizationProjectsResponse)
+async def get_activities_from_approved_applications(
+        page: int = Query(1, ge=1, description='Page number'),
+        page_size: int = Query(10, ge=1, le=100, description='Number of items per page'),
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        if current_user.role != UserRole.M_AND_E:
+            raise HTTPException(status_code=403, detail='You are not authorized to do this action')
+        # Query to get total count of activities
+        count_query = select(func.count(Activity.uuid)).join(
+            Project, Activity.project_id == Project.uuid
+        ).join(
+            MouDetail, Project.uuid == MouDetail.project_id
+        ).join(
+            MouApplication, MouDetail.uuid == MouApplication.mou_detail_id
+        ).where(
+            MouApplication.status == MouApplicationStatus.APPROVED
+        )
+
+        total_items = await db.execute(count_query)
+        total_items = total_items.scalar()
+        total_pages = ceil(total_items / page_size)
+
+        if page > total_pages and total_pages > 0:
+            raise HTTPException(status_code=404, detail=f"Page {page} does not exist. Total pages: {total_pages}")
+
+        # Query to get paginated activities with related data
+        query = (
+            select(Activity, Project, Organization)
+            .join(Project, Activity.project_id == Project.uuid)
+            .join(Organization, Project.organization_id == Organization.uuid)
+            .join(MouDetail, Project.uuid == MouDetail.project_id)
+            .join(MouApplication, MouDetail.uuid == MouApplication.mou_detail_id)
+            .options(
+                selectinload(Activity.input_details).selectinload(InputDetail.input_category),
+                selectinload(Activity.input_details).selectinload(InputDetail.input),
+                selectinload(Activity.domains).selectinload(ActivityDomain.domain_intervention),
+                selectinload(Activity.domains).selectinload(ActivityDomain.sub_domain),
+                selectinload(Activity.domains).selectinload(ActivityDomain.sub_domain_function),
+                selectinload(Activity.domains).selectinload(ActivityDomain.sub_function),
+            )
+            .where(MouApplication.status == MouApplicationStatus.APPROVED)
+            .order_by(Organization.name, Project.name, Activity.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+
+        result = await db.execute(query)
+        activities_data = result.all()
+
+        # Group activities by organization and project
+        grouped_data = {}
+        for activity, project, organization in activities_data:
+            org_uuid = str(organization.uuid)
+            proj_uuid = str(project.uuid)
+
+            if org_uuid not in grouped_data:
+                grouped_data[org_uuid] = {
+                    'organization_name': organization.name,
+                    'organization_uuid': org_uuid,
+                    'projects': {}
+                }
+
+            if proj_uuid not in grouped_data[org_uuid]['projects']:
+                grouped_data[org_uuid]['projects'][proj_uuid] = {
+                    'project_name': project.name,
+                    'project_uuid': proj_uuid,
+                    'project_currency': project.currency,
+                    'activities': []
+                }
+
+            activity_dict = activity.__dict__
+            activity_dict['uuid'] = str(activity_dict['uuid'])
+            grouped_data[org_uuid]['projects'][proj_uuid]['activities'].append(
+                ActivityResponse(**{**activity_dict, 'currency': project.currency})
+            )
+
+        # Structure the response
+        items = [
+            OrganizationProjectsResponse(
+                organization_name=org_data['organization_name'],
+                organization_uuid=org_data['organization_uuid'],
+                projects=[
+                    ProjectActivitiesResponse(**proj_data)
+                    for proj_data in org_data['projects'].values()
+                ]
+            )
+            for org_data in grouped_data.values()
+        ]
+
+        return PaginatedOrganizationProjectsResponse(
+            items=items,
+            total_items=total_items,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
+        )
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
