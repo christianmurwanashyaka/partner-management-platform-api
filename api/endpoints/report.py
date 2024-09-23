@@ -9,7 +9,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, UserRole, Activity, Project, MouDetail, MouApplication, MouApplicationStatus, InputDetail, \
-    PaginatedResponse, ActivityDomain
+    PaginatedResponse, ActivityDomain, Report, ReportActivity, ReportActivityStatus
 from db.models.activity import ActivityStatus, ActivityReportingStatus
 from db.models.user_activity import UserActivity
 from helpers.activity import fetch_activities_for_projects
@@ -274,4 +274,161 @@ async def get_data_reporter_activities(
         raise http_exc
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+
+
+@router.get('/data-manager/reported_activities')
+async def get_reported_activities(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+        page: int = Query(1, ge=1, description='Page number'),
+        page_size: int = Query(10, ge=1, le=100, description='Number of items per page')
+):
+    try:
+        if current_user.role != UserRole.DATA_MANAGER:
+            raise HTTPException(status_code=403, detail='Access denied. User must be a data manager')
+
+        # Join with the Report table to filter by organization
+        query = select(ReportActivity).join(Report).where(
+            Report.organization_uuid == current_user.organization_uuid
+        ).options(
+            selectinload(ReportActivity.report),
+            selectinload(ReportActivity.comments),
+        )
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total_items = await db.execute(count_query)
+        total_items = total_items.scalar()
+        total_pages = ceil(total_items / page_size)
+
+        result = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+        activities_data = result.scalars().all()
+
+        activities_list = [
+            {
+                "uuid": str(activity.uuid),
+                "report_uuid": str(activity.report_uuid),
+                "reported_by": activity.reported_by,
+                "executed_budget": activity.executed_budget,
+                "actual_start_date": activity.actual_start_date.isoformat() if activity.actual_start_date else None,
+                "actual_end_date": activity.actual_end_date.isoformat() if activity.actual_end_date else None,
+                "status": activity.status.value,
+                "accomplishments": activity.accomplishments,
+                "comments": activity.comments,
+                # Add other fields as needed
+            }
+            for activity in activities_data
+        ]
+
+        return {
+            'page': page,
+            'page_size': page_size,
+            'total_pages': total_pages,
+            'total_items': total_items,
+            'items': activities_list
+        }
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+
+
+@router.post('/data-manager/reported_activity/{uuid}/approve')
+async def approve_reported_activity(
+        uuid: uuid.UUID,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    try:
+        if current_user.role != UserRole.DATA_MANAGER:
+            raise HTTPException(status_code=403, detail='Access denied. User must be a data manager')
+
+        # Fetch the reported activity
+        query = select(ReportActivity).where(ReportActivity.uuid == uuid)
+        result = await db.execute(query)
+        activity = result.scalar_one_or_none()
+
+        if not activity:
+            raise HTTPException(status_code=404, detail='Reported activity not found')
+
+        # Check if the activity belongs to the user's organization
+        report_query = select(Report).where(Report.uuid == activity.report_uuid)
+        report_result = await db.execute(report_query)
+        report = report_result.scalar_one_or_none()
+
+        if not report or report.organization_uuid != current_user.organization_uuid:
+            raise HTTPException(status_code=403, detail='Access denied. Activity does not belong to your organization')
+
+        # Check if the activity is in PENDING status
+        if activity.status != ReportActivityStatus.PENDING:
+            raise HTTPException(status_code=400, detail='Only pending activities can be approved')
+
+        # Update the status to APPROVED
+        activity.status = ReportActivityStatus.APPROVED
+        db.add(activity)
+        await db.commit()
+        await db.refresh(activity)
+
+        return {
+            "message": "Activity approved successfully",
+            "activity": {
+                "uuid": str(activity.uuid),
+                "status": activity.status.value,
+                "report_uuid": str(activity.report_uuid),
+                # Include other relevant fields here
+            }
+        }
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        await db.rollback()
+        print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+
+
+@router.get('/data-manager/reports')
+async def get_reports(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db), page: int = Query(1, ge=1, description='Page number'), page_size: int = Query(10, ge=1, le=100, description='Number of items per page')):
+    try:
+        if current_user.role != UserRole.DATA_MANAGER:
+            raise HTTPException(status_code=403, detail='Access denied. User must be a data manager')
+
+        query = select(Report).where(
+            Report.organization_uuid == current_user.organization_uuid
+        )
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total_items = await db.execute(count_query)
+        total_items = total_items.scalar()
+        total_pages = ceil(total_items/page_size)
+
+        result = await db.execute(query.offset((page-1) * page_size).limit(page_size))
+        reports_data = result.scalars().all()
+
+        reports_list = [
+            {
+                "uuid": report.uuid,
+                "mou_application_uuid": str(report.mou_application_uuid),
+                "reported_by": report.reported_by,
+                "organization_uuid": str(report.organization_uuid),
+                "reported_at": report.reported_at.isoformat() if report.reported_at else None,
+                "project_uuid": str(report.project_uuid),
+                "status": report.status.value,
+            }
+            for report in reports_data
+        ]
+
+        return {
+            'page': page,
+            'page_size': page_size,
+            'total_pages': total_pages,
+            'items': reports_list
+        }
+    except HTTPException as http_exc:
+        raise http_exc
+
+    except Exception as e:
+        print(e)
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")

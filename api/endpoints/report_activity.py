@@ -9,7 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, UserRole, Activity, Report, ReportStatus, ReportActivity, MouDetail, MouApplication, \
-    Organization, Project, InputDetail, ActivityDomain, MouApplicationStatus
+    Organization, Project, InputDetail, ActivityDomain, MouApplicationStatus, Comment
 from db.models.activity import ActivityStatus, ActivityReportingStatus
 from schemas.report import ActivityResponse, ProjectActivitiesResponse
 from schemas.report_activity import ReportActivityCreate, OrganizationProjectsResponse, \
@@ -77,11 +77,27 @@ async def report_activity(
             executed_budget=report_activity_data.executed_budget,
             actual_start_date=report_activity_data.actual_start_date.replace(tzinfo=None),
             actual_end_date=report_activity_data.actual_end_date.replace(tzinfo=None),
-            created_by=current_user.email
+            created_by=current_user.email,
+            reported_by=current_user.first_name + ' ' + current_user.last_name,
+            accomplishments=report_activity_data.accomplishments,
         )
+
         db.add(new_report_activity)
         await db.commit()
         await db.refresh(new_report_activity)
+
+        if report_activity_data.comment:
+            new_comment = Comment(
+                content=report_activity_data.comment,
+                user_uuid=current_user.uuid,
+                report_uuid=report.uuid,
+                report_activity_uuid=new_report_activity.uuid,
+                created_by=current_user.email
+            )
+
+            db.add(new_comment)
+            await db.commit()
+            await db.refresh(new_comment)
 
         # Update the Activity status
         activity.status = report_activity_data.status
