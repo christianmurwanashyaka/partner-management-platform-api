@@ -52,6 +52,7 @@ class ActivityResponseDict(BaseModel):
 class ReportedActivityResponse(ActivityResponseDict):
     report_uuid: str
     reported_by: Optional[str] = None
+    report_activity_uuid: str
     executed_budget: float
     actual_start_date: Optional[date] = None
     actual_end_date: Optional[date] = None
@@ -135,3 +136,31 @@ class PaginatedReportResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+class CommentResponse(BaseModel):
+    uuid: uuid.UUID
+    content: str
+    created_at: datetime
+    created_by: str
+
+    class Config:
+        from_attributes = True
+
+
+class ReportActivityDetailResponse(BaseModel):
+    uuid: uuid.UUID
+    report_uuid: uuid.UUID
+    reported_by: Optional[str]
+    executed_budget: float
+    actual_start_date: Optional[datetime]
+    actual_end_date: Optional[datetime]
+    status: ReportActivityStatus
+    accomplishments: Optional[List[str]]
+    comments: List[CommentResponse]
+    report_status: ReportStatus
+    project_name: str
+    organization_name: str
+
+    class Config:
+        from_attributes = True
