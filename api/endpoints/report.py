@@ -360,6 +360,7 @@ async def get_reported_activities(
                 actual_start_date=report_activity.actual_start_date.date() if report_activity.actual_start_date else None,
                 actual_end_date=report_activity.actual_end_date.date() if report_activity.actual_end_date else None,
                 report_activity_status=report_activity.status,
+                report_activity_uuid=str(report_activity.uuid),
                 accomplishments=report_activity.accomplishments,
                 comments=[{
                     "uuid": str(comment.uuid),
@@ -669,6 +670,7 @@ async def get_report_activities(
                 actual_start_date=report_activity.actual_start_date.date() if report_activity.actual_start_date else None,
                 actual_end_date=report_activity.actual_end_date.date() if report_activity.actual_end_date else None,
                 report_activity_status=report_activity.status,
+                report_activity_uuid=str(report_activity.uuid),
                 accomplishments=report_activity.accomplishments,
                 comments=[{
                     "uuid": str(comment.uuid),

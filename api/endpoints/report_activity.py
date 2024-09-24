@@ -1,6 +1,7 @@
 from datetime import datetime
 from math import ceil
 
+from uuid import UUID
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.orm import joinedload, selectinload
@@ -11,7 +12,7 @@ from db.database import get_db
 from db.models import User, UserRole, Activity, Report, ReportStatus, ReportActivity, MouDetail, MouApplication, \
     Organization, Project, InputDetail, ActivityDomain, MouApplicationStatus, Comment
 from db.models.activity import ActivityStatus, ActivityReportingStatus
-from schemas.report import ActivityResponse, ProjectActivitiesResponse
+from schemas.report import ActivityResponse, ProjectActivitiesResponse, ReportActivityDetailResponse, CommentResponse
 from schemas.report_activity import ReportActivityCreate, OrganizationProjectsResponse, \
     PaginatedOrganizationProjectsResponse
 
@@ -218,4 +219,62 @@ async def get_activities_from_approved_applications(
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+
+
+@router.get('/{uuid}', response_model=ReportActivityDetailResponse)
+async def get_report_activity_details(
+        uuid: UUID,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    try:
+        if current_user.role not in [UserRole.DATA_MANAGER, UserRole.M_AND_E, UserRole.DATA_REPORTER]:
+            raise HTTPException(status_code=403, detail='Access denied. User must be a data manager, M&E officer or data reporter')
+
+        query = (
+            select(ReportActivity)
+            .options(
+                joinedload(ReportActivity.comments),
+                joinedload(ReportActivity.report).joinedload(Report.project),
+                joinedload(ReportActivity.report).joinedload(Report.organization)
+            )
+            .where(ReportActivity.uuid == uuid)
+        )
+
+        if current_user.role == UserRole.DATA_MANAGER:
+            query = query.where(ReportActivity.report.has(Report.organization_uuid == current_user.organization_uuid))
+
+        result = await db.execute(query)
+        report_activity = result.unique().scalar_one_or_none()
+
+        if not report_activity:
+            raise HTTPException(status_code=404, detail="Report Activity not found")
+
+        return ReportActivityDetailResponse(
+            uuid=report_activity.uuid,
+            report_uuid=report_activity.report_uuid,
+            reported_by=report_activity.reported_by,
+            executed_budget=report_activity.executed_budget,
+            actual_start_date=report_activity.actual_start_date,
+            actual_end_date=report_activity.actual_end_date,
+            status=report_activity.status,
+            accomplishments=report_activity.accomplishments,
+            comments=[
+                CommentResponse(
+                    uuid=comment.uuid,
+                    content=comment.content,
+                    created_at=comment.created_at,
+                    created_by=comment.created_by
+                ) for comment in report_activity.comments
+            ],
+            report_status=report_activity.report.status,
+            project_name=report_activity.report.project.name,
+            organization_name=report_activity.report.organization.name
+        )
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        print(f"Error: {e}")
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
