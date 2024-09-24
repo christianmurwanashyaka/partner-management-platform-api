@@ -432,3 +432,73 @@ async def get_reports(current_user: User = Depends(get_current_user), db: AsyncS
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+
+
+@router.get('/data-manager/report/{uuid}/activities')
+async def get_report_activities(
+        uuid: uuid.UUID,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+        page: int = Query(1, ge=1, description='Page number'),
+        page_size: int = Query(10, ge=1, le=100, description='Number of items per page')
+):
+    try:
+        if current_user.role != UserRole.DATA_MANAGER:
+            raise HTTPException(status_code=403, detail='Access denied. User must be a data manager')
+
+        # First, check if the report exists and belongs to the user's organization
+        report_query = select(Report).where(
+            Report.uuid == uuid,
+            Report.organization_uuid == current_user.organization_uuid
+        )
+        report_result = await db.execute(report_query)
+        report = report_result.scalar_one_or_none()
+
+        if not report:
+            raise HTTPException(status_code=404, detail='Report not found or access denied')
+
+        # Query for activities associated with this report
+        query = select(ReportActivity).where(
+            ReportActivity.report_uuid == uuid
+        ).options(selectinload(ReportActivity.comments))
+
+        # Get total count for pagination
+        count_query = select(func.count()).select_from(query.subquery())
+        total_items = await db.execute(count_query)
+        total_items = total_items.scalar()
+        total_pages = ceil(total_items / page_size)
+
+        # Execute the main query with pagination
+        result = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+        activities = result.scalars().all()
+
+        activities_list = [
+            {
+                "uuid": str(activity.uuid),
+                "reported_by": activity.reported_by,
+                "executed_budget": float(activity.executed_budget),
+                "actual_start_date": activity.actual_start_date.isoformat() if activity.actual_start_date else None,
+                "actual_end_date": activity.actual_end_date.isoformat() if activity.actual_end_date else None,
+                "status": activity.status.value,
+                "accomplishments": activity.accomplishments,
+                "comments_count": len(activity.comments),
+                # Add other fields as needed
+            }
+            for activity in activities
+        ]
+
+        return {
+            "report_uuid": str(report.uuid),
+            "project_uuid": str(report.project_uuid),
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "total_items": total_items,
+            "activities": activities_list
+        }
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
