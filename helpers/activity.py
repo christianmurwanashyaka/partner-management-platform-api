@@ -1,11 +1,11 @@
-from typing import List, Dict
+from typing import List, Dict, Union, Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 from uuid import UUID
 
-from db.models import Project, Activity, InputDetail, ActivityDomain
+from db.models import Project, Activity, InputDetail, ActivityDomain, ReportActivity
 from schemas.activity import ActivityList, ActivityDomainDetail
 from schemas.input_detail import InputDetailRead
 
