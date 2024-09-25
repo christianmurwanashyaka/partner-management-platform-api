@@ -20,6 +20,7 @@ class ReportActivity(CommonBaseModel, table=True):
 
     report_uuid: uuid.UUID = Field(default=uuid.UUID, foreign_key='report.uuid', index=True)
     report: 'Report' = Relationship(back_populates='reported_activities', sa_relationship_kwargs={'lazy': 'noload'})
+    activity_uuid: uuid.UUID = Field(foreign_key='activity.uuid', index=True)  # New field
     reported_by: Optional[str] = Field(default=None, nullable=True, description='Name of the user who reported the MOU application')
     executed_budget: float = Field(default=0.0, description="The executed budget for the activity")
     actual_start_date: datetime = Field(default=None, nullable=True, description="The actual start date of the activity")
