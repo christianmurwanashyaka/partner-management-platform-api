@@ -594,7 +594,8 @@ async def get_budget_comparison(
             ActivityAlias.name,
             func.sum(InputDetail.budget).label('planned_budget'),
             func.sum(ReportActivity.executed_budget).label('executed_budget'),
-            Project.currency
+            Project.currency,
+            Project.uuid.label('project_uuid')
         ).select_from(ActivityAlias).join(
             InputDetail, ActivityAlias.uuid == InputDetail.activity_id
         ).join(
@@ -608,7 +609,8 @@ async def get_budget_comparison(
         ).group_by(
             ActivityAlias.uuid,
             ActivityAlias.name,
-            Project.currency
+            Project.currency,
+            Project.uuid
         ))
 
         # Apply filters
@@ -627,12 +629,14 @@ async def get_budget_comparison(
         comparison_data = []
         total_planned = 0
         total_executed = 0
+        currencies = set()
 
         for activity in activities:
             planned = float(activity.planned_budget or 0)
             executed = float(activity.executed_budget or 0)
             total_planned += planned
             total_executed += executed
+            currencies.add(activity.currency)
 
             comparison_data.append({
                 "activity_uuid": str(activity.uuid),
@@ -640,10 +644,11 @@ async def get_budget_comparison(
                 "planned_budget": planned,
                 "executed_budget": executed,
                 "difference": planned - executed,
-                "currency": activity.currency
+                "project_uuid": str(activity.project_uuid)
             })
 
-        return {
+        # Prepare the response
+        response = {
             "activities": comparison_data,
             "total_planned_budget": total_planned,
             "total_executed_budget": total_executed,
@@ -654,6 +659,12 @@ async def get_budget_comparison(
                 "fiscal_year": fiscal_year
             }
         }
+
+        # Add currency to the response if project_uuids filter is applied
+        if project_uuids:
+            if len(currencies) == 1:
+                response["currency"] = currencies.pop()
+        return response
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
