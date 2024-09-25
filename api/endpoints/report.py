@@ -10,7 +10,8 @@ from sqlalchemy.orm import joinedload, selectinload
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, UserRole, Activity, Project, MouDetail, MouApplication, MouApplicationStatus, InputDetail, \
-    PaginatedResponse, ActivityDomain, Report, ReportActivity, ReportActivityStatus, ReportStatus, Organization
+    PaginatedResponse, ActivityDomain, Report, ReportActivity, ReportActivityStatus, ReportStatus, Organization, \
+    Document, DocumentType
 from db.models.activity import ActivityStatus, ActivityReportingStatus
 from db.models.user_activity import UserActivity
 from helpers.activity import fetch_activities_for_projects
@@ -18,6 +19,7 @@ from schemas.project import ProjectList
 from schemas.report import ActivityResponse, PaginatedActivityResponse, ActivityAssignment, ReportProjectActivityRead, \
     ProjectActivitiesResponse, PaginatedProjectActivitiesResponse, ReportedActivityResponse, \
     PaginatedReportedActivityResponse, ReportedActivityProjectResponse, PaginatedReportResponse, ReportResponse
+from utils.files import generate_implementation_plan
 
 router = APIRouter()
 
@@ -716,8 +718,12 @@ async def submit_report(
         if current_user.role != UserRole.DATA_MANAGER:
             raise HTTPException(status_code=403, detail='Access denied. User must be a data manager')
 
-        # Fetch the report
-        query = select(Report).where(
+        # Fetch the report with related data
+        query = select(Report).options(
+            selectinload(Report.mou_application),
+            selectinload(Report.project),
+            selectinload(Report.reported_activities)
+        ).where(
             Report.uuid == uuid,
             Report.organization_uuid == current_user.organization_uuid
         )
@@ -727,7 +733,6 @@ async def submit_report(
         if not report:
             raise HTTPException(status_code=404, detail='Report not found or access denied')
 
-        # Check if the report is in a state that can be submitted
         if report.status != ReportStatus.PENDING:
             raise HTTPException(status_code=400, detail='Only pending reports can be submitted')
 
@@ -736,10 +741,25 @@ async def submit_report(
         report.reported_by = current_user.first_name + ' ' + current_user.last_name
         report.reported_at = datetime.utcnow()
 
-        # Commit the changes
+        # Generate implementation plan
+        implementation_plan_path, implementation_plan_filename = await generate_implementation_plan(report, db)
+
+        # Create a new Document for the implementation plan
+        implementation_plan_document = Document(
+            name=f"Implementation Plan - {report.project.name}",
+            description='Implementation Plan Report',
+            document_type=DocumentType.ADDITIONAL_DOCUMENT,
+            path=implementation_plan_path,
+            filename=implementation_plan_filename,
+            report=report,
+            created_by=current_user.email
+        )
+
+        db.add(implementation_plan_document)
         db.add(report)
         await db.commit()
         await db.refresh(report)
+        await db.refresh(implementation_plan_document)
 
         return {
             "message": "Report submitted successfully",
@@ -749,7 +769,12 @@ async def submit_report(
                 "reported_by": report.reported_by,
                 "reported_at": report.reported_at.isoformat(),
                 "project_uuid": str(report.project_uuid),
-                # Include other relevant fields here
+                "implementation_plan": {
+                    "uuid": str(implementation_plan_document.uuid),
+                    "name": implementation_plan_document.name,
+                    "filename": implementation_plan_document.filename,
+                    "path": implementation_plan_document.path  # Added the document path here
+                }
             }
         }
 
