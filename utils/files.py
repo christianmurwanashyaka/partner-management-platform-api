@@ -24,7 +24,7 @@ import pypandoc
 
 from db.database import get_db
 from db.models import Activity, ActivityDomain, InputDetail, MouApplication, MouDetail, Project, OrganizationType, \
-    Party, Goal, FundingSource, FundingUnit, Organization, BudgetType
+    Party, Goal, FundingSource, FundingUnit, Organization, BudgetType, Report, ReportActivity
 
 
 async def handle_upload_file(file: UploadFile):
@@ -390,4 +390,152 @@ async def save_mou_doc_to_disk(document_buffer, filename, doc_type):
     file_path = os.path.join(directory, filename)
     with open(file_path, 'wb') as file:
         file.write(document_buffer.getvalue())  # Use getvalue() instead of read()
+    return file_path, filename
+
+
+async def generate_implementation_plan(report: Report, db: AsyncSession):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Implementation Plan'
+
+    headers = [
+        'Organization',
+        'Organization Type',
+        'Project Name',
+        'Domain of Intervention',
+        'Sub Domain of Intervention',
+        'Sub Domain Function',
+        'Sub Function',
+        'Location',
+        'Funding Source',
+        'Funding Unit',
+        'Activity',
+        'Description of activity',
+        'Input Category',
+        'Inputs',
+        'Planned budget',
+        'Currency',
+        'On/Off Budget/IGR',
+        'Implementer',
+        'Fiscal Year',
+        'Executed Budget',
+        'Accomplishments'
+    ]
+    ws.append(headers)
+
+    bold_font = Font(bold=True)
+    for cell in ws[1]:
+        cell.font = bold_font
+
+    # Fetch project data
+    project_query = select(Project).where(Project.uuid == report.project_uuid)
+    project_result = await db.execute(project_query)
+    project = project_result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=404, detail='Project not found')
+
+    # Fetch organization data
+    organization_query = select(Organization).where(Organization.uuid == project.organization_id)
+    organization_result = await db.execute(organization_query)
+    organization = organization_result.scalar_one_or_none()
+
+    if not organization:
+        raise HTTPException(status_code=404, detail='Organization not found')
+
+    # Fetch organization type
+    organization_type_query = select(OrganizationType).where(OrganizationType.uuid == organization.organization_type_id)
+    organization_type_result = await db.execute(organization_type_query)
+    organization_type = organization_type_result.scalar_one_or_none()
+
+    # Fetch funding source
+    funding_source_query = select(FundingSource).where(FundingSource.uuid == project.funding_source_id)
+    funding_source_result = await db.execute(funding_source_query)
+    funding_source = funding_source_result.scalar_one_or_none()
+    funding_source_name = funding_source.name if funding_source else project.other_funding_source or "N/A"
+
+    # Fetch funding unit
+    funding_unit_query = select(FundingUnit).where(FundingUnit.uuid == project.funding_unit_id)
+    funding_unit_result = await db.execute(funding_unit_query)
+    funding_unit = funding_unit_result.scalar_one_or_none()
+    funding_unit_name = funding_unit.name if funding_unit else 'N/A'
+
+    # Fetch budget type
+    budget_type_query = select(BudgetType).where(BudgetType.uuid == project.budget_type_id)
+    budget_type_result = await db.execute(budget_type_query)
+    budget_type = budget_type_result.scalar_one_or_none()
+
+    # Fetch activities associated with the report
+    activities_query = select(Activity).where(Activity.report_uuid == report.uuid)
+    activities_result = await db.execute(activities_query)
+    activities = activities_result.scalars().all()
+
+    for activity in activities:
+        activity_domains_query = select(ActivityDomain).where(ActivityDomain.activity_id == activity.uuid).options(
+            selectinload(ActivityDomain.domain_intervention),
+            selectinload(ActivityDomain.sub_domain),
+            selectinload(ActivityDomain.sub_domain_function),
+            selectinload(ActivityDomain.sub_function),
+        )
+        activity_domains = (await db.execute(activity_domains_query)).scalars().all()
+
+        input_details_query = select(InputDetail).where(InputDetail.activity_id == activity.uuid).options(
+            selectinload(InputDetail.input_category),
+            selectinload(InputDetail.input),
+        )
+        input_details = (await db.execute(input_details_query)).scalars().all()
+
+        # Fetch corresponding ReportActivity
+        report_activity_query = select(ReportActivity).where(ReportActivity.activity_uuid == activity.uuid)
+        report_activity_result = await db.execute(report_activity_query)
+        # TODO: UPDATE TO SCALAR_ONE_OR_NONE()
+        report_activity = report_activity_result.scalars().all()[0]
+
+        for input_detail in input_details:
+            district = getattr(input_detail, 'district', 'N/A')
+            province = getattr(input_detail, 'province', 'N/A')
+            location = f"{district}, {province}"
+            input_category = getattr(getattr(input_detail, 'input_category', None), 'name', 'N/A')
+            input_name = getattr(getattr(input_detail, 'input', None), 'name', 'N/A')
+            budget = getattr(input_detail, 'budget', 'N/A')
+
+            for domain in activity_domains:
+                domain_name = getattr(getattr(domain, 'domain_intervention', None), 'name', 'N/A')
+                sub_domain_name = getattr(getattr(domain, 'sub_domain', None), 'name', 'N/A')
+                sub_domain_function_name = getattr(getattr(domain, 'sub_domain_function', None), 'name', 'N/A')
+                sub_function_name = getattr(getattr(domain, 'sub_function', None), 'name', 'N/A')
+
+                data = [
+                    organization.name,
+                    organization_type.name,
+                    project.name,
+                    domain_name,
+                    sub_domain_name,
+                    sub_domain_function_name,
+                    sub_function_name,
+                    location,
+                    funding_source_name,
+                    funding_unit_name,
+                    activity.name,
+                    activity.description,
+                    input_category,
+                    input_name,
+                    budget,
+                    project.currency,
+                    budget_type.name if budget_type else 'N/A',
+                    activity.implementer,
+                    activity.fiscal_year,
+                    report_activity.executed_budget if report_activity else 'N/A',
+                    ', '.join(report_activity.accomplishments) if report_activity and report_activity.accomplishments else 'N/A'
+                ]
+                ws.append(data)
+
+    implementation_plans_directory = os.path.join(os.getcwd(), 'implementation_plans')
+    os.makedirs(implementation_plans_directory, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f'{timestamp}_implementation_plan_{report.reported_by}.xlsx'
+    file_path = os.path.join(implementation_plans_directory, filename)
+    wb.save(file_path)
+
     return file_path, filename
