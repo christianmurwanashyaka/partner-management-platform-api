@@ -212,7 +212,7 @@ async def get_mou_detail(uuid: uuid.UUID, db: AsyncSession = Depends(get_db), cu
         if not mou_detail:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='MOU detail not found')
 
-        await load_project_related_objects(db, mou_detail.project)
+        await load_project_related_objects(db, mou_detail.project, load_goals=True)
 
         if current_user.role in ['admin', 'moh_staff']:
             return mou_detail
