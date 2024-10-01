@@ -235,15 +235,9 @@ async def generate_mou_doc(mou_application, template_path, db: AsyncSession = De
 
 def convert_docx_to_pdf_linux(docx_path: str, pdf_path: str):
     """
-    Convert DOCX to PDF using LibreOffice or pypandoc on Linux.
+    Convert DOCX to PDF using LibreOffice on Linux.
     """
-    try:
-        # Prefer LibreOffice
-        subprocess.run(['libreoffice', '--headless', '--convert-to', 'pdf', docx_path, '--outdir', os.path.dirname(pdf_path)], check=True)
-    except Exception as e:
-        print(f"LibreOffice conversion failed: {e}. Falling back to pypandoc.")
-        # Fallback to pypandoc
-        pypandoc.convert_file(docx_path, 'pdf', outputfile=pdf_path)
+    subprocess.run(['libreoffice', '--headless', '--convert-to', 'pdf', docx_path, '--outdir', os.path.dirname(pdf_path)], check=True)
 
 
 async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(get_db)):
