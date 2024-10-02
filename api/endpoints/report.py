@@ -171,12 +171,34 @@ async def assign_activities_to_data_reporter(
         raise HTTPException(status_code=403, detail="Access denied. User must be a data manager.")
 
     try:
+        # Check if any of the activities are already assigned to the user
+        existing_assignments_query = (
+            select(UserActivity)
+            .where(UserActivity.user_uuid == activity_assignment_data.user_uuid)
+            .where(UserActivity.activity_uuid.in_(activity_assignment_data.activity_uuid))
+        )
+        existing_assignments = (await db.execute(existing_assignments_query)).scalars().all()
+
+        if existing_assignments:
+            existing_activities = [assignment.activity_uuid for assignment in existing_assignments]
+            raise HTTPException(
+                status_code=400,
+                detail=f"User already assigned to activities: {existing_activities}"
+            )
+
+        # Assign activities to the user
         user_activities = [
-            UserActivity(user_uuid=activity_assignment_data.user_uuid, activity_uuid=activity_uuid, created_by=current_user.email) for activity_uuid in activity_assignment_data.activity_uuid
+            UserActivity(
+                user_uuid=activity_assignment_data.user_uuid,
+                activity_uuid=activity_uuid,
+                created_by=current_user.email
+            )
+            for activity_uuid in activity_assignment_data.activity_uuid
         ]
         db.add_all(user_activities)
         await db.commit()
 
+        # Update the activity reporting status
         stmt = (
             update(Activity)
             .where(Activity.uuid.in_(activity_assignment_data.activity_uuid))
@@ -188,11 +210,13 @@ async def assign_activities_to_data_reporter(
 
         updated_count = result.rowcount
         if updated_count != len(activity_assignment_data.activity_uuid):
-            print(f"Warning: only {updated_count} out of {len(activity_assignment_data.activity_uuid)} activities were updated.")
+            print(
+                f"Warning: only {updated_count} out of {len(activity_assignment_data.activity_uuid)} activities were updated.")
 
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+
     return {"message": f"{updated_count} activities assigned successfully"}
 
 
