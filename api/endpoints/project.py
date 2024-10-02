@@ -206,6 +206,54 @@ async def get_projects(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+@router.get('/has_mou', response_model=PaginatedResponse[ProjectList])
+async def get_projects_that_have_mou(
+    page: int = 1,
+    page_size: int = 100,
+    approved: bool = Query(False, description="Filter projects with approved MOU applications only"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        if current_user.role not in ['admin', 'moh_staff', 'partner']:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='You are not authorized to perform this action')
+
+        query = (select(Project.uuid, Project.name, Project.duration, Project.currency, Project.fiscal_year_budgets, Project.total_budget).distinct(Project.uuid).join(MouDetail).filter(MouDetail.project_id == Project.uuid))
+
+        if current_user.role == 'partner':
+            query = query.join(Organization).filter(Organization.created_by == current_user.email)
+
+        if approved:
+            query = query.join(MouDetail, MouDetail.project_id == Project.uuid)
+            query = query.join(MouApplication, MouApplication.mou_detail_id == MouDetail.uuid)
+            query = query.filter(MouApplication.status == MouApplicationStatus.APPROVED)
+
+        total_items = await db.scalar(select(func.count()).select_from(query.subquery()))
+
+        projects = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+
+        projects = [ProjectList(
+            uuid=p.uuid,
+            name=p.name,
+            duration=p.duration,
+            currency=p.currency,
+            fiscal_year_budgets=p.fiscal_year_budgets,
+            total_budget=p.total_budget,
+        ) for p in projects.fetchall()]
+
+        total_pages = (total_items + page_size - 1) // page_size
+
+        return PaginatedResponse(
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            data=projects
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 @router.get('/{uuid}/activities/', response_model=PaginatedResponse[ActivityList])
 async def get_project_activities(
         uuid: uuid.UUID,
