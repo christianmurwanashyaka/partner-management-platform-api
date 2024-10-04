@@ -18,7 +18,7 @@ from db.models.project import Project, Goal
 from db.models.user import User, UserRole
 from helpers.db import get_all_items, get_items_by_criteria, load_project_related_objects
 from notification.handlers import EmailNotificationHandler
-from schemas.activity import ActivityList
+from schemas.activity import ActivityList, ProjectActivityResponse
 from schemas.project import ProjectRead, ProjectCreate, ProjectUpdate, ProjectList
 
 router = APIRouter()
@@ -254,7 +254,7 @@ async def get_projects_that_have_mou(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-@router.get('/{uuid}/activities/', response_model=PaginatedResponse[ActivityList])
+@router.get('/{uuid}/activities/', response_model=ProjectActivityResponse)
 async def get_project_activities(
         uuid: uuid.UUID,
         page: int = 1,
@@ -289,25 +289,18 @@ async def get_project_activities(
     if not activities_list:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No activities found for this project")
 
-    activities_with_project_info = [
-        {
-            **activity.__dict__,
-            "project_fiscal_year_budgets": project.fiscal_year_budgets,
-            "project_currency": project.currency
-        }
-        for activity in activities_list
-    ]
-
     total_items_query = select(func.count()).select_from(Activity).where(Activity.project_id == uuid)
     total_items = (await db.execute(total_items_query)).scalar_one()
     total_pages = (total_items + page_size - 1) // page_size
 
-    return PaginatedResponse(
+    return ProjectActivityResponse(
         page=page,
         page_size=page_size,
         total_items=total_items,
         total_pages=total_pages,
-        data=activities_with_project_info
+        project_fiscal_year_budgets=project.fiscal_year_budgets,
+        project_currency=project.currency,
+        data=activities_list
     )
 
 

@@ -4,7 +4,7 @@ from typing import List, Optional, Dict
 import uuid
 from pydantic import BaseModel
 
-from db.models import Currency
+from db.models import Currency, PaginatedResponse
 from db.models.activity import ActivityStatus, ActivityReportingStatus
 from schemas.domain_intervention import DomainInterventionList
 from schemas.input_detail import InputDetailCreate, InputDetailRead
@@ -102,8 +102,6 @@ class ActivityList(BaseModel):
     start_date: date
     end_date: date
     domains: List[ActivityDomainDetail]
-    project_fiscal_year_budgets: Optional[List[Dict]] = None
-    project_currency: Optional[Currency] = None
 
     class Config:
         from_attributes = True
@@ -134,3 +132,13 @@ class OperationalZoneUpdate(OperationalZoneCreate):
 
     class Config:
         from_attributes = True
+
+
+class ProjectActivityResponse(BaseModel):
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+    project_fiscal_year_budgets: Optional[List[Dict]] = None
+    project_currency: Optional[Currency] = None
+    data: List[ActivityList]
