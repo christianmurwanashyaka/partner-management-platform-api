@@ -81,6 +81,7 @@ async def report_activity(
             created_by=current_user.email,
             reported_by=current_user.first_name + ' ' + current_user.last_name,
             accomplishments=report_activity_data.accomplishments,
+            activity_uuid=report_activity_data.activity_uuid,
         )
 
         db.add(new_report_activity)
