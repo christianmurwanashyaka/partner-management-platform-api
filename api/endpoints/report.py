@@ -3,7 +3,7 @@ from datetime import datetime
 from math import ceil
 
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy import and_, func, select, update, or_
+from sqlalchemy import and_, func, select, update, or_, distinct
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -11,7 +11,7 @@ from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, UserRole, Activity, Project, MouDetail, MouApplication, MouApplicationStatus, InputDetail, \
     PaginatedResponse, ActivityDomain, Report, ReportActivity, ReportActivityStatus, ReportStatus, Organization, \
-    Document, DocumentType
+    Document, DocumentType, Comment
 from db.models.activity import ActivityStatus, ActivityReportingStatus
 from db.models.user_activity import UserActivity
 from helpers.activity import fetch_activities_for_projects
@@ -19,6 +19,7 @@ from schemas.project import ProjectList
 from schemas.report import ActivityResponse, PaginatedActivityResponse, ActivityAssignment, ReportProjectActivityRead, \
     ProjectActivitiesResponse, PaginatedProjectActivitiesResponse, ReportedActivityResponse, \
     PaginatedReportedActivityResponse, ReportedActivityProjectResponse, PaginatedReportResponse, ReportResponse
+from schemas.report_activity import RequestChange
 from utils.files import generate_implementation_plan
 
 router = APIRouter()
@@ -626,6 +627,7 @@ async def get_report_activities(
         # Query for activities associated with this report
         query = (
             select(ReportActivity, Project, Activity)
+            .distinct(Activity.uuid)
             .join(Report, ReportActivity.report_uuid == Report.uuid)
             .join(Project, Report.project_uuid == Project.uuid)
             .join(Activity, and_(Activity.project_id == Project.uuid, Activity.report_uuid == Report.uuid))
@@ -639,11 +641,11 @@ async def get_report_activities(
                 selectinload(Activity.domains).joinedload(ActivityDomain.sub_domain_function),
                 selectinload(Activity.domains).joinedload(ActivityDomain.sub_function),
             )
-            .order_by(ReportActivity.created_at.desc())
+            .order_by(Activity.uuid, ReportActivity.created_at.desc())
         )
 
         # Get total count for pagination
-        count_query = select(func.count()).select_from(query.subquery())
+        count_query = select(func.count(distinct(Activity.uuid))).join(Report, Activity.report_uuid == Report.uuid).where(Report.uuid == uuid)
         total_items = await db.execute(count_query)
         total_items = total_items.scalar()
         total_pages = ceil(total_items / page_size)
