@@ -2,6 +2,8 @@ from datetime import datetime
 from math import ceil
 
 from uuid import UUID
+
+import uuid
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.orm import joinedload, selectinload
@@ -10,11 +12,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import User, UserRole, Activity, Report, ReportStatus, ReportActivity, MouDetail, MouApplication, \
-    Organization, Project, InputDetail, ActivityDomain, MouApplicationStatus, Comment
+    Organization, Project, InputDetail, ActivityDomain, MouApplicationStatus, Comment, ReportActivityStatus
 from db.models.activity import ActivityStatus, ActivityReportingStatus
-from schemas.report import ActivityResponse, ProjectActivitiesResponse, ReportActivityDetailResponse, CommentResponse
+from schemas.report import ActivityResponse, ProjectActivitiesResponse, ReportActivityDetailResponse, CommentResponse, \
+    ReportedActivityResponse
 from schemas.report_activity import ReportActivityCreate, OrganizationProjectsResponse, \
-    PaginatedOrganizationProjectsResponse
+    PaginatedOrganizationProjectsResponse, RequestChange, ReportActivityUpdateResponse, ReportActivityUpdateRequest
 
 router = APIRouter()
 
@@ -278,4 +281,132 @@ async def get_report_activity_details(
         raise http_exc
     except Exception as e:
         print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+
+@router.post('/{uuid}/request_change')
+async def request_change_on_reported_activity(
+        uuid: uuid.UUID,
+        comment: RequestChange,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    try:
+        if current_user.role != UserRole.DATA_MANAGER:
+            raise HTTPException(status_code=403, detail='Access denied. User must be a data manager')
+
+        # Fetch the reported activity
+        query = select(ReportActivity).where(ReportActivity.uuid == uuid)
+        result = await db.execute(query)
+        activity = result.scalar_one_or_none()
+
+        if not activity:
+            raise HTTPException(status_code=404, detail='Reported activity not found')
+
+        # Check if the activity belongs to the user's organization
+        report_query = select(Report).where(Report.uuid == activity.report_uuid)
+        report_result = await db.execute(report_query)
+        report = report_result.scalar_one_or_none()
+
+        if not report or report.organization_uuid != current_user.organization_uuid:
+            raise HTTPException(status_code=403, detail='Access denied. Activity does not belong to your organization')
+
+        # Check if the activity is in PENDING status
+        if activity.status != ReportActivityStatus.PENDING:
+            raise HTTPException(status_code=400, detail='Only pending activities can be approved')
+
+        # Update the status to APPROVED
+        if comment:
+            new_comment = Comment(
+                content=comment,
+                user_uuid=current_user.uuid,
+                report_uuid=report.uuid,
+                report_activity_uuid=uuid,
+                created_by=current_user.email
+            )
+
+            db.add(new_comment)
+            await db.commit()
+            await db.refresh(new_comment)
+
+        activity.status = ReportActivityStatus.NEEDS_CHANGE
+        db.add(activity)
+        await db.commit()
+        await db.refresh(activity)
+
+        return {
+            "message": "Change requested successfully",
+            "activity": {
+                "uuid": str(activity.uuid),
+                "status": activity.status.value,
+                "report_uuid": str(activity.report_uuid),
+            }
+        }
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        await db.rollback()
+        print(f"Error: {e}")
+        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+
+
+@router.patch('/{uui}', response_model=ReportActivityUpdateResponse)
+async def update_report_activity(
+        uuid: uuid.UUID,
+        update_data: ReportActivityUpdateRequest,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    try:
+        if current_user.role != UserRole.DATA_REPORTER:
+            raise HTTPException(status_code=403, detail='Access denied. User must be a data reporter')
+
+        # Fetch the report activity from the database
+        result = await db.execute(select(ReportActivity).where(ReportActivity.uuid == uuid))
+        report_activity = result.scalar_one_or_none()
+
+        if not report_activity:
+            raise HTTPException(status_code=404, detail="Report activity not found")
+
+            # Check if the activity belongs to the user's organization
+            report_query = select(Report).where(Report.uuid == activity.report_uuid)
+            report_result = await db.execute(report_query)
+            report = report_result.scalar_one_or_none()
+
+            if not report or report.organization_uuid != current_user.organization_uuid:
+                raise HTTPException(status_code=403,
+                                    detail='Access denied. Activity does not belong to your organization')
+
+        # Update only the provided fields
+        if update_data.executed_budget is not None:
+            report_activity.executed_budget = update_data.executed_budget
+        if update_data.actual_start_date is not None:
+            report_activity.actual_start_date = update_data.actual_start_date
+        if update_data.actual_end_date is not None:
+            report_activity.actual_end_date = update_data.actual_end_date
+        if update_data.status is not None:
+            report_activity.status = update_data.status
+        if update_data.accomplishments is not None:
+            report_activity.accomplishments = update_data.accomplishments
+        if update_data.comment:
+            new_comment = Comment(
+                content=update_data,
+                user_uuid=current_user.uuid,
+                report_uuid=report.uuid,
+                report_activity_uuid=uuid,
+                created_by=current_user.email
+            )
+
+            db.add(new_comment)
+            await db.commit()
+            await db.refresh(new_comment)
+
+        # Commit the changes
+        report_activity.status = ReportActivityStatus.CHANGED
+        await db.commit()
+        await db.refresh(report_activity)
+
+        return report_activity
+    except Exception as e:
+        await db.rollback()
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")

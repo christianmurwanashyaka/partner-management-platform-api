@@ -33,3 +33,30 @@ class PaginatedOrganizationProjectsResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+class RequestChange(BaseModel):
+    comment: Optional[str] = None
+
+
+class ReportActivityUpdateRequest(BaseModel):
+    executed_budget: Optional[float] = None
+    actual_start_date: Optional[datetime] = None
+    actual_end_date: Optional[datetime] = None
+    accomplishments: Optional[List[str]] = None
+    comment: Optional[str] = None
+    status: Optional[ActivityStatus] = None
+
+    class Config:
+        from_attributes = True
+
+class ReportActivityUpdateResponse(BaseModel):
+    executed_budget: float
+    actual_start_date: datetime
+    actual_end_date: datetime
+    accomplishments: List[str]
+    comment: Optional[str] = None
+    status: ActivityStatus
+
+    class Config:
+        from_attributes = True
