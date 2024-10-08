@@ -13,6 +13,7 @@ class ReportActivityStatus(str, Enum):
     PENDING = 'pending'
     APPROVED = 'approved'
     NEEDS_CHANGE = 'needs_change'
+    CHANGED = 'changed'
 
 
 class ReportActivity(CommonBaseModel, table=True):
