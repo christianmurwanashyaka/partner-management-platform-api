@@ -164,3 +164,26 @@ class ReportActivityDetailResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ReportActivityInputDetailResponse(BaseModel):
+    uuid: str
+    category: str
+    input :str
+    budget: float
+    district: Optional[str]
+    province: Optional[str]
+
+
+class ReportActivityDomainResponse(BaseModel):
+    uuid: str
+    domain_intervention: str
+    sub_domain: str
+    sub_domain_function: str
+    sub_function: str
+
+
+class ReportActivityCommentResponse(BaseModel):
+    uuid: str
+    content: str
+    created_at: datetime
