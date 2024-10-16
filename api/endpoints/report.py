@@ -18,8 +18,10 @@ from helpers.activity import fetch_activities_for_projects
 from schemas.project import ProjectList
 from schemas.report import ActivityResponse, PaginatedActivityResponse, ActivityAssignment, ReportProjectActivityRead, \
     ProjectActivitiesResponse, PaginatedProjectActivitiesResponse, ReportedActivityResponse, \
-    PaginatedReportedActivityResponse, ReportedActivityProjectResponse, PaginatedReportResponse, ReportResponse
+    PaginatedReportedActivityResponse, ReportedActivityProjectResponse, PaginatedReportResponse, ReportResponse, \
+    ReportActivityCommentResponse, ReportActivityInputDetailResponse
 from schemas.report_activity import RequestChange
+from service.report_activity import ReportActivityService
 from utils.files import generate_implementation_plan
 
 router = APIRouter()
@@ -597,6 +599,146 @@ async def get_submitted_reports(
         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
 
 
+# @router.get('/data-manager/report/{uuid}/activities', response_model=PaginatedReportedActivityResponse)
+# async def get_report_activities(
+#         uuid: uuid.UUID,
+#         current_user: User = Depends(get_current_user),
+#         db: AsyncSession = Depends(get_db),
+#         page: int = Query(1, ge=1, description='Page number'),
+#         page_size: int = Query(10, ge=1, le=100, description='Number of items per page')
+# ):
+#     try:
+#         if current_user.role not in [UserRole.DATA_MANAGER, UserRole.M_AND_E]:
+#             raise HTTPException(status_code=403, detail='Access denied. User must be a data manager or m and e')
+#
+#         # Check if the report exists and belongs to the user's organization
+#         report_query = (
+#             select(Report)
+#             .where(Report.uuid == uuid)
+#             .where(or_(
+#                 and_(Report.organization_uuid == current_user.organization_uuid, current_user.role == UserRole.DATA_MANAGER),
+#                 current_user.role == UserRole.M_AND_E
+#             ))
+#         )
+#         report_result = await db.execute(report_query)
+#         report = report_result.scalar_one_or_none()
+#
+#         if not report:
+#             raise HTTPException(status_code=404, detail='Report not found or access denied')
+#
+#         # Query for activities associated with this report
+#         query = (
+#             select(ReportActivity, Project, Activity)
+#             .distinct(Activity.uuid)
+#             .join(Report, ReportActivity.report_uuid == Report.uuid)
+#             .join(Project, Report.project_uuid == Project.uuid)
+#             .join(Activity, and_(Activity.project_id == Project.uuid, Activity.report_uuid == Report.uuid))
+#             .where(ReportActivity.report_uuid == uuid)
+#             .options(
+#                 selectinload(ReportActivity.comments),
+#                 selectinload(Activity.input_details).joinedload(InputDetail.input_category),
+#                 selectinload(Activity.input_details).joinedload(InputDetail.input),
+#                 selectinload(Activity.domains).joinedload(ActivityDomain.domain_intervention),
+#                 selectinload(Activity.domains).joinedload(ActivityDomain.sub_domain),
+#                 selectinload(Activity.domains).joinedload(ActivityDomain.sub_domain_function),
+#                 selectinload(Activity.domains).joinedload(ActivityDomain.sub_function),
+#             )
+#             .order_by(Activity.uuid, ReportActivity.created_at.desc())
+#         )
+#
+#         # Get total count for pagination
+#         count_query = select(func.count(distinct(Activity.uuid))).join(Report, Activity.report_uuid == Report.uuid).where(Report.uuid == uuid)
+#         total_items = await db.execute(count_query)
+#         total_items = total_items.scalar()
+#         total_pages = ceil(total_items / page_size)
+#
+#         if page > total_pages and total_pages > 0:
+#             raise HTTPException(status_code=404, detail=f"Page {page} does not exist. Total pages: {total_pages}")
+#
+#         # Execute the main query with pagination
+#         result = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+#         activities_data = result.all()
+#
+#         # Group activities by project
+#         print('\nACTIVITIES DATA: ', activities_data)
+#         grouped_activities = {}
+#         for report_activity, project, activity in activities_data:
+#             print('\nACTIVITY: ', activity)
+#             print('\nREPORT ACTIVITY: ', report_activity)
+#             activity_dict = ReportedActivityResponse(
+#                 # Fields from Activity
+#                 uuid=str(activity.uuid),
+#                 name=activity.name,
+#                 description=activity.description,
+#                 start_date=activity.start_date,
+#                 end_date=activity.end_date,
+#                 implementer=activity.implementer,
+#                 implementer_unit=activity.implementer_unit,
+#                 fiscal_year=activity.fiscal_year,
+#                 project_name=project.name,
+#                 planned_budget=sum(detail.budget for detail in activity.input_details) if activity.input_details else None,
+#                 currency=project.currency,
+#                 status=activity.status,
+#                 report_status=activity.report_status,
+#                 input_details=[{
+#                     "uuid": str(detail.uuid),
+#                     "category": detail.input_category.name,
+#                     "input": detail.input.name,
+#                     "budget": detail.budget,
+#                     "district": detail.district,
+#                     "province": detail.province
+#                 } for detail in activity.input_details],
+#                 domains=[{
+#                     "uuid": str(domain.uuid),
+#                     "domain_intervention": domain.domain_intervention.name,
+#                     "sub_domain": domain.sub_domain.name,
+#                     "sub_domain_function": domain.sub_domain_function.name,
+#                     "sub_function": domain.sub_function.name
+#                 } for domain in activity.domains],
+#
+#                 # Fields from ReportActivity
+#                 report_uuid=str(report_activity.report_uuid),
+#                 reported_by=report_activity.reported_by,
+#                 executed_budget=report_activity.executed_budget,
+#                 actual_start_date=report_activity.actual_start_date.date() if report_activity.actual_start_date else None,
+#                 actual_end_date=report_activity.actual_end_date.date() if report_activity.actual_end_date else None,
+#                 report_activity_status=report_activity.status,
+#                 report_activity_uuid=str(report_activity.uuid),
+#                 accomplishments=report_activity.accomplishments,
+#                 comments=[{
+#                     "uuid": str(comment.uuid),
+#                     "content": comment.content,
+#                     "created_at": comment.created_at,
+#                 } for comment in report_activity.comments],
+#             )
+#
+#             if project.uuid not in grouped_activities:
+#                 grouped_activities[project.uuid] = ReportedActivityProjectResponse(
+#                     project_name=project.name,
+#                     project_uuid=str(project.uuid),
+#                     project_currency=project.currency,
+#                     activities=[]
+#                 )
+#
+#             grouped_activities[project.uuid].activities.append(activity_dict)
+#
+#         items = list(grouped_activities.values())
+#
+#         return PaginatedReportedActivityResponse(
+#             items=items,
+#             total_items=total_items,
+#             page=page,
+#             page_size=page_size,
+#             total_pages=total_pages
+#         )
+#
+#     except HTTPException as http_exc:
+#         raise http_exc
+#     except Exception as e:
+#         print(f"Error: {e}")
+#         raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+
+
 @router.get('/data-manager/report/{uuid}/activities', response_model=PaginatedReportedActivityResponse)
 async def get_report_activities(
         uuid: uuid.UUID,
@@ -609,57 +751,23 @@ async def get_report_activities(
         if current_user.role not in [UserRole.DATA_MANAGER, UserRole.M_AND_E]:
             raise HTTPException(status_code=403, detail='Access denied. User must be a data manager or m and e')
 
-        # Check if the report exists and belongs to the user's organization
-        report_query = (
-            select(Report)
-            .where(Report.uuid == uuid)
-            .where(or_(
-                and_(Report.organization_uuid == current_user.organization_uuid, current_user.role == UserRole.DATA_MANAGER),
-                current_user.role == UserRole.M_AND_E
-            ))
-        )
-        report_result = await db.execute(report_query)
-        report = report_result.scalar_one_or_none()
+        service = ReportActivityService(db)
 
-        if not report:
-            raise HTTPException(status_code=404, detail='Report not found or access denied')
+        report = await service.validate_report_access(uuid, current_user)
 
-        # Query for activities associated with this report
-        query = (
-            select(ReportActivity, Project, Activity)
-            .distinct(Activity.uuid)
-            .join(Report, ReportActivity.report_uuid == Report.uuid)
-            .join(Project, Report.project_uuid == Project.uuid)
-            .join(Activity, and_(Activity.project_id == Project.uuid, Activity.report_uuid == Report.uuid))
-            .where(ReportActivity.report_uuid == uuid)
-            .options(
-                selectinload(ReportActivity.comments),
-                selectinload(Activity.input_details).joinedload(InputDetail.input_category),
-                selectinload(Activity.input_details).joinedload(InputDetail.input),
-                selectinload(Activity.domains).joinedload(ActivityDomain.domain_intervention),
-                selectinload(Activity.domains).joinedload(ActivityDomain.sub_domain),
-                selectinload(Activity.domains).joinedload(ActivityDomain.sub_domain_function),
-                selectinload(Activity.domains).joinedload(ActivityDomain.sub_function),
+        activities_data, total_items = await service.get_paginated_activities(uuid, page, page_size)
+
+        total_pages = ceil(total_items/page_size)
+        if page > total_pages > 0:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Page {page} does not exist. Total pages: {total_pages}"
             )
-            .order_by(Activity.uuid, ReportActivity.created_at.desc())
-        )
 
-        # Get total count for pagination
-        count_query = select(func.count(distinct(Activity.uuid))).join(Report, Activity.report_uuid == Report.uuid).where(Report.uuid == uuid)
-        total_items = await db.execute(count_query)
-        total_items = total_items.scalar()
-        total_pages = ceil(total_items / page_size)
-
-        if page > total_pages and total_pages > 0:
-            raise HTTPException(status_code=404, detail=f"Page {page} does not exist. Total pages: {total_pages}")
-
-        # Execute the main query with pagination
-        result = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
-        activities_data = result.all()
-
-        # Group activities by project
         grouped_activities = {}
         for report_activity, project, activity in activities_data:
+            print('\nACTIVITY: ', activity)
+            print('\nREPORT ACTIVITY: ', report_activity)
             activity_dict = ReportedActivityResponse(
                 # Fields from Activity
                 uuid=str(activity.uuid),
@@ -730,8 +838,8 @@ async def get_report_activities(
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
-        print(f"Error: {e}")
-        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+        raise HTTPException(status_code = 500, detail=f'An internal server error occured: {str(e)}')
+
 
 
 @router.patch('/data-manager/report/{uuid}/submit')
