@@ -146,8 +146,6 @@ async def create_organization(
             db.add(notified_constitution_bylaws_doc)
 
         await db.commit()
-        print('DB USER', db_user)
-        print('NEW ORGANIZATION', new_organization)
         await notify_new_user(db, email_handler, db_user, new_organization)
         # await notify_new_organization(db, email_handler, db_user, new_organization)
 

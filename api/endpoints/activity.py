@@ -27,72 +27,72 @@ router = APIRouter()
 
 @router.post('/', response_model=ActivityRead, dependencies=[Depends(partner_access)])
 async def create_activity(request: Request, activity: ActivityCreate, db: AsyncSession = Depends(get_db)):
-    user = request.state.user.email
-
-    if not activity.domains or not activity.input_details:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Input details and domains are required for an activity')
-    # Check for existing activity with the same basic details
-    existing_activity_query = select(Activity).where(
-        Activity.project_id == activity.project_id,
-        Activity.name == activity.name,
-        Activity.implementer == activity.implementer,
-        Activity.implementer_unit == activity.implementer_unit,
-        Activity.fiscal_year == activity.fiscal_year,
-        Activity.start_date == activity.start_date,
-        Activity.end_date == activity.end_date
-    )
-    existing_activity = (await db.execute(existing_activity_query)).scalars().first()
-
-    if existing_activity:
-        # Check if the existing activity has the same domains
-        existing_domains_query = select(ActivityDomain).where(
-            ActivityDomain.activity_id == existing_activity.uuid
-        )
-        existing_domains = (await db.execute(existing_domains_query)).scalars().all()
-        existing_domain_ids = {(domain.domain_intervention_id, domain.sub_domain_id) for domain in existing_domains}
-
-        new_domain_ids = {(domain.domain_intervention_id, domain.sub_domain_id) for domain in activity.domains}
-
-        if existing_domain_ids == new_domain_ids:
-            # Check if the existing activity has the same input details
-            existing_input_details_query = select(InputDetail).where(
-                InputDetail.activity_id == existing_activity.uuid
-            )
-            existing_input_details = (await db.execute(existing_input_details_query)).scalars().all()
-            existing_input_details_set = {
-                (input_detail.input_category_id, input_detail.input_id, input_detail.budget, input_detail.district,
-                 input_detail.province)
-                for input_detail in existing_input_details
-            }
-
-            new_input_details_set = {
-                (input_detail.input_category_id, input_detail.input_id, input_detail.budget, input_detail.district,
-                 input_detail.province)
-                for input_detail in activity.input_details
-            }
-
-            if existing_input_details_set == new_input_details_set:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="An activity with the same details already exists."
-                )
-
-    new_activity = Activity(
-        project_id=activity.project_id,
-        name=activity.name,
-        description=activity.description,
-        implementer=activity.implementer,
-        implementer_unit=activity.implementer_unit,
-        fiscal_year=activity.fiscal_year,
-        start_date=activity.start_date,
-        end_date=activity.end_date,
-        created_by=user
-    )
-    db.add(new_activity)
-    await db.commit()
-    await db.refresh(new_activity)
-
     try:
+        user = request.state.user.email
+
+        if not activity.domains or not activity.input_details:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, 'Input details and domains are required for an activity')
+        # Check for existing activity with the same basic details
+        existing_activity_query = select(Activity).where(
+            Activity.project_id == activity.project_id,
+            Activity.name == activity.name,
+            Activity.implementer == activity.implementer,
+            Activity.implementer_unit == activity.implementer_unit,
+            Activity.fiscal_year == activity.fiscal_year,
+            Activity.start_date == activity.start_date,
+            Activity.end_date == activity.end_date
+        )
+        existing_activity = (await db.execute(existing_activity_query)).scalars().first()
+
+        if existing_activity:
+            # Check if the existing activity has the same domains
+            existing_domains_query = select(ActivityDomain).where(
+                ActivityDomain.activity_id == existing_activity.uuid
+            )
+            existing_domains = (await db.execute(existing_domains_query)).scalars().all()
+            existing_domain_ids = {(domain.domain_intervention_id, domain.sub_domain_id) for domain in existing_domains}
+
+            new_domain_ids = {(domain.domain_intervention_id, domain.sub_domain_id) for domain in activity.domains}
+
+            if existing_domain_ids == new_domain_ids:
+                # Check if the existing activity has the same input details
+                existing_input_details_query = select(InputDetail).where(
+                    InputDetail.activity_id == existing_activity.uuid
+                )
+                existing_input_details = (await db.execute(existing_input_details_query)).scalars().all()
+                existing_input_details_set = {
+                    (input_detail.input_category_id, input_detail.input_id, input_detail.budget, input_detail.district,
+                     input_detail.province)
+                    for input_detail in existing_input_details
+                }
+
+                new_input_details_set = {
+                    (input_detail.input_category_id, input_detail.input_id, input_detail.budget, input_detail.district,
+                     input_detail.province)
+                    for input_detail in activity.input_details
+                }
+
+                if existing_input_details_set == new_input_details_set:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="An activity with the same details already exists."
+                    )
+
+        new_activity = Activity(
+            project_id=activity.project_id,
+            name=activity.name,
+            description=activity.description,
+            implementer=activity.implementer,
+            implementer_unit=activity.implementer_unit,
+            fiscal_year=activity.fiscal_year,
+            start_date=activity.start_date,
+            end_date=activity.end_date,
+            created_by=user
+        )
+        db.add(new_activity)
+        await db.commit()
+        await db.refresh(new_activity)
+
         # Handle domains
         activity_domains = []
         for domain in activity.domains:
@@ -121,9 +121,7 @@ async def create_activity(request: Request, activity: ActivityCreate, db: AsyncS
             )
             input_details.append(new_input_detail)
         db.add_all(input_details)
-
         await db.commit()
-
         new_activity_read = await load_activity_related_entities(db, new_activity)
 
         return new_activity_read
