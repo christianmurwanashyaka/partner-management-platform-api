@@ -323,7 +323,10 @@ async def get_reported_activities(
             select(ReportActivity, Project, Activity)
             .join(Report, ReportActivity.report_uuid == Report.uuid)
             .join(Project, Report.project_uuid == Project.uuid)
-            .join(Activity, and_(Activity.project_id == Project.uuid, Activity.report_uuid == Report.uuid))
+            .join(Activity, and_(
+                Activity.uuid == ReportActivity.activity_uuid,
+                Activity.project_id == Project.uuid,
+                Activity.report_uuid == Report.uuid))
             .options(
                 selectinload(ReportActivity.comments),
                 selectinload(Activity.input_details).joinedload(InputDetail.input_category),
