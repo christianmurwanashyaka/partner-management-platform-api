@@ -1,0 +1,56 @@
+#!/bin/sh
+set -e
+
+# Error trapping
+trap 'echo "Error on line $LINENO"' ERR
+
+echo "Starting pre-commit hook"
+
+# Get a list of changed files staged for commit
+echo "Running git diff command..."
+all_changed=$(git diff --cached --name-only --diff-filter=ACM)
+echo "Git diff command completed"
+
+echo "All changed files:"
+echo "$all_changed"
+
+echo "Running grep command..."
+changed_files=$(echo "$all_changed" | grep -E '\.py$' || true)
+echo "Grep command completed"
+
+echo "====================================="
+echo "Filtered changed files:"
+echo "$changed_files"
+
+# Check if there are any files to format/lint
+if [ -n "$changed_files" ]; then
+    echo "Entering main execution block"
+
+    echo "Files to format/lint detected:"
+    echo "$changed_files"
+
+    # Run Black formatter
+    echo "Running Black formatter..."
+    if ! black $changed_files; then
+        echo "BLACK FORMATTER FAILED. COMMIT ABORTED."
+        exit 1
+    fi
+    echo "Black formatting completed successfully"
+
+    # Run Ruff linter
+    echo "Running Ruff linter..."
+    if ! ruff check $changed_files; then
+        echo "RUFF LINTER FAILED. COMMIT ABORTED."
+        exit 1
+    fi
+    echo "Ruff linting completed successfully"
+
+    echo "Staging formatted files..."
+    git add $changed_files
+    echo "Changes staged"
+else
+    echo "NO FILES TO FORMAT/LINT. SKIPPING PRE-COMMIT CHECKS."
+fi
+
+echo "Pre-commit hook completed successfully"
+exit 0

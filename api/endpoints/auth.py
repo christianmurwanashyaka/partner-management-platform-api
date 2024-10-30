@@ -1,23 +1,27 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import admin_access
 from api.dependencies.auth import get_current_user
+from api.dependencies.email_notification_handler import get_email_notification_handler
 from db.database import get_db
 from db.models.organization import Organization
 from db.models.user import User, UserRole, MOHStaffLevel
 from helpers.db import get_first_item, check_if_exists, get_items_by_criteria
+from notification.handlers import EmailNotificationHandler
+from notification.services import send_verification_email
 from schemas.user import UserCreate, Token, LoginRequest, UserProfile, SignupResponse, UserOrganization, \
     ChangePasswordRequest
-from utils.security import get_password_hash, verify_password, create_access_token
+from utils.security import get_password_hash, verify_password, create_access_token, create_verification_token, \
+    verify_token
 
 router = APIRouter()
 
 
 @router.post("/signup", response_model=SignupResponse)
-async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
+async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db), email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)):
     if await check_if_exists(User, db, email=user.email):
         raise HTTPException(status.HTTP_409_CONFLICT, detail='User with this email already exists')
 
@@ -53,14 +57,55 @@ async def create_user(user: UserCreate, db: AsyncSession = Depends(get_db)):
         created_by=user.email,
         partner_organization_name=user.partner_organization_name,
         organization_uuid=user.organization_uuid if user.role in [UserRole.DATA_MANAGER,
-                                                                  UserRole.DATA_REPORTER] else None
+                                                                  UserRole.DATA_REPORTER] else None,
+        is_verified=False,
+        has_set_password=False
     )
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
 
-    token = create_access_token(data={"sub": user.email})
-    return {"user": db_user, "token": {"access_token": token, "token_type": "bearer"}}
+    verification_token = create_verification_token(user.email)
+    await send_verification_email(db, email_handler, db_user, verification_token=verification_token)
+
+    return {"user": db_user}
+
+
+@router.get('/verify/{token}')
+async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+    email = verify_token(token)
+
+    query = select(User).where(User.email == email)
+    result = await db.execute(query)
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+
+    if user.is_verified:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='User already verified')
+
+    user.is_verified = True
+    await db.commit()
+
+    return { 'message': 'Email verified successfully'}
+
+
+@router.get('/resend-verification')
+async def resend_verification_email(email: str, db: AsyncSession = Depends(get_db), email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)):
+    query = select(User).filter(User.email == email)
+    user = await get_first_item(db, query)
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='User not found')
+    if user.is_verified:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Email is already verified')
+
+    verification_token = create_verification_token(user.email)
+
+    await send_verification_email(db=db, email_handler=email_handler, user=user, verification_token=verification_token)
+
+    return { "message": "Verification email has been reset"}
 
 
 @router.post("/login", response_model=Token)
@@ -78,6 +123,12 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please verify your email address before logging in. Check your email for the verification link.",
+        )
+
     access_token = create_access_token(data={"sub": user.email})
     return {
         "uuid": user.uuid,
@@ -86,7 +137,9 @@ async def login_for_access_token(
         "first_name": user.first_name,
         "last_name": user.last_name,
         "role": user.role,
-        "level": user.level
+        "level": user.level,
+        "is_verified": user.is_verified,
+        "has_set_password": user.has_set_password
     }
 
 
