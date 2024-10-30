@@ -1,3 +1,5 @@
+from fastapi import HTTPException, status
+from jose import JWTError
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from typing import Optional
@@ -55,3 +57,25 @@ async def create_admin(db: AsyncSession):
         await db.refresh(admin)
 
     return admin
+
+
+def create_verification_token(email: str) -> str:
+    expire = datetime.utcnow() + timedelta(hours=48)
+    to_encode = {
+        "sub": email,
+        "exp": expire,
+        "type": 'email_verification'
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def verify_token(token: str) -> str:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        email: str = payload.get('sub')
+        token_type: str = payload.get('type')
+        if email is None or  token_type != 'email_verification':
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid verification token')
+        return email
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid or expired verification token')
