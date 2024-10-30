@@ -36,6 +36,8 @@ class User(CommonBaseModel, table=True):
     role: UserRole
     level: Optional[MOHStaffLevel] = None
     phone_number: Optional[str] = None
+    is_verified: bool = Field(default=False)
+    has_set_password: bool = Field(default=False)
     organization_uuid: Optional[uuid.UUID] = Field(default=None, foreign_key='organization.uuid')
     organization: Optional['Organization'] = Relationship(
         back_populates="users", sa_relationship_kwargs={'lazy': 'noload'})

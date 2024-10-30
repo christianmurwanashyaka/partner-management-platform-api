@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # CORS configuration
     CORS_ORIGINS: List[str]
 
+    FRONT_END_EMAIL_VERIFICATION_URL: str
+    SYSTEM_NAME: str
+    CLIENT_URL: str
+
     class Config:
         env_file = env_path
 
