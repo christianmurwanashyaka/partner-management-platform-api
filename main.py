@@ -1,5 +1,6 @@
 import traceback
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -19,12 +20,37 @@ from db.database import create_db_and_tables, async_session
 from utils.security import create_admin
 
 
+async def verify_template_setup():
+    template_dir = Path(__file__).parent / "templates"
+    verification_template = template_dir / "emails" / "verification_email.html"
+    base_template = template_dir / "emails" / "base_email.html"
+
+    issues = []
+
+    if not template_dir.exists():
+        issues.append(f"Template directory not found: {template_dir}")
+
+    if not verification_template.exists():
+        issues.append(f"Verification template not found: {verification_template}")
+
+    if not base_template.exists():
+        issues.append(f"Base template not found: {base_template}")
+
+    if issues:
+        for issue in issues:
+            print(issue)
+        raise FileNotFoundError("\n".join(issues))
+
+    return True
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     system_logger.info("Starting up the application")
     try:
         await create_db_and_tables()
+        await verify_template_setup()
         async with async_session() as db:
             await create_admin(db)
     except Exception as e:

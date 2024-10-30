@@ -7,6 +7,8 @@ from sqlalchemy.future import select
 
 from db.models import Notification, UserRole, User, MOHStaffLevel, MouApplication, Organization
 import logging
+
+from templates.handlers import TemplateHandler
 from .handlers import EmailNotificationHandler
 from core.config import settings
 
@@ -42,6 +44,22 @@ async def create_and_send_notification(
 
     # Send the notification
     await email_handler.send_notification(notification, attachment)
+
+
+async def send_verification_email(db: AsyncSession, email_handler: EmailNotificationHandler, user: User, verification_token: str):
+    template_handler = TemplateHandler()
+    verification_url = f"{settings.FRONT_END_EMAIL_VERIFICATION_URL}?token={verification_token}"
+    html_content = await template_handler.render_template(
+        'verification_email.html',
+        user={
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'email': user.email
+        },
+        verification_url=verification_url
+    )
+
+    await create_and_send_notification(db=db, email_handler=email_handler, recipient_id=user.uuid, subject='Verify Your Email Address', message=html_content, created_by=user.email)
 
 
 async def notify_partner_coordinators(db: AsyncSession, application_id: str, created_by: str, email_handler: EmailNotificationHandler):
@@ -139,36 +157,64 @@ async def notify_partner(
 
 
 async def notify_new_user(db: AsyncSession, email_handler: EmailNotificationHandler, user: User, organization: Organization):
-    subject = "Welcome to Our System - Your Account and Organization Details"
-    message = f"""
-    Dear {user.first_name} {user.last_name},
+    # subject = "Welcome to Our System - Your Account and Organization Details"
+    # message = f"""
+    # Dear {user.first_name} {user.last_name},
+    #
+    # Welcome to our system! Your account has been successfully created with the following details:
+    #
+    # User Profile:
+    # - Email: {user.email}
+    # - Phone: {user.phone_number}
+    #
+    # Organization Details:
+    # - Name: {organization.name}
+    # - Email: {organization.email}
+    # - Phone: {organization.phone_number}
+    # - Website: {organization.website}
+    #
+    # You can now log in to your account using your email and the password you provided during registration.
+    #
+    # If you have any questions or need assistance, please don't hesitate to contact our support team.
+    #
+    # Best regards,
+    # The System Team
+    # """
+    #
+    # await create_and_send_notification(
+    #     db=db,
+    #     email_handler=email_handler,
+    #     recipient_id=user.uuid,
+    #     subject=subject,
+    #     message=message,
+    #     created_by=user.email
+    # )
+    template_handler = TemplateHandler()
 
-    Welcome to our system! Your account has been successfully created with the following details:
+    # Render the HTML template
+    html_content = await template_handler.render_template(
+        "welcome_email.html",
+        user={
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+            "phone_number": user.phone_number
+        },
+        organization=organization and {
+            "name": organization.name,
+            "email": organization.email,
+            "phone_number": organization.phone_number,
+            "website": organization.website
+        }
+    )
 
-    User Profile:
-    - Email: {user.email}
-    - Phone: {user.phone_number}
-
-    Organization Details:
-    - Name: {organization.name}
-    - Email: {organization.email}
-    - Phone: {organization.phone_number}
-    - Website: {organization.website}
-
-    You can now log in to your account using your email and the password you provided during registration.
-
-    If you have any questions or need assistance, please don't hesitate to contact our support team.
-
-    Best regards,
-    The System Team
-    """
-
+    # Create and send notification
     await create_and_send_notification(
         db=db,
         email_handler=email_handler,
         recipient_id=user.uuid,
-        subject=subject,
-        message=message,
+        subject="Welcome to Our System",
+        message=html_content,
         created_by=user.email
     )
 

@@ -1,0 +1,38 @@
+<!-- templates/emails/welcome_email.html -->
+{% extends "emails/base_email.html" %}
+
+{% block content %}
+<h2>Welcome to {{ system_name }}!</h2>
+
+<p>Dear {{ user.first_name }} {{ user.last_name }},</p>
+
+<p>Welcome to our system! Your account has been successfully created.</p>
+
+<div class="info-block">
+    <h3>User Profile</h3>
+    <p>Email: {{ user.email }}</p>
+    {% if user.phone_number %}
+    <p>Phone: {{ user.phone_number }}</p>
+    {% endif %}
+</div>
+
+{% if organization %}
+<div class="info-block">
+    <h3>Organization Details</h3>
+    <p>Name: {{ organization.name }}</p>
+    <p>Email: {{ organization.email }}</p>
+    {% if organization.phone_number %}
+    <p>Phone: {{ organization.phone_number }}</p>
+    {% endif %}
+    {% if organization.website %}
+    <p>Website: {{ organization.website }}</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<p>You can now log in to your account using your email and the password you provided during registration.</p>
+
+<p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+
+<p>Best regards,<br>The {{ system_name }} Team</p>
+{% endblock %}
