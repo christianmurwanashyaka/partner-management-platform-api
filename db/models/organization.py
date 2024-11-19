@@ -1,26 +1,27 @@
-from __future__ import annotations
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 
 import uuid
 from pydantic import EmailStr
 from sqlmodel import Field, Relationship
 import sqlalchemy as sa
 
-from db.models import (
-    OrganizationType,
-    Project,
-    Party,
-    User,
-    Report,
-    FinancingScheme,
-    HealthCareProvider,
-    SubFinancingScheme,
-    FinancingAgent,
-    SubHealthCareProvider,
-    SubFinancingAgent,
-)
 from db.models.base import CommonBaseModel
 from db.models.document import Document
+
+if TYPE_CHECKING:
+    from .types import (
+        OrganizationType,
+        Project,
+        Party,
+        User,
+        Report,
+        FinancingScheme,
+        HealthCareProvider,
+        FinancingAgent,
+        SubFinancingScheme,
+        SubHealthCareProvider,
+        SubFinancingAgent,
+    )
 
 
 class OrganizationFinancingScheme(CommonBaseModel, table=True):
@@ -126,59 +127,59 @@ class Organization(CommonBaseModel, table=True):
     organization_type_id: uuid.UUID = Field(
         default=None, sa_column=sa.Column(sa.ForeignKey("organization_type.uuid"))
     )
-    organization_type: OrganizationType = Relationship(
+    organization_type: "OrganizationType" = Relationship(
         back_populates="organizations", sa_relationship_kwargs={"lazy": "noload"}
     )
     documents: List[Document] = Relationship(
         back_populates="organization", sa_relationship_kwargs={"lazy": "noload"}
     )
 
-    projects: List[Project] = Relationship(
+    projects: List["Project"] = Relationship(
         back_populates="", sa_relationship_kwargs={"lazy": "noload"}
     )
 
-    parties: List[Party] = Relationship(
+    parties: List["Party"] = Relationship(
         back_populates="", sa_relationship_kwargs={"lazy": "noload"}
     )
 
-    users: List[User] = Relationship(
+    users: List["User"] = Relationship(
         back_populates="organization", sa_relationship_kwargs={"lazy": "noload"}
     )
-    reports: List[Report] = Relationship(
+    reports: List["Report"] = Relationship(
         back_populates="organization", sa_relationship_kwargs={"lazy": "noload"}
     )
 
-    financing_schemes: List[FinancingScheme] = Relationship(
+    financing_schemes: List["FinancingScheme"] = Relationship(
         back_populates="organizations",
         link_model=OrganizationFinancingScheme,
         sa_relationship_kwargs={"lazy": "noload"},
     )
 
-    health_care_providers: List[HealthCareProvider] = Relationship(
+    health_care_providers: List["HealthCareProvider"] = Relationship(
         back_populates="organizations",
         link_model=OrganizationHealthCareProvider,
         sa_relationship_kwargs={"lazy": "noload"},
     )
 
-    financing_agents: List[FinancingAgent] = Relationship(
+    financing_agents: List["FinancingAgent"] = Relationship(
         back_populates="organizations",
         link_model=OrganizationFinancingAgent,
         sa_relationship_kwargs={"lazy": "noload"},
     )
 
-    sub_financing_schemes: List[SubFinancingScheme] = Relationship(
+    sub_financing_schemes: List["SubFinancingScheme"] = Relationship(
         back_populates="organizations",
         link_model=OrganizationSubFinancingScheme,
         sa_relationship_kwargs={"lazy": "noload"},
     )
 
-    sub_health_care_providers: List[SubHealthCareProvider] = Relationship(
+    sub_health_care_providers: List["SubHealthCareProvider"] = Relationship(
         back_populates="organizations",
         link_model=OrganizationSubHealthCareProvider,
         sa_relationship_kwargs={"lazy": "noload"},
     )
 
-    sub_financing_agents: List[SubFinancingAgent] = Relationship(
+    sub_financing_agents: List["SubFinancingAgent"] = Relationship(
         back_populates="organizations",
         link_model=OrganizationSubFinancingAgent,
         sa_relationship_kwargs={"lazy": "noload"},
