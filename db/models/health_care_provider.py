@@ -1,10 +1,12 @@
-from __future__ import annotations
 import uuid
-from typing import List
+from typing import List, TYPE_CHECKING
 
 from sqlmodel import Field, Relationship
 
-from db.models import CommonBaseModel, Organization
+from db.models import CommonBaseModel
+
+if TYPE_CHECKING:
+    from .types import Organization
 
 
 class SubHealthCareProvider(CommonBaseModel, table=True):
@@ -28,7 +30,7 @@ class SubHealthCareProvider(CommonBaseModel, table=True):
         description="SHA code of the sub health care provider (e.g., HP1.1",
         index=True,
     )
-    organizations: List[Organization] = Relationship(
+    organizations: List["Organization"] = Relationship(
         back_populates="sub_health_care_providers",
         sa_relationship_kwargs={"lazy": "noload"},
     )
@@ -47,7 +49,7 @@ class HealthCareProvider(CommonBaseModel, table=True):
     sha_code: str = Field(
         ..., description="SHA code of the health care provider", index=True
     )
-    organizations: List[Organization] = Relationship(
+    organizations: List["Organization"] = Relationship(
         back_populates="health_care_providers",
         sa_relationship_kwargs={"lazy": "noload"},
     )

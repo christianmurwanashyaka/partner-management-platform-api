@@ -1,10 +1,12 @@
-from __future__ import annotations
 import uuid
-from typing import List
+from typing import List, TYPE_CHECKING
 
 from sqlmodel import Field, Relationship
 
-from db.models import CommonBaseModel, Organization
+from db.models import CommonBaseModel
+
+if TYPE_CHECKING:
+    from .types import Organization
 
 
 class SubFinancingScheme(CommonBaseModel, table=True):
@@ -26,7 +28,7 @@ class SubFinancingScheme(CommonBaseModel, table=True):
         description="SHA code for the sub financing scheme (e.g., FS.1.1",
         index=True,
     )
-    organizations: List[Organization] = Relationship(
+    organizations: List["Organization"] = Relationship(
         back_populates="sub_financing_schemes",
         sa_relationship_kwargs={"lazy": "noload"},
     )
@@ -45,7 +47,7 @@ class FinancingScheme(CommonBaseModel, table=True):
     sub_financing_schemes: List[SubFinancingScheme] = Relationship(
         back_populates="financing_scheme", sa_relationship_kwargs={"lazy": "noload"}
     )
-    organizations: List[Organization] = Relationship(
+    organizations: List["Organization"] = Relationship(
         back_populates="financing_schemes", sa_relationship_kwargs={"lazy": "noload"}
     )
 
