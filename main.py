@@ -36,6 +36,7 @@ from api.endpoints import (
     report,
     report_activity,
     health,
+    financing_scheme,
 )
 
 from core.config import settings
@@ -180,6 +181,11 @@ app.include_router(
     organization_type.router,
     prefix="/api/v1/organization_type",
     tags=["Organization Type"],
+)
+app.include_router(
+    financing_scheme.router,
+    prefix="/api/v1/financing_scheme",
+    tags=["Financing Scheme"],
 )
 app.include_router(
     funding_source.router, prefix="/api/v1/funding_source", tags=["Funding Source"]
