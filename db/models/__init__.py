@@ -26,7 +26,6 @@ from .input_detail import InputDetail
 from .input_category import Input, InputCategory
 from .project import Project, Goal
 
-# from .operational_zone import OperationalZone
 from .mou_detail import MouDetail
 from .mou_application import MouApplication, MouApplicationStatus
 from .mou_approval_or_review import MouApprovalOrReview, MouApprovalOrReviewDecision
