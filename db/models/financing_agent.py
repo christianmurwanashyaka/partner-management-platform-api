@@ -3,7 +3,11 @@ from typing import List, TYPE_CHECKING
 
 from sqlmodel import Field, Relationship
 
-from db.models import CommonBaseModel
+from db.models import (
+    CommonBaseModel,
+    OrganizationFinancingAgent,
+    OrganizationSubFinancingAgent,
+)
 
 if TYPE_CHECKING:
     from .types import Organization
@@ -30,7 +34,9 @@ class SubFinancingAgent(CommonBaseModel, table=True):
         index=True,
     )
     organizations: List["Organization"] = Relationship(
-        back_populates="sub_financing_agents", sa_relationship_kwargs={"lazy": "noload"}
+        back_populates="sub_financing_agents",
+        link_model=OrganizationSubFinancingAgent,
+        sa_relationship_kwargs={"lazy": "noload"},
     )
 
 
@@ -50,7 +56,9 @@ class FinancingAgent(CommonBaseModel, table=True):
         back_populates="financing_agent", sa_relationship_kwargs={"lazy": "noload"}
     )
     organizations: List["Organization"] = Relationship(
-        back_populates="financing_agents", sa_relationship_kwargs={"lazy": "noload"}
+        back_populates="financing_agents",
+        link_model=OrganizationFinancingAgent,
+        sa_relationship_kwargs={"lazy": "noload"},
     )
 
     class Config:

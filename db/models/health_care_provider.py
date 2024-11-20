@@ -3,7 +3,11 @@ from typing import List, TYPE_CHECKING
 
 from sqlmodel import Field, Relationship
 
-from db.models import CommonBaseModel
+from db.models import (
+    CommonBaseModel,
+    OrganizationSubHealthCareProvider,
+    OrganizationHealthCareProvider,
+)
 
 if TYPE_CHECKING:
     from .types import Organization
@@ -32,6 +36,7 @@ class SubHealthCareProvider(CommonBaseModel, table=True):
     )
     organizations: List["Organization"] = Relationship(
         back_populates="sub_health_care_providers",
+        link_model=OrganizationSubHealthCareProvider,
         sa_relationship_kwargs={"lazy": "noload"},
     )
 
@@ -51,6 +56,7 @@ class HealthCareProvider(CommonBaseModel, table=True):
     )
     organizations: List["Organization"] = Relationship(
         back_populates="health_care_providers",
+        link_model=OrganizationHealthCareProvider,
         sa_relationship_kwargs={"lazy": "noload"},
     )
 
