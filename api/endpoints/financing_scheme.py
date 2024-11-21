@@ -13,7 +13,6 @@ from db.models import (
     FinancingScheme,
     PaginatedResponse,
     User,
-    UserRole,
     SubFinancingScheme,
 )
 from helpers.db import (
@@ -70,10 +69,6 @@ async def get_financing_schemes(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
         return await get_all_items(db, FinancingScheme, page=page, page_size=page_size)
     except Exception as e:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -86,11 +81,6 @@ async def get_financing_scheme(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
-
         financing_scheme = await get_joined_details_by_uuid(
             db=db,
             model=FinancingScheme,
