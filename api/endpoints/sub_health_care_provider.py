@@ -9,7 +9,6 @@ from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import (
     PaginatedResponse,
-    UserRole,
     User,
     HealthCareProvider,
     SubHealthCareProvider,
@@ -78,10 +77,6 @@ async def get_sub_health_care_providers(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
         return await get_all_items(
             db, SubHealthCareProvider, page=page, page_size=page_size
         )
@@ -96,10 +91,6 @@ async def get_sub_health_care_provider(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
         query = select(SubHealthCareProvider).filter(SubHealthCareProvider.uuid == uuid)
         sub_health_care_provider = await get_first_item(db, query)
         if not sub_health_care_provider:

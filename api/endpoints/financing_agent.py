@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Request, HTTPException, status
 from fastapi.params import Depends
 from sqlalchemy.future import select
+from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import admin_access
@@ -12,14 +13,11 @@ from db.database import get_db
 from db.models import (
     PaginatedResponse,
     User,
-    UserRole,
     FinancingAgent,
-    SubFinancingAgent,
 )
 from helpers.db import (
     check_if_exists,
     get_all_items,
-    get_joined_details_by_uuid,
     get_first_item,
 )
 from schemas.financing_scheme import (
@@ -45,7 +43,7 @@ async def create_financing_agent(
         if await check_if_exists(FinancingAgent, db, name=financing_agent_data.name):
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                detail="Financing scheme with this name already exists",
+                detail="Financing agent with this name already exists",
             )
 
         new_financing_agent = FinancingAgent(
@@ -70,10 +68,6 @@ async def get_financing_agents(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
         return await get_all_items(db, FinancingAgent, page=page, page_size=page_size)
     except Exception as e:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -86,20 +80,15 @@ async def get_financing_agent(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
-
-        financing_agent = await get_joined_details_by_uuid(
-            db=db,
-            model=FinancingAgent,
-            alias_model=SubFinancingAgent,
-            join_condition=lambda alias: alias.financing_agent_uuid
-            == FinancingAgent.uuid,
-            uuid=uuid,
-            relationship_option=FinancingAgent.sub_financing_agents,
+        query = (
+            select(FinancingAgent)
+            .filter(FinancingAgent.uuid == uuid)
+            .options(joinedload(FinancingAgent.sub_financing_agents))
         )
+        result = await db.execute(query)
+
+        financing_agent = result.unique().scalar_one_or_none()
+
         if not financing_agent:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND, detail="Financing agent not found"
@@ -118,20 +107,20 @@ async def delete_financing_agent(
     try:
         user = request.state.user.email
         query = select(FinancingAgent).filter(FinancingAgent.uuid == uuid)
-        financing_scheme = await get_first_item(db, query)
+        financing_agent = await get_first_item(db, query)
 
-        if not financing_scheme:
+        if not financing_agent:
             raise HTTPException(
-                status.HTTP_404_NOT_FOUND, detail="Financing scheme not found"
+                status.HTTP_404_NOT_FOUND, detail="Financing agent not found"
             )
 
-        financing_scheme.deleted_status = True
-        financing_scheme.deleted_by = user
-        financing_scheme.last_updated_at = datetime.now()
-        financing_scheme.last_updated_by = user
+        financing_agent.deleted_status = True
+        financing_agent.deleted_by = user
+        financing_agent.last_updated_at = datetime.now()
+        financing_agent.last_updated_by = user
 
         await db.commit()
-        await db.refresh(financing_scheme)
-        return financing_scheme
+        await db.refresh(financing_agent)
+        return financing_agent
     except Exception as e:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

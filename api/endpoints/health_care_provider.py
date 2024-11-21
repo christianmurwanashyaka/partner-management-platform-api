@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Request, HTTPException, status
 from fastapi.params import Depends
 from sqlalchemy.future import select
+from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import admin_access
@@ -12,14 +13,11 @@ from db.database import get_db
 from db.models import (
     PaginatedResponse,
     User,
-    UserRole,
     HealthCareProvider,
-    SubHealthCareProvider,
 )
 from helpers.db import (
     check_if_exists,
     get_all_items,
-    get_joined_details_by_uuid,
     get_first_item,
 )
 from schemas.financing_scheme import (
@@ -72,10 +70,6 @@ async def get_health_care_providers(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
         return await get_all_items(
             db, HealthCareProvider, page=page, page_size=page_size
         )
@@ -90,20 +84,15 @@ async def get_health_care_provider(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
-
-        health_care_provider = await get_joined_details_by_uuid(
-            db=db,
-            model=HealthCareProvider,
-            alias_model=SubHealthCareProvider,
-            join_condition=lambda alias: alias.health_care_provider_uuid
-            == HealthCareProvider.uuid,
-            uuid=uuid,
-            relationship_option=HealthCareProvider.sub_health_care_providers,
+        query = (
+            select(HealthCareProvider)
+            .filter(HealthCareProvider.uuid == uuid)
+            .options(joinedload(HealthCareProvider.sub_health_care_providers))
         )
+        result = await db.execute(query)
+
+        health_care_provider = result.unique().scalar_one_or_none()
+
         if not health_care_provider:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND, detail="Health care provider not found"

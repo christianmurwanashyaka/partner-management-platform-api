@@ -11,7 +11,6 @@ from db.models import (
     FinancingScheme,
     SubFinancingScheme,
     PaginatedResponse,
-    UserRole,
     User,
 )
 from helpers.db import get_first_item, check_if_exists, get_all_items
@@ -77,10 +76,6 @@ async def get_sub_financing_schemes(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
         return await get_all_items(
             db, SubFinancingScheme, page=page, page_size=page_size
         )
@@ -95,10 +90,6 @@ async def get_sub_financing_scheme(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
         query = select(SubFinancingScheme).filter(SubFinancingScheme.uuid == uuid)
         sub_financing_scheme = await get_first_item(db, query)
         if not sub_financing_scheme:
