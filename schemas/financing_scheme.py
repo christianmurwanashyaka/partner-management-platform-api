@@ -34,6 +34,8 @@ class FinancingSchemeRead(BaseModel):
     sha_code: str
     description: Optional[str] = None
     sub_financing_schemes: List[SubFinancingSchemeList] = []
+    sub_financing_agents: List[SubFinancingSchemeList] = []
+    sub_health_care_providers: List[SubFinancingSchemeList] = []
     created_at: datetime
     created_by: str
 

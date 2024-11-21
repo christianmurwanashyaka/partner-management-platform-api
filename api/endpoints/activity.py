@@ -450,7 +450,7 @@ async def get_activity(
             select(Activity)
             .filter(Activity.uuid == uuid)
             .options(
-                joinedload(Activity.project),  # Add any other related models as needed
+                joinedload(Activity.project),
             )
         )
 

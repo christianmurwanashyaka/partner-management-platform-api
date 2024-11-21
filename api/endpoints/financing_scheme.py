@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Request, HTTPException, status
 from fastapi.params import Depends
 from sqlalchemy.future import select
+from sqlalchemy.orm import joinedload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import admin_access
@@ -13,12 +14,10 @@ from db.models import (
     FinancingScheme,
     PaginatedResponse,
     User,
-    SubFinancingScheme,
 )
 from helpers.db import (
     check_if_exists,
     get_all_items,
-    get_joined_details_by_uuid,
     get_first_item,
 )
 from schemas.financing_scheme import (
@@ -81,21 +80,22 @@ async def get_financing_scheme(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        financing_scheme = await get_joined_details_by_uuid(
-            db=db,
-            model=FinancingScheme,
-            alias_model=SubFinancingScheme,
-            join_condition=lambda alias: alias.financing_scheme_uuid
-            == FinancingScheme.uuid,
-            uuid=uuid,
-            relationship_option=FinancingScheme.sub_financing_schemes,
+        query = (
+            select(FinancingScheme)
+            .filter(FinancingScheme.uuid == uuid)
+            .options(joinedload(FinancingScheme.sub_financing_schemes))
         )
+        result = await db.execute(query)
+
+        financing_scheme = result.unique().scalar_one_or_none()
+
         if not financing_scheme:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND, detail="Financing scheme not found"
             )
         return financing_scheme
     except Exception as e:
+        print("ERROR: ", e)
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 

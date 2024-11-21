@@ -9,7 +9,6 @@ from api.dependencies.auth import get_current_user
 from db.database import get_db
 from db.models import (
     PaginatedResponse,
-    UserRole,
     User,
     FinancingAgent,
     SubFinancingAgent,
@@ -77,10 +76,6 @@ async def get_sub_financing_agents(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
         return await get_all_items(
             db, SubFinancingAgent, page=page, page_size=page_size
         )
@@ -95,10 +90,6 @@ async def get_sub_financing_agent(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        if current_user.role != UserRole.DATA_MANAGER:
-            raise HTTPException(
-                status_code=403, detail="Access denied. User must be a data manager."
-            )
         query = select(SubFinancingAgent).filter(SubFinancingAgent.uuid == uuid)
         sub_financing_agent = await get_first_item(db, query)
         if not sub_financing_agent:
@@ -125,7 +116,7 @@ async def delete_sub_financing_scheme(
         sub_financing_agent = await get_first_item(db, query)
         if not sub_financing_agent:
             raise HTTPException(
-                status.HTTP_404_NOT_FOUND, detail="Sub financing scheme not found"
+                status.HTTP_404_NOT_FOUND, detail="Sub financing agent not found"
             )
 
         sub_financing_agent.deleted_status = True

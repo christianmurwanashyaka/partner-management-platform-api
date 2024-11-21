@@ -187,6 +187,8 @@ app.include_router(
     prefix="/api/v1/organization_type",
     tags=["Organization Type"],
 )
+
+
 app.include_router(
     financing_scheme.router,
     prefix="/api/v1/financing_scheme",
@@ -215,6 +217,8 @@ app.include_router(
     prefix="/api/v1/sub_health_care_provider",
     tags=["Sub Health Care Provider"],
 )
+
+
 app.include_router(
     funding_source.router, prefix="/api/v1/funding_source", tags=["Funding Source"]
 )
@@ -270,7 +274,14 @@ if __name__ == "__main__":
     setup_uvicorn_logging()
     try:
         system_logger.info("Starting the application")
-        uvicorn.run("main:app", host="0.0.0.0", port=7001, log_config=None)
+        uvicorn.run(
+            "main:app",
+            host="0.0.0.0",
+            port=7001,
+            log_config=None,
+            reload=True,
+            reload_delay=0.25,
+        )
     except SystemExit as e:
         system_logger.info(f"Application stopped with SystemExit: {e}")
     except KeyboardInterrupt:
