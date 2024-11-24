@@ -2,7 +2,9 @@ from typing import Optional, List
 import uuid
 from pydantic import BaseModel, EmailStr
 from schemas.document import DocumentRead
+from schemas.financing_scheme import FinancingSchemeList
 from schemas.organization_type import OrganizationTypeRead
+from schemas.sub_financing_scheme import SubFinancingSchemeList
 
 
 class OrganizationRead(BaseModel):
@@ -31,6 +33,13 @@ class OrganizationRead(BaseModel):
 
     organization_type: Optional[OrganizationTypeRead] = None
     documents: List[DocumentRead] = []
+
+    financing_schemes: List[FinancingSchemeList] = []
+    financing_agents: List[FinancingSchemeList] = []
+    health_care_providers: List[FinancingSchemeList] = []
+    sub_financing_schemes: List[SubFinancingSchemeList] = []
+    sub_financing_agents: List[SubFinancingSchemeList] = []
+    sub_health_care_providers: List[SubFinancingSchemeList] = []
 
     class Config:
         from_attributes = True

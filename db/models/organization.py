@@ -7,6 +7,7 @@ import sqlalchemy as sa
 
 from db.models.base import CommonBaseModel
 from db.models.document import Document
+from . import JunctionBaseModel
 
 if TYPE_CHECKING:
     from .types import (
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     )
 
 
-class OrganizationFinancingScheme(CommonBaseModel, table=True):
+class OrganizationFinancingScheme(JunctionBaseModel, table=True):
     __tablename__ = "organization_financing_scheme"
 
     organization_uuid: uuid.UUID = Field(
@@ -35,7 +36,7 @@ class OrganizationFinancingScheme(CommonBaseModel, table=True):
     )
 
 
-class OrganizationSubFinancingScheme(CommonBaseModel, table=True):
+class OrganizationSubFinancingScheme(JunctionBaseModel, table=True):
     __tablename__ = "organization_sub_financing_scheme"
 
     organization_uuid: uuid.UUID = Field(
@@ -46,7 +47,7 @@ class OrganizationSubFinancingScheme(CommonBaseModel, table=True):
     )
 
 
-class OrganizationHealthCareProvider(CommonBaseModel, table=True):
+class OrganizationHealthCareProvider(JunctionBaseModel, table=True):
     __tablename__ = "organization_health_care_provider"
 
     organization_uuid: uuid.UUID = Field(
@@ -57,7 +58,7 @@ class OrganizationHealthCareProvider(CommonBaseModel, table=True):
     )
 
 
-class OrganizationSubHealthCareProvider(CommonBaseModel, table=True):
+class OrganizationSubHealthCareProvider(JunctionBaseModel, table=True):
     __tablename__ = "organization_sub_health_care_provider"
 
     organization_uuid: uuid.UUID = Field(
@@ -68,7 +69,7 @@ class OrganizationSubHealthCareProvider(CommonBaseModel, table=True):
     )
 
 
-class OrganizationFinancingAgent(CommonBaseModel, table=True):
+class OrganizationFinancingAgent(JunctionBaseModel, table=True):
     __tablename__ = "organization_financing_agent"
 
     organization_uuid: uuid.UUID = Field(
@@ -79,7 +80,7 @@ class OrganizationFinancingAgent(CommonBaseModel, table=True):
     )
 
 
-class OrganizationSubFinancingAgent(CommonBaseModel, table=True):
+class OrganizationSubFinancingAgent(JunctionBaseModel, table=True):
     __tablename__ = "organization_sub_financing_agent"
 
     organization_uuid: uuid.UUID = Field(
