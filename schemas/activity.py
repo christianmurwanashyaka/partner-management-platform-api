@@ -4,7 +4,7 @@ from typing import List, Optional, Dict
 import uuid
 from pydantic import BaseModel
 
-from db.models import Currency, PaginatedResponse
+from db.models import Currency
 from db.models.activity import ActivityStatus, ActivityReportingStatus
 from schemas.domain_intervention import DomainInterventionList
 from schemas.input_detail import InputDetailCreate, InputDetailRead
@@ -33,25 +33,6 @@ class ActivityDomainDetail(BaseModel):
     sub_domain: SubDomainList
     sub_domain_function: SubDomainFunctionRead
     sub_function: SubFunctionRead
-
-    class Config:
-        from_attributes = True
-
-
-class OperationalZoneCreate(BaseModel):
-    province: str
-    district: str
-
-    class Config:
-        from_attributes = True
-
-
-class OperationalZoneRead(BaseModel):
-    uuid: uuid.UUID
-    province: str
-    district: str
-    created_at: datetime
-    created_by: str
 
     class Config:
         from_attributes = True
@@ -123,12 +104,6 @@ class ActivityRead(BaseModel):
     created_by: Optional[str] = None
     status: Optional[ActivityStatus] = None
     report_status: Optional[ActivityReportingStatus] = None
-
-    class Config:
-        from_attributes = True
-
-
-class OperationalZoneUpdate(OperationalZoneCreate):
 
     class Config:
         from_attributes = True
