@@ -61,7 +61,7 @@ class HealthCareProvider(CommonBaseModel, table=True):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "name": "Central government",
                 "sha_code": "HP.1",

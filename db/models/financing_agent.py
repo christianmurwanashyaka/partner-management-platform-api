@@ -62,7 +62,7 @@ class FinancingAgent(CommonBaseModel, table=True):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "name": "Central government",
                 "sha_code": "FA.1",

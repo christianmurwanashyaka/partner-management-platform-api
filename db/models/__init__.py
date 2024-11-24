@@ -1,4 +1,4 @@
-from .base import BaseFields, CommonBaseModel
+from .base import BaseFields, CommonBaseModel, JunctionBaseModel
 from .organization_type import OrganizationType
 
 from .organization import (
@@ -44,6 +44,7 @@ from .pagination import PaginatedResponse
 __all__ = [
     "BaseFields",
     "CommonBaseModel",
+    "JunctionBaseModel",
     "OrganizationType",
     "FinancingScheme",
     "FinancingAgent",

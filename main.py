@@ -274,14 +274,7 @@ if __name__ == "__main__":
     setup_uvicorn_logging()
     try:
         system_logger.info("Starting the application")
-        uvicorn.run(
-            "main:app",
-            host="0.0.0.0",
-            port=7001,
-            log_config=None,
-            reload=True,
-            reload_delay=0.25,
-        )
+        uvicorn.run("main:app", host="0.0.0.0", port=7001, log_config=None)
     except SystemExit as e:
         system_logger.info(f"Application stopped with SystemExit: {e}")
     except KeyboardInterrupt:
