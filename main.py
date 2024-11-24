@@ -36,6 +36,12 @@ from api.endpoints import (
     report,
     report_activity,
     health,
+    financing_scheme,
+    sub_financing_scheme,
+    financing_agent,
+    sub_financing_agent,
+    health_care_provider,
+    sub_health_care_provider,
 )
 
 from core.config import settings
@@ -181,6 +187,38 @@ app.include_router(
     prefix="/api/v1/organization_type",
     tags=["Organization Type"],
 )
+
+
+app.include_router(
+    financing_scheme.router,
+    prefix="/api/v1/financing_scheme",
+    tags=["Financing Scheme"],
+)
+app.include_router(
+    sub_financing_scheme.router,
+    prefix="/api/v1/sub_financing_scheme",
+    tags=["Sub Financing Scheme"],
+)
+app.include_router(
+    financing_agent.router, prefix="/api/v1/financing_agent", tags=["Financing Agent"]
+)
+app.include_router(
+    sub_financing_agent.router,
+    prefix="/api/v1/sub_financing_agent",
+    tags=["Sub Financing Agent"],
+)
+app.include_router(
+    health_care_provider.router,
+    prefix="/api/v1/health_care_provider",
+    tags=["Health Care Provider"],
+)
+app.include_router(
+    sub_health_care_provider.router,
+    prefix="/api/v1/sub_health_care_provider",
+    tags=["Sub Health Care Provider"],
+)
+
+
 app.include_router(
     funding_source.router, prefix="/api/v1/funding_source", tags=["Funding Source"]
 )

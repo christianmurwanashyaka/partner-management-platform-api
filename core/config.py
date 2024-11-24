@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import os
 
 
-env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 env_path = os.path.normpath(env_path)
 
 load_dotenv(dotenv_path=env_path)
@@ -13,7 +13,7 @@ load_dotenv(dotenv_path=env_path)
 
 class Settings(BaseSettings):
     SECRET_KEY: str
-    ALGORITHM: str = 'HS256'
+    ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRES_IN: int
     DATABASE_URL: str
     EMAIL: str
@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     FRONT_END_EMAIL_VERIFICATION_URL: str
     SYSTEM_NAME: str
     CLIENT_URL: str
+
+    # DB_USERNAME: str
+    # DB_PASSWORD: str
+    # DB_DATABASE: str
 
     class Config:
         env_file = env_path
