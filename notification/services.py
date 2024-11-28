@@ -5,7 +5,14 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from db.models import Notification, UserRole, User, MOHStaffLevel, MouApplication, Organization
+from db.models import (
+    Notification,
+    UserRole,
+    User,
+    MOHStaffLevel,
+    MouApplication,
+    Organization,
+)
 import logging
 
 from templates.handlers import TemplateHandler
@@ -20,7 +27,7 @@ async def create_and_send_notification(
     subject: str,
     message: str,
     created_by: str,
-    attachment: Optional[tuple] = None
+    attachment: Optional[tuple] = None,
 ):
     # Create the notification
     notification = Notification(
@@ -29,7 +36,7 @@ async def create_and_send_notification(
         from_email=settings.MAIL_FROM,
         message=message,
         is_read=False,
-        created_by=created_by
+        created_by=created_by,
     )
 
     db.add(notification)
@@ -46,27 +53,73 @@ async def create_and_send_notification(
     await email_handler.send_notification(notification, attachment)
 
 
-async def send_verification_email(db: AsyncSession, email_handler: EmailNotificationHandler, user: User, verification_token: str):
+async def send_verification_email(
+    db: AsyncSession,
+    email_handler: EmailNotificationHandler,
+    user: User,
+    verification_token: str,
+):
     template_handler = TemplateHandler()
-    verification_url = f"{settings.FRONT_END_EMAIL_VERIFICATION_URL}?token={verification_token}"
+    verification_url = (
+        f"{settings.FRONT_END_EMAIL_VERIFICATION_URL}?token={verification_token}"
+    )
     html_content = await template_handler.render_template(
-        'verification_email.html',
+        "verification_email.html",
         user={
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'email': user.email
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
         },
-        verification_url=verification_url
+        verification_url=verification_url,
     )
 
-    await create_and_send_notification(db=db, email_handler=email_handler, recipient_id=user.uuid, subject='Verify Your Email Address', message=html_content, created_by=user.email)
+    await create_and_send_notification(
+        db=db,
+        email_handler=email_handler,
+        recipient_id=user.uuid,
+        subject="Verify Your Email Address",
+        message=html_content,
+        created_by=user.email,
+    )
 
 
-async def notify_partner_coordinators(db: AsyncSession, application_id: str, created_by: str, email_handler: EmailNotificationHandler):
+async def send_forgot_password_email(
+    db: AsyncSession,
+    email_handler: EmailNotificationHandler,
+    user: User,
+    reset_token: str,
+):
+    template_handler = TemplateHandler()
+    reset_url = f"{settings.FRONT_END_EMAIL_VERIFICATION_URL}?reset_token={reset_token}"
+    html_content = await template_handler.render_template(
+        "forgot_password.html",
+        user={
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+        },
+        reset_url=reset_url,
+    )
+
+    await create_and_send_notification(
+        db=db,
+        email_handler=email_handler,
+        recipient_id=user.uuid,
+        subject="Forgot password",
+        message=html_content,
+        created_by=user.email,
+    )
+
+
+async def notify_partner_coordinators(
+    db: AsyncSession,
+    application_id: str,
+    created_by: str,
+    email_handler: EmailNotificationHandler,
+):
     # Query for all partner coordinators
     query = select(User).filter(
-        User.role == UserRole.MOH_STAFF,
-        User.level == MOHStaffLevel.PARTNER_COORDINATOR
+        User.role == UserRole.MOH_STAFF, User.level == MOHStaffLevel.PARTNER_COORDINATOR
     )
     result = await db.execute(query)
     partner_coordinators = result.scalars().all()
@@ -83,17 +136,15 @@ async def notify_partner_coordinators(db: AsyncSession, application_id: str, cre
 
 
 async def notify_moh_staff(
-        db: AsyncSession,
-        email_handler: EmailNotificationHandler,
-        levels: List[MOHStaffLevel],
-        created_by: str,
-        subject: str,
-        message: str):
+    db: AsyncSession,
+    email_handler: EmailNotificationHandler,
+    levels: List[MOHStaffLevel],
+    created_by: str,
+    subject: str,
+    message: str,
+):
     # Query for all MOH staff with the specified levels
-    query = select(User).filter(
-        User.role == UserRole.MOH_STAFF,
-        User.level.in_(levels)
-    )
+    query = select(User).filter(User.role == UserRole.MOH_STAFF, User.level.in_(levels))
     result = await db.execute(query)
     moh_staff = result.scalars().all()
 
@@ -104,7 +155,7 @@ async def notify_moh_staff(
             recipient_id=staff.uuid,
             subject=subject,
             message=message,
-            created_by=created_by
+            created_by=created_by,
         )
 
 
@@ -116,10 +167,12 @@ async def notify_partner(
     subject: str,
     message: str,
     attachment_path: str = None,
-    attachment_filename: str = None
+    attachment_filename: str = None,
 ):
     # Get the partner's email associated with the application
-    query = select(MouApplication.created_by).where(MouApplication.uuid == application_id)
+    query = select(MouApplication.created_by).where(
+        MouApplication.uuid == application_id
+    )
     result = await db.execute(query)
     partner_email = result.scalar_one_or_none()
 
@@ -141,7 +194,9 @@ async def notify_partner(
     if attachment_path and attachment_filename:
         with open(attachment_path, "rb") as file:
             content = file.read()
-        content_type = mimetypes.guess_type(attachment_filename)[0] or "application/octet-stream"
+        content_type = (
+            mimetypes.guess_type(attachment_filename)[0] or "application/octet-stream"
+        )
         attachment = (attachment_filename, content, content_type)
 
     # Send the email with or without attachment
@@ -152,43 +207,16 @@ async def notify_partner(
         subject=subject,
         message=message,
         created_by=created_by,
-        attachment=attachment
+        attachment=attachment,
     )
 
 
-async def notify_new_user(db: AsyncSession, email_handler: EmailNotificationHandler, user: User, organization: Organization):
-    # subject = "Welcome to Our System - Your Account and Organization Details"
-    # message = f"""
-    # Dear {user.first_name} {user.last_name},
-    #
-    # Welcome to our system! Your account has been successfully created with the following details:
-    #
-    # User Profile:
-    # - Email: {user.email}
-    # - Phone: {user.phone_number}
-    #
-    # Organization Details:
-    # - Name: {organization.name}
-    # - Email: {organization.email}
-    # - Phone: {organization.phone_number}
-    # - Website: {organization.website}
-    #
-    # You can now log in to your account using your email and the password you provided during registration.
-    #
-    # If you have any questions or need assistance, please don't hesitate to contact our support team.
-    #
-    # Best regards,
-    # The System Team
-    # """
-    #
-    # await create_and_send_notification(
-    #     db=db,
-    #     email_handler=email_handler,
-    #     recipient_id=user.uuid,
-    #     subject=subject,
-    #     message=message,
-    #     created_by=user.email
-    # )
+async def notify_new_user(
+    db: AsyncSession,
+    email_handler: EmailNotificationHandler,
+    user: User,
+    organization: Organization,
+):
     template_handler = TemplateHandler()
 
     # Render the HTML template
@@ -198,14 +226,15 @@ async def notify_new_user(db: AsyncSession, email_handler: EmailNotificationHand
             "first_name": user.first_name,
             "last_name": user.last_name,
             "email": user.email,
-            "phone_number": user.phone_number
+            "phone_number": user.phone_number,
         },
-        organization=organization and {
+        organization=organization
+        and {
             "name": organization.name,
             "email": organization.email,
             "phone_number": organization.phone_number,
-            "website": organization.website
-        }
+            "website": organization.website,
+        },
     )
 
     # Create and send notification
@@ -215,11 +244,16 @@ async def notify_new_user(db: AsyncSession, email_handler: EmailNotificationHand
         recipient_id=user.uuid,
         subject="Welcome to Our System",
         message=html_content,
-        created_by=user.email
+        created_by=user.email,
     )
 
 
-async def notify_new_organization(db: AsyncSession, email_handler: EmailNotificationHandler, user: User, organization: Organization):
+async def notify_new_organization(
+    db: AsyncSession,
+    email_handler: EmailNotificationHandler,
+    user: User,
+    organization: Organization,
+):
     subject = "Welcome to Our System - Your Organization Has Been Registered"
     message = f"""
     Dear {organization.name},
@@ -245,7 +279,5 @@ async def notify_new_organization(db: AsyncSession, email_handler: EmailNotifica
         recipient_id=user.uuid,
         subject=subject,
         message=message,
-        created_by=user.email
+        created_by=user.email,
     )
-
-

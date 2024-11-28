@@ -48,7 +48,7 @@ from db.models.user import User, UserRole
 from helpers.comments import filter_comments_for_partner
 from helpers.exceptions import handle_integrity_error
 from notification.handlers import EmailNotificationHandler
-from notification.services import notify_new_user
+from notification.services import notify_new_user, send_verification_email
 from schemas.activity import ActivityRead
 from schemas.document import DocumentRead
 from schemas.mou import BasicMouReadApplication, BasicMouRead
@@ -61,7 +61,11 @@ from schemas.user import OrganizationUserCreate, OrganizationUser
 from helpers.db import check_if_exists, get_all_items, get_first_item
 from schemas.project import ProjectRead, ProjectList
 from utils.files import handle_upload_file
-from utils.security import get_password_hash, create_access_token
+from utils.security import (
+    get_password_hash,
+    create_access_token,
+    create_verification_token,
+)
 
 router = APIRouter()
 
@@ -184,7 +188,11 @@ async def create_organization(
 
         await db.commit()
         await notify_new_user(db, email_handler, db_user, new_organization)
-        # await notify_new_organization(db, email_handler, db_user, new_organization)
+
+        verification_token = create_verification_token(db_user.email)
+        await send_verification_email(
+            db, email_handler, verification_token=verification_token
+        )
 
     except IntegrityError as e:
         await handle_integrity_error(e, db)
