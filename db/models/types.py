@@ -10,6 +10,9 @@ if TYPE_CHECKING:
     from .financing_scheme import FinancingScheme, SubFinancingScheme
     from .health_care_provider import HealthCareProvider, SubHealthCareProvider
     from .financing_agent import FinancingAgent, SubFinancingAgent
+    from .user_activity import UserActivity
+    from .user_domain import UserDomain
+    from .notification import Notification
 
     __all__ = [
         "List",
@@ -25,4 +28,7 @@ if TYPE_CHECKING:
         "SubHealthCareProvider",
         "FinancingAgent",
         "SubFinancingAgent",
+        "UserDomain",
+        "UserActivity",
+        "Notification",
     ]

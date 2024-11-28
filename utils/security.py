@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi import HTTPException, status
 from jose import JWTError
 from passlib.context import CryptContext
@@ -32,7 +34,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRES_IN)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
     return encoded_jwt
 
 
@@ -50,7 +54,7 @@ async def create_admin(db: AsyncSession):
             first_name=settings.FIRST_NAME,
             last_name=settings.LAST_NAME,
             role=settings.ROLE,
-            created_by='system'
+            created_by="system",
         )
         db.add(admin)
         await db.commit()
@@ -61,21 +65,92 @@ async def create_admin(db: AsyncSession):
 
 def create_verification_token(email: str) -> str:
     expire = datetime.utcnow() + timedelta(hours=48)
-    to_encode = {
-        "sub": email,
-        "exp": expire,
-        "type": 'email_verification'
-    }
+    to_encode = {"sub": email, "exp": expire, "type": "email_verification"}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
 def verify_token(token: str) -> str:
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get('sub')
-        token_type: str = payload.get('type')
-        if email is None or  token_type != 'email_verification':
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid verification token')
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        email: str = payload.get("sub")
+        token_type: str = payload.get("type")
+        if email is None or token_type != "email_verification":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid verification token",
+            )
         return email
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Invalid or expired verification token')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token",
+        )
+
+
+def create_reset_token(email: str) -> str:
+    """
+    Creates a time-limited JWT token for password reset purposes.
+
+    This token has a shorter expiration time than verification tokens (1 hour vs 48 hours)
+    and includes a specific type identifier to prevent token reuse across different features.
+
+    Args:
+        email: The email address of the user requesting the password reset
+
+    Returns:
+        str: An encoded JWT token containing the user's email and expiration time
+    """
+    expire = datetime.utcnow() + timedelta(hours=1)  # Shorter expiration for security
+    to_encode = {
+        "sub": email,
+        "exp": expire,
+        "type": "password_reset",
+        "nonce": secrets.token_hex(8),
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def verify_reset_token(token: str) -> str:
+    """
+    Verifies a password reset token and returns the associated email if valid.
+
+    This function checks both the token's validity and ensures it's specifically
+    a password reset token, not another type of token (like email verification).
+
+    Args:
+        token: The JWT token to verify
+
+    Returns:
+        str: The email address associated with the token
+
+    Raises:
+        HTTPException: If the token is invalid, expired, or of wrong type
+    """
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        email: str = payload.get("sub")
+        token_type: str = payload.get("type")
+
+        if email is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid reset token - missing email",
+            )
+
+        if token_type != "password_reset":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid reset token - wrong token type",
+            )
+
+        return email
+
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
