@@ -291,94 +291,100 @@ async def update_organization(
         ]
 
         # Update financing schemes
-        await db.execute(
-            delete(OrganizationFinancingScheme).where(
-                OrganizationFinancingScheme.organization_uuid == uuid
-            )
-        )
-        for scheme_uuid in financing_schemes_uuids:
-            db.add(
-                OrganizationFinancingScheme(
-                    organization_uuid=uuid,
-                    financing_scheme_uuid=scheme_uuid,
-                    created_by=current_user.email,
+        if len(financing_schemes_uuids) != 0:
+            await db.execute(
+                delete(OrganizationFinancingScheme).where(
+                    OrganizationFinancingScheme.organization_uuid == uuid
                 )
             )
+            for scheme_uuid in financing_schemes_uuids:
+                db.add(
+                    OrganizationFinancingScheme(
+                        organization_uuid=uuid,
+                        financing_scheme_uuid=scheme_uuid,
+                        created_by=current_user.email,
+                    )
+                )
 
         # Update financing agents
-        await db.execute(
-            delete(OrganizationFinancingAgent).where(
-                OrganizationFinancingAgent.organization_uuid == uuid
-            )
-        )
-        for agent_uuid in financing_agents_uuids:
-            db.add(
-                OrganizationFinancingAgent(
-                    organization_uuid=uuid,
-                    financing_agent_uuid=agent_uuid,
-                    created_by=current_user.email,
+        if len(financing_agents_uuids) != 0:
+            await db.execute(
+                delete(OrganizationFinancingAgent).where(
+                    OrganizationFinancingAgent.organization_uuid == uuid
                 )
             )
+            for agent_uuid in financing_agents_uuids:
+                db.add(
+                    OrganizationFinancingAgent(
+                        organization_uuid=uuid,
+                        financing_agent_uuid=agent_uuid,
+                        created_by=current_user.email,
+                    )
+                )
 
         # Update health care providers
-        await db.execute(
-            delete(OrganizationHealthCareProvider).where(
-                OrganizationHealthCareProvider.organization_uuid == uuid
-            )
-        )
-        for provider_uuid in health_care_providers_uuids:
-            db.add(
-                OrganizationHealthCareProvider(
-                    organization_uuid=uuid,
-                    health_care_provider_uuid=provider_uuid,
-                    created_by=current_user.email,
+        if len(health_care_providers_uuids) != 0:
+            await db.execute(
+                delete(OrganizationHealthCareProvider).where(
+                    OrganizationHealthCareProvider.organization_uuid == uuid
                 )
             )
+            for provider_uuid in health_care_providers_uuids:
+                db.add(
+                    OrganizationHealthCareProvider(
+                        organization_uuid=uuid,
+                        health_care_provider_uuid=provider_uuid,
+                        created_by=current_user.email,
+                    )
+                )
 
         # Update sub-financing schemes
-        await db.execute(
-            delete(OrganizationSubFinancingScheme).where(
-                OrganizationSubFinancingScheme.organization_uuid == uuid
-            )
-        )
-        for sub_scheme_uuid in sub_financing_schemes_uuids:
-            db.add(
-                OrganizationSubFinancingScheme(
-                    organization_uuid=uuid,
-                    sub_financing_scheme_uuid=sub_scheme_uuid,
-                    created_by=current_user.email,
+        if len(sub_financing_schemes_uuids) != 0:
+            await db.execute(
+                delete(OrganizationSubFinancingScheme).where(
+                    OrganizationSubFinancingScheme.organization_uuid == uuid
                 )
             )
+            for sub_scheme_uuid in sub_financing_schemes_uuids:
+                db.add(
+                    OrganizationSubFinancingScheme(
+                        organization_uuid=uuid,
+                        sub_financing_scheme_uuid=sub_scheme_uuid,
+                        created_by=current_user.email,
+                    )
+                )
 
         # Update sub-financing agents
-        await db.execute(
-            delete(OrganizationSubFinancingAgent).where(
-                OrganizationSubFinancingAgent.organization_uuid == uuid
-            )
-        )
-        for sub_agent_uuid in sub_financing_agents_uuids:
-            db.add(
-                OrganizationSubFinancingAgent(
-                    organization_uuid=uuid,
-                    sub_financing_agent_uuid=sub_agent_uuid,
-                    created_by=current_user.email,
+        if len(sub_financing_agents_uuids) != 0:
+            await db.execute(
+                delete(OrganizationSubFinancingAgent).where(
+                    OrganizationSubFinancingAgent.organization_uuid == uuid
                 )
             )
+            for sub_agent_uuid in sub_financing_agents_uuids:
+                db.add(
+                    OrganizationSubFinancingAgent(
+                        organization_uuid=uuid,
+                        sub_financing_agent_uuid=sub_agent_uuid,
+                        created_by=current_user.email,
+                    )
+                )
 
         # Update sub-health care providers
-        await db.execute(
-            delete(OrganizationSubHealthCareProvider).where(
-                OrganizationSubHealthCareProvider.organization_uuid == uuid
-            )
-        )
-        for sub_provider_uuid in sub_health_care_providers_uuids:
-            db.add(
-                OrganizationSubHealthCareProvider(
-                    organization_uuid=uuid,
-                    sub_healthcare_provider_uuid=sub_provider_uuid,
-                    created_by=current_user.email,
+        if len(sub_health_care_providers_uuids) != 0:
+            await db.execute(
+                delete(OrganizationSubHealthCareProvider).where(
+                    OrganizationSubHealthCareProvider.organization_uuid == uuid
                 )
             )
+            for sub_provider_uuid in sub_health_care_providers_uuids:
+                db.add(
+                    OrganizationSubHealthCareProvider(
+                        organization_uuid=uuid,
+                        sub_healthcare_provider_uuid=sub_provider_uuid,
+                        created_by=current_user.email,
+                    )
+                )
 
         async def upload_document(
             upload_file: Optional[UploadFile], document_type: DocumentType
@@ -490,7 +496,7 @@ async def get_organization(
 
     organization_response.documents = [DocumentRead.from_orm(doc) for doc in documents]
 
-    if current_user.role in ["admin", "moh_staff"]:
+    if current_user.role in [UserRole.ADMIN, UserRole.MOH_STAFF, UserRole.DATA_MANAGER]:
         return organization_response
     elif (
         current_user.role == "partner" and organization.created_by == current_user.email
