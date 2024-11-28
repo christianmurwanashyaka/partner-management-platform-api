@@ -1,6 +1,6 @@
 import uuid
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from uuid import UUID
 
@@ -95,6 +95,7 @@ class DomainAssignment(BaseModel):
     domain_uuid: uuid.UUID
     subdomain_uuids: Optional[List[uuid.UUID]] = None
 
+
 class AssignDomains(BaseModel):
     user_uuid: uuid.UUID
     domain_assignments: List[DomainAssignment]
@@ -120,3 +121,7 @@ class OrganizationUser(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PasswordResetRequest(BaseModel):
+    new_password: str = Field(..., min_length=8)
