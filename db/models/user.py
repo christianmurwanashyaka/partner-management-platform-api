@@ -1,12 +1,16 @@
 import uuid
+from datetime import datetime
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 
 from pydantic import EmailStr
 from sqlmodel import Field, Relationship
 import sqlalchemy as sa
 
 from db.models.base import CommonBaseModel
+
+if TYPE_CHECKING:
+    from .types import Organization, UserDomain, UserActivity, Notification
 
 
 class UserRole(str, Enum):
@@ -15,7 +19,7 @@ class UserRole(str, Enum):
     MOH_STAFF = "moh_staff"
     DATA_MANAGER = "data_manager"
     DATA_REPORTER = "data_reporter"
-    M_AND_E = 'm_and_e'
+    M_AND_E = "m_and_e"
 
 
 class MOHStaffLevel(str, Enum):
@@ -28,7 +32,7 @@ class MOHStaffLevel(str, Enum):
 
 
 class User(CommonBaseModel, table=True):
-    __tablename__ = 'user'
+    __tablename__ = "user"
     email: EmailStr = Field(sa_column=sa.Column(sa.String, unique=True, index=True))
     password: str
     first_name: str
@@ -37,12 +41,22 @@ class User(CommonBaseModel, table=True):
     level: Optional[MOHStaffLevel] = None
     phone_number: Optional[str] = None
     is_verified: bool = Field(default=False)
+    password_reset_token: Optional[str] = None
+    password_reset_token_expires: Optional[datetime] = None
     has_set_password: bool = Field(default=False)
-    organization_uuid: Optional[uuid.UUID] = Field(default=None, foreign_key='organization.uuid')
-    organization: Optional['Organization'] = Relationship(
-        back_populates="users", sa_relationship_kwargs={'lazy': 'noload'})
-    notifications: Optional[List['Notification']] = Relationship(
-        back_populates='recipient', sa_relationship_kwargs={'lazy': 'noload'})
-    domains: List['UserDomain'] = Relationship(back_populates='user', sa_relationship_kwargs={'lazy': 'noload'})
+    organization_uuid: Optional[uuid.UUID] = Field(
+        default=None, foreign_key="organization.uuid"
+    )
+    organization: Optional["Organization"] = Relationship(
+        back_populates="users", sa_relationship_kwargs={"lazy": "noload"}
+    )
+    notifications: Optional[List["Notification"]] = Relationship(
+        back_populates="recipient", sa_relationship_kwargs={"lazy": "noload"}
+    )
+    domains: List["UserDomain"] = Relationship(
+        back_populates="user", sa_relationship_kwargs={"lazy": "noload"}
+    )
     partner_organization_name: Optional[str] = None
-    activities: List['UserActivity'] = Relationship(back_populates='user', sa_relationship_kwargs={'lazy': 'noload'})
+    activities: List["UserActivity"] = Relationship(
+        back_populates="user", sa_relationship_kwargs={"lazy": "noload"}
+    )
