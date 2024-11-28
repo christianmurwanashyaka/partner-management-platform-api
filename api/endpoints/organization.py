@@ -631,7 +631,11 @@ async def get_organization_mou_applications(
             base_query = base_query.filter(
                 MouApplication.created_by == current_user.email
             )
-        elif current_user.role not in ["admin", "moh_staff"]:
+        elif current_user.role not in [
+            UserRole.ADMIN,
+            UserRole.MOH_STAFF,
+            UserRole.DATA_MANAGER,
+        ]:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 detail="You are not authorized to access these MOU applications",
@@ -713,7 +717,11 @@ async def get_organization_projects(
             )
 
         # Access control based on user role
-        if current_user.role not in ["admin", "moh_staff"]:
+        if current_user.role not in [
+            UserRole.ADMIN,
+            UserRole.MOH_STAFF,
+            UserRole.DATA_MANAGER,
+        ]:
             if (
                 current_user.role == "partner"
                 and organization.created_by != current_user.email
@@ -795,7 +803,7 @@ async def get_organization_activities(
             )
 
         # Access control based on user role
-        if current_user.role not in ["admin", "moh_staff"]:
+        if current_user.role not in [UserRole.ADMIN, UserRole.MOH_STAFF]:
             if (
                 current_user.role == "partner"
                 and organization.created_by != current_user.email
@@ -861,16 +869,20 @@ async def get_organization_mou_details(
             )
 
         # Access control based on user role
-        if current_user.role not in ["admin", "moh_staff"]:
+        if current_user.role not in [
+            UserRole.ADMIN,
+            UserRole.MOH_STAFF,
+            UserRole.DATA_MANAGER,
+        ]:
             if (
-                current_user.role == "partner"
+                current_user.role == UserRole.PARTNER
                 and organization.created_by != current_user.email
             ):
                 raise HTTPException(
                     status.HTTP_403_FORBIDDEN,
                     detail="You are not authorized to access these MOU details",
                 )
-            elif current_user.role != "partner":
+            elif current_user.role != UserRole.PARTNER:
                 raise HTTPException(
                     status.HTTP_403_FORBIDDEN,
                     detail="You are not authorized to access these MOU details",
@@ -881,8 +893,6 @@ async def get_organization_mou_details(
         projects_query = select(Project).filter(Project.organization_id == uuid)
         projects_result = await db.execute(projects_query)
         projects = projects_result.scalars().all()
-
-        print("PROJECTS: ", projects)
 
         for project in projects:
             project_mou_details = (
@@ -897,7 +907,6 @@ async def get_organization_mou_details(
             project_mou_details_result = await db.execute(project_mou_details)
             project_mou_details_list = project_mou_details_result.scalars().all()
 
-            print("PROJECT MOU DETAILS LIST: ", project_mou_details_list)
             mou_details.extend(project_mou_details_list)
 
         # Map data to response schema
