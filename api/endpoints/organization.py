@@ -1,6 +1,6 @@
+import uuid
 from typing import Optional, List
 
-import uuid
 from fastapi import (
     APIRouter,
     Depends,
@@ -12,13 +12,12 @@ from fastapi import (
     Query,
 )
 from sqlalchemy import func, delete
-from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from api.dependencies.access_control import (
-    partner_access,
     moh_staff_access,
 )
 from api.dependencies.auth import get_current_user
@@ -34,6 +33,7 @@ from db.models import (
     OrganizationType,
     OrganizationFinancingScheme,
 )
+from db.models.document import Document, DocumentType
 from db.models.organization import (
     Organization,
     OrganizationFinancingAgent,
@@ -42,10 +42,10 @@ from db.models.organization import (
     OrganizationSubFinancingAgent,
     OrganizationSubHealthCareProvider,
 )
-from db.models.document import Document, DocumentType
 from db.models.pagination import PaginatedResponse
 from db.models.user import User, UserRole
 from helpers.comments import filter_comments_for_partner
+from helpers.db import check_if_exists, get_all_items, get_first_item
 from helpers.exceptions import handle_integrity_error
 from notification.handlers import EmailNotificationHandler
 from notification.services import notify_new_user, send_verification_email
@@ -57,9 +57,8 @@ from schemas.mou_detail import MouDetailRead
 from schemas.organization import OrganizationRead
 from schemas.organization_type import OrganizationTypeRead
 from schemas.party import PartyRead
-from schemas.user import OrganizationUserCreate, OrganizationUser
-from helpers.db import check_if_exists, get_all_items, get_first_item
 from schemas.project import ProjectRead, ProjectList
+from schemas.user import OrganizationUserCreate, OrganizationUser
 from utils.files import handle_upload_file
 from utils.security import (
     get_password_hash,
@@ -204,9 +203,7 @@ async def create_organization(
     return new_organization
 
 
-@router.patch(
-    "/{uuid}", response_model=OrganizationRead, dependencies=[Depends(partner_access)]
-)
+@router.patch("/{uuid}", response_model=OrganizationRead)
 async def update_organization(
     uuid: uuid.UUID,
     name: Optional[str] = Form(None),
@@ -228,12 +225,12 @@ async def update_organization(
     organization_type_id: Optional[uuid.UUID] = Form(None),
     appointment_letter: UploadFile = None,
     notified_constitution_bylaws: UploadFile = None,
-    financing_schemes: str = Form(),
-    financing_agents: str = Form(),
-    health_care_providers: str = Form(),
-    sub_financing_schemes: str = Form(),
-    sub_financing_agents: str = Form(),
-    sub_health_care_providers: str = Form(),
+    financing_schemes: Optional[str] = Form(None),
+    financing_agents: Optional[str] = Form(None),
+    health_care_providers: Optional[str] = Form(None),
+    sub_financing_schemes: Optional[str] = Form(None),
+    sub_financing_agents: Optional[str] = Form(None),
+    sub_health_care_providers: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -278,17 +275,56 @@ async def update_organization(
         }
 
         for key, value in organization_data.items():
-            if value is not None:
+            if value is not None and value != "":
                 setattr(organization, key, value)
 
-        financing_schemes_uuids = [x for x in financing_schemes.split(",") if x]
-        financing_agents_uuids = [x for x in financing_agents.split(",") if x]
-        health_care_providers_uuids = [x for x in health_care_providers.split(",") if x]
-        sub_financing_schemes_uuids = [x for x in sub_financing_schemes.split(",") if x]
-        sub_financing_agents_uuids = [x for x in sub_financing_agents.split(",") if x]
-        sub_health_care_providers_uuids = [
-            x for x in sub_health_care_providers.split(",") if x
-        ]
+        financing_schemes_uuids = []
+        financing_agents_uuids = []
+        health_care_providers_uuids = []
+        sub_financing_schemes_uuids = []
+        sub_financing_agents_uuids = []
+        sub_health_care_providers_uuids = []
+
+        if any(
+            [
+                financing_schemes,
+                financing_agents,
+                health_care_providers,
+                sub_financing_schemes,
+                sub_financing_agents,
+                sub_health_care_providers,
+            ]
+        ):
+            financing_schemes_uuids = (
+                [x for x in financing_schemes.split(",") if x]
+                if financing_schemes
+                else []
+            )
+            financing_agents_uuids = (
+                [x for x in financing_agents.split(",") if x]
+                if financing_agents
+                else []
+            )
+            health_care_providers_uuids = (
+                [x for x in health_care_providers.split(",") if x]
+                if health_care_providers
+                else []
+            )
+            sub_financing_schemes_uuids = (
+                [x for x in sub_financing_schemes.split(",") if x]
+                if sub_financing_schemes
+                else []
+            )
+            sub_financing_agents_uuids = (
+                [x for x in sub_financing_agents.split(",") if x]
+                if sub_financing_agents
+                else []
+            )
+            sub_health_care_providers_uuids = (
+                [x for x in sub_health_care_providers.split(",") if x]
+                if sub_health_care_providers
+                else []
+            )
 
         # Update financing schemes
         if len(financing_schemes_uuids) != 0:
