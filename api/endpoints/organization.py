@@ -235,7 +235,18 @@ async def update_organization(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        query = select(Organization).where(Organization.uuid == uuid)
+        query = (
+            select(Organization)
+            .where(Organization.uuid == uuid)
+            .options(
+                selectinload(Organization.financing_schemes),
+                selectinload(Organization.financing_agents),
+                selectinload(Organization.health_care_providers),
+                selectinload(Organization.sub_financing_schemes),
+                selectinload(Organization.sub_financing_agents),
+                selectinload(Organization.sub_health_care_providers),
+            )
+        )
         result = await db.execute(query)
         organization = result.scalar_one_or_none()
 
@@ -327,12 +338,12 @@ async def update_organization(
             )
 
         # Update financing schemes
-        if len(financing_schemes_uuids) != 0:
-            await db.execute(
-                delete(OrganizationFinancingScheme).where(
-                    OrganizationFinancingScheme.organization_uuid == uuid
-                )
+        await db.execute(
+            delete(OrganizationFinancingScheme).where(
+                OrganizationFinancingScheme.organization_uuid == uuid
             )
+        )
+        if len(financing_schemes_uuids) != 0:
             for scheme_uuid in financing_schemes_uuids:
                 db.add(
                     OrganizationFinancingScheme(
@@ -343,12 +354,12 @@ async def update_organization(
                 )
 
         # Update financing agents
-        if len(financing_agents_uuids) != 0:
-            await db.execute(
-                delete(OrganizationFinancingAgent).where(
-                    OrganizationFinancingAgent.organization_uuid == uuid
-                )
+        await db.execute(
+            delete(OrganizationFinancingAgent).where(
+                OrganizationFinancingAgent.organization_uuid == uuid
             )
+        )
+        if len(financing_agents_uuids) != 0:
             for agent_uuid in financing_agents_uuids:
                 db.add(
                     OrganizationFinancingAgent(
@@ -359,12 +370,12 @@ async def update_organization(
                 )
 
         # Update health care providers
-        if len(health_care_providers_uuids) != 0:
-            await db.execute(
-                delete(OrganizationHealthCareProvider).where(
-                    OrganizationHealthCareProvider.organization_uuid == uuid
-                )
+        await db.execute(
+            delete(OrganizationHealthCareProvider).where(
+                OrganizationHealthCareProvider.organization_uuid == uuid
             )
+        )
+        if len(health_care_providers_uuids) != 0:
             for provider_uuid in health_care_providers_uuids:
                 db.add(
                     OrganizationHealthCareProvider(
@@ -375,12 +386,12 @@ async def update_organization(
                 )
 
         # Update sub-financing schemes
-        if len(sub_financing_schemes_uuids) != 0:
-            await db.execute(
-                delete(OrganizationSubFinancingScheme).where(
-                    OrganizationSubFinancingScheme.organization_uuid == uuid
-                )
+        await db.execute(
+            delete(OrganizationSubFinancingScheme).where(
+                OrganizationSubFinancingScheme.organization_uuid == uuid
             )
+        )
+        if len(sub_financing_schemes_uuids) != 0:
             for sub_scheme_uuid in sub_financing_schemes_uuids:
                 db.add(
                     OrganizationSubFinancingScheme(
@@ -391,12 +402,12 @@ async def update_organization(
                 )
 
         # Update sub-financing agents
-        if len(sub_financing_agents_uuids) != 0:
-            await db.execute(
-                delete(OrganizationSubFinancingAgent).where(
-                    OrganizationSubFinancingAgent.organization_uuid == uuid
-                )
+        await db.execute(
+            delete(OrganizationSubFinancingAgent).where(
+                OrganizationSubFinancingAgent.organization_uuid == uuid
             )
+        )
+        if len(sub_financing_agents_uuids) != 0:
             for sub_agent_uuid in sub_financing_agents_uuids:
                 db.add(
                     OrganizationSubFinancingAgent(
@@ -407,12 +418,12 @@ async def update_organization(
                 )
 
         # Update sub-health care providers
-        if len(sub_health_care_providers_uuids) != 0:
-            await db.execute(
-                delete(OrganizationSubHealthCareProvider).where(
-                    OrganizationSubHealthCareProvider.organization_uuid == uuid
-                )
+        await db.execute(
+            delete(OrganizationSubHealthCareProvider).where(
+                OrganizationSubHealthCareProvider.organization_uuid == uuid
             )
+        )
+        if len(sub_health_care_providers_uuids) != 0:
             for sub_provider_uuid in sub_health_care_providers_uuids:
                 db.add(
                     OrganizationSubHealthCareProvider(
