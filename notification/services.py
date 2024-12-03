@@ -1,3 +1,4 @@
+import logging
 import mimetypes
 import uuid
 from typing import List, Optional
@@ -5,6 +6,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from core.config import settings
 from db.models import (
     Notification,
     UserRole,
@@ -13,11 +15,8 @@ from db.models import (
     MouApplication,
     Organization,
 )
-import logging
-
 from templates.handlers import TemplateHandler
 from .handlers import EmailNotificationHandler
-from core.config import settings
 
 
 async def create_and_send_notification(
@@ -90,7 +89,7 @@ async def send_forgot_password_email(
     reset_token: str,
 ):
     template_handler = TemplateHandler()
-    reset_url = f"{settings.FRONT_END_EMAIL_VERIFICATION_URL}?reset_token={reset_token}"
+    reset_url = f"{settings.FRONT_END_PASSWORD_RESET_URL}?reset_token={reset_token}"
     html_content = await template_handler.render_template(
         "forgot_password.html",
         user={
