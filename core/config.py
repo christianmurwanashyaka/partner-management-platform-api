@@ -1,9 +1,8 @@
+import os
 from typing import List
 
-from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
-import os
-
+from pydantic_settings import BaseSettings
 
 env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 env_path = os.path.normpath(env_path)
@@ -36,6 +35,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str]
 
     FRONT_END_EMAIL_VERIFICATION_URL: str
+    FRONT_END_PASSWORD_RESET_URL: str
     SYSTEM_NAME: str
     CLIENT_URL: str
 
