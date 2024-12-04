@@ -69,7 +69,6 @@ from utils.security import (
 router = APIRouter()
 
 
-# TODO: UPDATE TO USE A FORM INSTEAD OF PASSING ALL THE FIELDS HERE (FOR READABILITY PURPOSES)
 @router.post("/", response_model=OrganizationRead)
 async def create_organization(
     user_email: str = Form(...),
@@ -190,7 +189,7 @@ async def create_organization(
 
         verification_token = create_verification_token(db_user.email)
         await send_verification_email(
-            db, email_handler, verification_token=verification_token
+            db, email_handler, db_user, verification_token=verification_token
         )
 
     except IntegrityError as e:
