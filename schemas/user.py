@@ -1,8 +1,8 @@
 import uuid
-
-from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from uuid import UUID
+
+from pydantic import BaseModel, EmailStr, Field
 
 from db.models.user import UserRole, MOHStaffLevel
 
@@ -83,7 +83,7 @@ class UserProfile(BaseModel):
 
 class SignupResponse(BaseModel):
     user: UserProfile
-    token: BaseToken
+    token: Optional[BaseToken] = None
 
 
 class ChangePasswordRequest(BaseModel):

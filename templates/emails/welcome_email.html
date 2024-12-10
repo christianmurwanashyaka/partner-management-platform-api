@@ -1,31 +1,32 @@
-<!-- templates/emails/welcome_email.html -->
 {% extends "emails/base_email.html" %}
 
 {% block content %}
-<h2>Welcome to {{ system_name }}!</h2>
+<h2 style="color: #333; margin-bottom: 20px;">Welcome to {{ system_name }}!</h2>
 
 <p>Dear {{ user.first_name }} {{ user.last_name }},</p>
 
 <p>Welcome to our system! Your account has been successfully created.</p>
 
-<div class="info-block">
-    <h3>User Profile</h3>
-    <p>Email: {{ user.email }}</p>
+<div style="background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px;">
+    <h3 style="color: #333; margin-top: 0;">User Profile</h3>
+    <p style="margin: 5px 0;">Email: {{ user.email }}</p>
     {% if user.phone_number %}
-    <p>Phone: {{ user.phone_number }}</p>
+    <p style="margin: 5px 0;">Phone: {{ user.phone_number }}</p>
     {% endif %}
 </div>
 
 {% if organization %}
-<div class="info-block">
-    <h3>Organization Details</h3>
-    <p>Name: {{ organization.name }}</p>
-    <p>Email: {{ organization.email }}</p>
+<div style="background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px;">
+    <h3 style="color: #333; margin-top: 0;">Organization Details</h3>
+    <p style="margin: 5px 0;">Name: {{ organization.name }}</p>
+    <p style="margin: 5px 0;">Email: {{ organization.email }}</p>
     {% if organization.phone_number %}
-    <p>Phone: {{ organization.phone_number }}</p>
+    <p style="margin: 5px 0;">Phone: {{ organization.phone_number }}</p>
     {% endif %}
     {% if organization.website %}
-    <p>Website: {{ organization.website }}</p>
+    <p style="margin: 5px 0;">Website: <a href="{{ organization.website }}"
+                                          style="color: #007bff; text-decoration: none;">{{ organization.website }}</a>
+    </p>
     {% endif %}
 </div>
 {% endif %}
@@ -34,5 +35,5 @@
 
 <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
 
-<p>Best regards,<br>The {{ system_name }} Team</p>
+<p style="margin-top: 20px;">Best regards,<br>The {{ system_name }} Team</p>
 {% endblock %}
