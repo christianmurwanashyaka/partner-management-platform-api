@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     libpq-dev \
     gcc \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -30,5 +31,8 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Command to run the application
-CMD ["python", "main.py"]
+# Make entrypoint script executable
+RUN chmod +x entrypoint.sh
+
+# Set entrypoint
+CMD ["./entrypoint.sh"]

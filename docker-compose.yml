@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   api:
-    build: .
+    image: ghcr.io/hisprwanda/partner-management-platform-api:prod
     container_name: partner-management-platform-api
     ports:
       - "7001:7001"
@@ -20,6 +20,16 @@ services:
       - .env
     ports:
       - "5432:5432"
+  
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true # Removes old images after updating
+      - WATCHTOWER_POLL_INTERVAL=300 # Check for updates every 300 seconds (5 minutes)
+    restart: always
 
 volumes:
   postgres_data:
