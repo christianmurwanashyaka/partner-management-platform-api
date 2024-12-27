@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   api:
-    build: .
+    image: ghcr.io/hisprwanda/partner-management-platform-api:prod
     container_name: partner-management-platform-api
     ports:
       - "7001:7001"
