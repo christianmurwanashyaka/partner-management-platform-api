@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -40,6 +40,7 @@ router = APIRouter()
 @router.post("/signup", response_model=SignupResponse)
 async def create_user(
     user: UserCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
 ):
@@ -103,7 +104,7 @@ async def create_user(
 
     verification_token = create_verification_token(user.email)
     await send_verification_email(
-        db, email_handler, db_user, verification_token=verification_token
+        db, email_handler, db_user, verification_token, background_tasks
     )
 
     return {"user": db_user}
@@ -136,6 +137,7 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
 @router.get("/resend-verification")
 async def resend_verification_email(
     email: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
 ):
@@ -154,10 +156,7 @@ async def resend_verification_email(
     verification_token = create_verification_token(user.email)
 
     await send_verification_email(
-        db=db,
-        email_handler=email_handler,
-        user=user,
-        verification_token=verification_token,
+        db, email_handler, user, verification_token, background_tasks
     )
 
     return {"message": "Verification email has been reset"}
@@ -275,6 +274,7 @@ async def change_password(
 @router.post("/forgot_password")
 async def forgot_password(
     email: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
 ):
@@ -299,7 +299,9 @@ async def forgot_password(
         user.password_reset_token_expires = datetime.utcnow() + timedelta(hours=1)
         await db.commit()
 
-        await send_forgot_password_email(db, email_handler, user, reset_token)
+        await send_forgot_password_email(
+            db, email_handler, user, reset_token, background_tasks
+        )
 
         return {"message": "Reset password email has been reset"}
     except Exception as e:

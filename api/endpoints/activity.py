@@ -1,7 +1,7 @@
 from typing import List
 
 import uuid
-from fastapi import APIRouter, Request, Depends, HTTPException, status
+from fastapi import APIRouter, Request, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy import func, delete
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload, selectinload
@@ -172,6 +172,7 @@ async def create_activity(
 async def update_activity(
     uuid: uuid.UUID,
     activity_update: ActivityUpdate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
@@ -267,7 +268,9 @@ async def update_activity(
             )
             activity_to_update.project = project.scalars().first()
 
-        await update_related_mou_application(activity_to_update, db, email_handler)
+        await update_related_mou_application(
+            activity_to_update, db, email_handler, background_tasks
+        )
 
         activity_to_return = await load_full_activity_entities(db, activity_to_update)
 

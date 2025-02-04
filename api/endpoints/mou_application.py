@@ -3,7 +3,15 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from fastapi import APIRouter, Request, Depends, status, HTTPException, Query
+from fastapi import (
+    APIRouter,
+    Request,
+    Depends,
+    status,
+    HTTPException,
+    Query,
+    BackgroundTasks,
+)
 from sqlalchemy import distinct, select, func, and_, or_
 from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -93,6 +101,7 @@ router = APIRouter()
 async def create_mou_application(
     request: Request,
     mou_application_data: MouApplicationCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
 ):
@@ -215,6 +224,7 @@ async def create_mou_application(
             str(new_mou_application.id),
             created_by=user,
             email_handler=email_handler,
+            background_tasks=background_tasks,
         )
         new_mou_application.mou_detail = mou_detail
 
@@ -798,6 +808,7 @@ async def get_mou_application(
 async def start_review(
     uuid: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
 ):
@@ -841,6 +852,7 @@ async def start_review(
             created_by=user.email,
             subject="MOU Application Review Started",
             message=f"An MOU application (ID: {mou_application.id}) has been set to 'Under Review' and requires your attention.",
+            background_tasks=background_tasks,
         )
 
         mou_detail_query = select(MouDetail).where(
@@ -1003,6 +1015,7 @@ async def get_mou_application_approvals(
 async def add_review(
     uuid: uuid.UUID,
     review: MouReviewCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
@@ -1149,6 +1162,7 @@ async def add_review(
                 created_by=current_user.email,
                 subject="MOU Application Requires Your Review",
                 message=f"An MOU application (ID: {mou_application.id}) has been reviewed and requires your attention.",
+                background_tasks=background_tasks,
             )
 
         if review.decision == MouReviewDecision.REJECT:
@@ -1159,6 +1173,7 @@ async def add_review(
                 created_by=current_user.email,
                 subject="MOU Application Rejected",
                 message=f"Your MOU application (ID: {mou_application.id}) has been rejected.",
+                background_tasks=background_tasks,
             )
         elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
             await notify_partner(
@@ -1168,6 +1183,7 @@ async def add_review(
                 created_by=current_user.email,
                 subject="MOU Application Requires Modification",
                 message=f"Your MOU application (ID: {mou_application.id}) requires modifications. Please review and update accordingly.",
+                background_tasks=background_tasks,
             )
 
         return MouReviewRead(
@@ -1195,6 +1211,7 @@ async def add_review(
 async def add_approval(
     uuid: uuid.UUID,
     approval: MouApprovalCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
@@ -1339,6 +1356,7 @@ async def add_approval(
                     message=f"Your MOU application (ID: {mou_application.id}) has been approved. Please find the attached MOU document.",
                     attachment_path=pdf_filepath,
                     attachment_filename=pdf_filename,
+                    background_tasks=background_tasks,
                 )
             else:
                 next_level_index = approval_stage_levels.index(current_user.level) + 1
@@ -1351,6 +1369,7 @@ async def add_approval(
                     levels=[mou_application.next_level],
                     subject="MOU Application Requires Your Approval",
                     message=f"An MOU application (ID: {mou_application.id}) has been approved at the previous level and requires your attention.",
+                    background_tasks=background_tasks,
                 )
         elif approval.decision == MouApprovalDecision.REQUEST_MODIFICATION:
             mou_application.status = MouApplicationStatus.UNDER_REVIEW
@@ -1362,6 +1381,7 @@ async def add_approval(
                 levels=[MOHStaffLevel.PARTNER_COORDINATOR],
                 subject="MOU Application Requires Modification",
                 message=f"An MOU application (ID: {mou_application.id}) requires modification. Please review and coordinate with the partner.",
+                background_tasks=background_tasks,
             )
         elif approval.decision == MouApprovalDecision.REJECT:
             mou_application.status = MouApplicationStatus.UNDER_REVIEW
@@ -1375,6 +1395,7 @@ async def add_approval(
                 levels=[MOHStaffLevel.PARTNER_COORDINATOR],
                 subject="MOU Application Rejected",
                 message=f"An MOU application (ID: {mou_application.id}) has been rejected. Please review and take appropriate action.",
+                background_tasks=background_tasks,
             )
 
         # Record the approval
@@ -1705,6 +1726,7 @@ async def get_modification_comments(
 
 async def update_related_mou_application(
     entity,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
 ):
@@ -1772,7 +1794,6 @@ async def update_related_mou_application(
 
             mou_application.last_updated_at = datetime.utcnow()
             mou_application.last_updated_by = mou_application.created_by
-            print("ABOUT TO NOTIFY MOH STAFF")
             await notify_moh_staff(
                 db,
                 email_handler,
@@ -1780,6 +1801,7 @@ async def update_related_mou_application(
                 subject="MOU Application Modified",
                 message=f"An MOU application (ID: {mou_application.id}) has been modified and requires your attention.",
                 created_by=mou_application.last_updated_by,
+                background_tasks=background_tasks,
             )
 
             await db.commit()

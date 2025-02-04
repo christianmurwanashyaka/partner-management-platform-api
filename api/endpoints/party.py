@@ -1,7 +1,7 @@
 from typing import List
 
 import uuid
-from fastapi import APIRouter, HTTPException, Depends, Request, status
+from fastapi import APIRouter, HTTPException, Depends, Request, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -17,8 +17,10 @@ from schemas.party import PartyRead, PartyCreate, PartyUpdate
 router = APIRouter()
 
 
-@router.post('/', response_model=PartyRead, dependencies=[Depends(partner_access)])
-async def create_party(request: Request, party_data: PartyCreate, db: AsyncSession = Depends(get_db)):
+@router.post("/", response_model=PartyRead, dependencies=[Depends(partner_access)])
+async def create_party(
+    request: Request, party_data: PartyCreate, db: AsyncSession = Depends(get_db)
+):
     user = request.state.user.email
     new_party = Party(
         name=party_data.name,
@@ -28,7 +30,7 @@ async def create_party(request: Request, party_data: PartyCreate, db: AsyncSessi
         organization_id=party_data.organization_id,
         duration=party_data.duration,
         reason_for_extended_duration=party_data.reason_for_extended_duration,
-        created_by=user
+        created_by=user,
     )
     try:
         db.add(new_party)
@@ -37,32 +39,35 @@ async def create_party(request: Request, party_data: PartyCreate, db: AsyncSessi
     except Exception as e:
         await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
     return new_party
 
 
-@router.get('/{uuid}', response_model=PartyRead)
-async def get_party(uuid: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get("/{uuid}", response_model=PartyRead)
+async def get_party(
+    uuid: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
         query = select(Party).where(Party.uuid == uuid)
         result = await db.execute(query)
         party = result.scalar_one_or_none()
 
         if not party:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Party not found')
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Party not found")
 
         return party
 
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
 
-@router.get('/', response_model=List[PartyRead], dependencies=[Depends(partner_access)])
+@router.get("/", response_model=List[PartyRead], dependencies=[Depends(partner_access)])
 async def get_user_parties(request: Request, db: AsyncSession = Depends(get_db)):
     user = request.state.user.email
 
@@ -71,32 +76,53 @@ async def get_user_parties(request: Request, db: AsyncSession = Depends(get_db))
         parties = parties.scalars().all()
 
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
     return parties
 
 
-@router.patch('/{uuid}', response_model=PartyRead, dependencies=[Depends(partner_access)])
-async def update_party(uuid: uuid.UUID, party_update: PartyUpdate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user), email_handler: EmailNotificationHandler = Depends(get_email_notification_handler)):
+@router.patch(
+    "/{uuid}", response_model=PartyRead, dependencies=[Depends(partner_access)]
+)
+async def update_party(
+    uuid: uuid.UUID,
+    party_update: PartyUpdate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
+):
     try:
         query = select(Party).where(Party.uuid == uuid)
         result = await db.execute(query)
         party = result.scalar_one_or_none()
 
         if not party:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Party not found')
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Party not found"
+            )
 
-        if party.created_by != current_user.email and current_user.role != UserRole.ADMIN:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Not authorized to update this party')
+        if (
+            party.created_by != current_user.email
+            and current_user.role != UserRole.ADMIN
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to update this party",
+            )
 
         for key, value in party_update.dict(exclude_unset=True).items():
             setattr(party, key, value)
 
         await db.commit()
         await db.refresh(party)
-        await update_related_mou_application(party, db, email_handler)
+        await update_related_mou_application(party, db, email_handler, background_tasks)
 
         return party
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )

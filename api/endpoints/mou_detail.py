@@ -10,6 +10,7 @@ from fastapi import (
     UploadFile,
     File,
     Form,
+    BackgroundTasks,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -124,6 +125,7 @@ async def create_mou_detail(
 )
 async def update_mou_detail(
     uuid: uuid.UUID,
+    background_tasks: BackgroundTasks,
     project_id: Optional[uuid.UUID] = Form(None),
     party_ids: Optional[str] = Form(None),
     memo_describing_the_source_of_funds: UploadFile = None,
@@ -207,7 +209,9 @@ async def update_mou_detail(
 
         await db.commit()
 
-        await update_related_mou_application(mou_detail, db, email_handler)
+        await update_related_mou_application(
+            mou_detail, db, email_handler, background_tasks
+        )
 
         mou_detail_to_return = await load_mou_detail_related_entities(db, mou_detail)
         return mou_detail_to_return
