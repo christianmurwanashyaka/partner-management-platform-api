@@ -1,13 +1,14 @@
 # Use Python 3.11 slim base image
 FROM python:3.11-slim
 
-# Install system dependencies
+# Install system dependencies including LibreOffice
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
     libpq-dev \
     gcc \
     postgresql-client \
+    libreoffice \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
