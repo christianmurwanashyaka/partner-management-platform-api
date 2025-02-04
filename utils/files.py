@@ -1,25 +1,24 @@
 import os
-from datetime import datetime
-from io import BytesIO
 import platform
 import subprocess
+from datetime import datetime
+from io import BytesIO
 from tempfile import NamedTemporaryFile
 
-from docx2pdf import convert
-from fastapi import status
-
+import qrcode
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
-from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from docx.shared import Pt
+from docx.oxml.ns import qn
+from docx.shared import Pt, Inches
+from docx2pdf import convert
 from fastapi import UploadFile, HTTPException, Depends
+from fastapi import status
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
-
 
 from db.database import get_db
 from db.models import (
@@ -83,6 +82,38 @@ async def generate_mou_doc(
 
     organization = project.organization
     current_date = datetime.now().strftime("%d/%m/%Y")
+
+    # generating the QR Code
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+
+    qr_organization_name = f"Organization name: {organization.name}\r\n"
+    qr_application_reference = f"MOU Reference number: {mou_application.reference_number}\r\n"
+    qr_project_duration = f"Project duration: {project.duration}"
+
+    qr.add_data(qr_organization_name)
+    qr.add_data(qr_application_reference)
+    qr.add_data(qr_project_duration)
+
+    qr.make(fit=True)
+
+    # creating the QR Code Image
+    qr_image = qr.make_image(fill_color="black", black_color="white")
+
+    # converting the PIL Image to bytes
+    qr_buffer = BytesIO()
+    qr_image.save(qr_buffer, format="PNG")
+    qr_buffer.seek(0)
+
+    # getting the last paragraph of the document to add the QR
+
+    qr_paragraph = doc.add_paragraph()
+    qr_run = qr_paragraph.add_run()
+    qr_run.add_picture(qr_buffer, width=Inches(1))
 
     def get_attr_or_none(obj, attr):
         value = getattr(obj, attr, None)
@@ -222,7 +253,7 @@ async def generate_mou_doc(
     return docx_buffer, pdf_buffer
 
 
-def convert_docx_to_pdf(docx_buffer: BytesIO) -> BytesIO:
+def convert_docx_to_pdf(docx_buffer: BytesIO) -> BytesIO | None:
     pdf_buffer = BytesIO()
 
     with NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
