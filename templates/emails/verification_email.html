@@ -5,41 +5,24 @@
 
 <p>Dear {{ user.first_name }} {{ user.last_name }},</p>
 
-<<<<<<< HEAD
-<p>Thank you for registering with {{ system_name }}! To complete your registration and access all features, please verify your email address.</p>
-
-<div style="text-align: center; margin: 30px 0;">
-    <a href="{{ verification_url }}" class="button" style="font-size: 16px;">
-=======
 <p>Thank you for registering with {{ system_name }}. Please click the button below to verify your email address:</p>
 
 <div style="text-align: center; margin: 30px 0;">
     <a href="{{ verification_url }}" target="_blank"
        style="display: inline-block; padding: 10px 20px; margin: 20px 0; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; font-size: 16px; cursor: pointer;">
->>>>>>> 6af8bc40ba8f51251b6c9f5db9fe2a7ab8248eee
         Verify Email Address
     </a>
 </div>
 
-<<<<<<< HEAD
-<div class="info-block">
-    <p>If the button above doesn't work, you can copy and paste this link into your browser:</p>
-    <a style="word-break: break-all;">{{ verification_url }}</a>
-=======
 <div style="background-color: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px;">
     <p>If the button above doesn't work, you can copy and paste this link into your browser:</p>
     <p style="word-break: break-all;"><a href="{{ verification_url }}" style="color: #007bff;">{{ verification_url
         }}</a></p>
->>>>>>> 6af8bc40ba8f51251b6c9f5db9fe2a7ab8248eee
 </div>
 
 <p><strong>This verification link will expire in 24 hours.</strong></p>
 
-<<<<<<< HEAD
-<p>If you did not create an account with {{ system_name }}, please ignore this email or contact our support team if you have concerns.</p>
-=======
 <p>If you did not create an account, please ignore this email.</p>
->>>>>>> 6af8bc40ba8f51251b6c9f5db9fe2a7ab8248eee
 
 <p>Best regards,<br>The {{ system_name }} Team</p>
 {% endblock %}

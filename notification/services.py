@@ -2,6 +2,7 @@ import logging
 import mimetypes
 import uuid
 from typing import List, Optional
+from fastapi import BackgroundTasks
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -26,6 +27,7 @@ async def create_and_send_notification(
     subject: str,
     message: str,
     created_by: str,
+    background_tasks: BackgroundTasks,
     attachment: Optional[tuple] = None,
 ):
     # Create the notification
@@ -49,7 +51,7 @@ async def create_and_send_notification(
     notification.recipient = recipient
 
     # Send the notification
-    await email_handler.send_notification(notification, attachment)
+    background_tasks.add_task(email_handler.send_notification, notification, attachment)
 
 
 async def send_verification_email(
@@ -57,6 +59,7 @@ async def send_verification_email(
     email_handler: EmailNotificationHandler,
     user: User,
     verification_token: str,
+    background_tasks: BackgroundTasks,
 ):
     template_handler = TemplateHandler()
     verification_url = (
@@ -79,6 +82,7 @@ async def send_verification_email(
         subject="Verify Your Email Address",
         message=html_content,
         created_by=user.email,
+        background_tasks=background_tasks,
     )
 
 
@@ -87,6 +91,7 @@ async def send_forgot_password_email(
     email_handler: EmailNotificationHandler,
     user: User,
     reset_token: str,
+    background_tasks: BackgroundTasks,
 ):
     template_handler = TemplateHandler()
     reset_url = f"{settings.FRONT_END_PASSWORD_RESET_URL}?reset_token={reset_token}"
@@ -107,6 +112,7 @@ async def send_forgot_password_email(
         subject="Forgot password",
         message=html_content,
         created_by=user.email,
+        background_tasks=background_tasks,
     )
 
 
@@ -115,6 +121,7 @@ async def notify_partner_coordinators(
     application_id: str,
     created_by: str,
     email_handler: EmailNotificationHandler,
+    background_tasks: BackgroundTasks,
 ):
     # Query for all partner coordinators
     query = select(User).filter(
@@ -131,6 +138,7 @@ async def notify_partner_coordinators(
             subject="New MOU Application Submitted",
             message=f"A new MOU application (ID: {application_id}) has been submitted and requires your review.",
             created_by=created_by,
+            background_tasks=background_tasks,
         )
 
 
@@ -141,6 +149,7 @@ async def notify_moh_staff(
     created_by: str,
     subject: str,
     message: str,
+    background_tasks: BackgroundTasks,
 ):
     # Query for all MOH staff with the specified levels
     query = select(User).filter(User.role == UserRole.MOH_STAFF, User.level.in_(levels))
@@ -155,6 +164,7 @@ async def notify_moh_staff(
             subject=subject,
             message=message,
             created_by=created_by,
+            background_tasks=background_tasks,
         )
 
 
@@ -165,6 +175,7 @@ async def notify_partner(
     created_by: str,
     subject: str,
     message: str,
+    background_tasks: BackgroundTasks,
     attachment_path: str = None,
     attachment_filename: str = None,
 ):
@@ -207,6 +218,7 @@ async def notify_partner(
         message=message,
         created_by=created_by,
         attachment=attachment,
+        background_tasks=background_tasks,
     )
 
 
@@ -215,6 +227,7 @@ async def notify_new_user(
     email_handler: EmailNotificationHandler,
     user: User,
     organization: Organization,
+    background_tasks: BackgroundTasks,
 ):
     template_handler = TemplateHandler()
 
@@ -244,6 +257,7 @@ async def notify_new_user(
         subject="Welcome to Our System",
         message=html_content,
         created_by=user.email,
+        background_tasks=background_tasks,
     )
 
 
@@ -252,6 +266,7 @@ async def notify_new_organization(
     email_handler: EmailNotificationHandler,
     user: User,
     organization: Organization,
+    background_tasks: BackgroundTasks,
 ):
     subject = "Welcome to Our System - Your Organization Has Been Registered"
     message = f"""
@@ -279,4 +294,5 @@ async def notify_new_organization(
         subject=subject,
         message=message,
         created_by=user.email,
+        background_tasks=background_tasks,
     )

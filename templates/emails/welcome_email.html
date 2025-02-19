@@ -1,48 +1,21 @@
-<<<<<<< HEAD
-<!-- templates/emails/welcome_email.html -->
-{% extends "emails/base_email.html" %}
-
-{% block content %}
-<h2>Welcome to {{ system_name }}!</h2>
-=======
 {% extends "emails/base_email.html" %}
 
 {% block content %}
 <h2 style="color: #333; margin-bottom: 20px;">Welcome to {{ system_name }}!</h2>
->>>>>>> 6af8bc40ba8f51251b6c9f5db9fe2a7ab8248eee
 
 <p>Dear {{ user.first_name }} {{ user.last_name }},</p>
 
 <p>Welcome to our system! Your account has been successfully created.</p>
 
-<<<<<<< HEAD
-<div class="info-block">
-    <h3>User Profile</h3>
-    <p>Email: {{ user.email }}</p>
-    {% if user.phone_number %}
-    <p>Phone: {{ user.phone_number }}</p>
-=======
 <div style="background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px;">
     <h3 style="color: #333; margin-top: 0;">User Profile</h3>
     <p style="margin: 5px 0;">Email: {{ user.email }}</p>
     {% if user.phone_number %}
     <p style="margin: 5px 0;">Phone: {{ user.phone_number }}</p>
->>>>>>> 6af8bc40ba8f51251b6c9f5db9fe2a7ab8248eee
     {% endif %}
 </div>
 
 {% if organization %}
-<<<<<<< HEAD
-<div class="info-block">
-    <h3>Organization Details</h3>
-    <p>Name: {{ organization.name }}</p>
-    <p>Email: {{ organization.email }}</p>
-    {% if organization.phone_number %}
-    <p>Phone: {{ organization.phone_number }}</p>
-    {% endif %}
-    {% if organization.website %}
-    <p>Website: {{ organization.website }}</p>
-=======
 <div style="background-color: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px;">
     <h3 style="color: #333; margin-top: 0;">Organization Details</h3>
     <p style="margin: 5px 0;">Name: {{ organization.name }}</p>
@@ -54,7 +27,6 @@
     <p style="margin: 5px 0;">Website: <a href="{{ organization.website }}"
                                           style="color: #007bff; text-decoration: none;">{{ organization.website }}</a>
     </p>
->>>>>>> 6af8bc40ba8f51251b6c9f5db9fe2a7ab8248eee
     {% endif %}
 </div>
 {% endif %}
@@ -63,9 +35,5 @@
 
 <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
 
-<<<<<<< HEAD
-<p>Best regards,<br>The {{ system_name }} Team</p>
-=======
 <p style="margin-top: 20px;">Best regards,<br>The {{ system_name }} Team</p>
->>>>>>> 6af8bc40ba8f51251b6c9f5db9fe2a7ab8248eee
 {% endblock %}

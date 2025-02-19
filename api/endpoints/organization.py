@@ -10,6 +10,7 @@ from fastapi import (
     File,
     UploadFile,
     Query,
+    BackgroundTasks,
 )
 from sqlalchemy import func, delete
 from sqlalchemy.exc import IntegrityError
@@ -97,6 +98,7 @@ async def create_organization(
     notified_constitution_bylaws: UploadFile = None,
     db: AsyncSession = Depends(get_db),
     email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
+    background_tasks: BackgroundTasks = Depends,
 ):
     if await check_if_exists(Organization, db, name=name):
         raise HTTPException(
@@ -185,11 +187,13 @@ async def create_organization(
             db.add(notified_constitution_bylaws_doc)
 
         await db.commit()
-        await notify_new_user(db, email_handler, db_user, new_organization)
+        await notify_new_user(
+            db, email_handler, db_user, new_organization, background_tasks
+        )
 
         verification_token = create_verification_token(db_user.email)
         await send_verification_email(
-            db, email_handler, db_user, verification_token=verification_token
+            db, email_handler, db_user, verification_token, background_tasks
         )
 
     except IntegrityError as e:
@@ -562,7 +566,6 @@ async def add_organization_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
     if current_user.role != UserRole.PARTNER:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,

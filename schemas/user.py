@@ -1,17 +1,9 @@
 import uuid
-<<<<<<< HEAD
-
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
-from uuid import UUID
-
-=======
 from typing import Optional, List
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
 
->>>>>>> 6af8bc40ba8f51251b6c9f5db9fe2a7ab8248eee
 from db.models.user import UserRole, MOHStaffLevel
 
 
@@ -91,11 +83,7 @@ class UserProfile(BaseModel):
 
 class SignupResponse(BaseModel):
     user: UserProfile
-<<<<<<< HEAD
-    token: BaseToken
-=======
     token: Optional[BaseToken] = None
->>>>>>> 6af8bc40ba8f51251b6c9f5db9fe2a7ab8248eee
 
 
 class ChangePasswordRequest(BaseModel):
