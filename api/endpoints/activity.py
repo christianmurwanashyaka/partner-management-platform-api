@@ -1,11 +1,12 @@
+import uuid
 from typing import List
 
-import uuid
 from fastapi import APIRouter, Request, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy import func, delete
 from sqlalchemy.future import select
 from sqlalchemy.orm import joinedload, selectinload
 from sqlmodel.ext.asyncio.session import AsyncSession
+
 from api.dependencies.access_control import partner_access
 from api.dependencies.auth import get_current_user
 from api.dependencies.email_notification_handler import get_email_notification_handler
@@ -269,7 +270,7 @@ async def update_activity(
             activity_to_update.project = project.scalars().first()
 
         await update_related_mou_application(
-            activity_to_update, db, email_handler, background_tasks
+            activity_to_update, background_tasks, db, email_handler
         )
 
         activity_to_return = await load_full_activity_entities(db, activity_to_update)

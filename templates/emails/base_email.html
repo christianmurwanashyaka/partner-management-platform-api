@@ -1,28 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ subject }}</title>
 </head>
-
 <body style="font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 0; background-color: #f4f4f4;">
-    <div
-        style="max-width: 600px; margin: 20px auto; padding: 20px; background-color: #ffffff; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-        <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #f4f4f4;">
-            <h2>{{ system_name }}</h2>
-        </div>
-
-        <div style="padding: 20px 0;">
-            {% block content %}{% endblock %}
-        </div>
-
-        <div style="text-align: center; padding: 20px 0; color: #666; font-size: 14px; border-top: 2px solid #f4f4f4;">
-            <p>© {{ year }} {{ system_name }}. All rights reserved.</p>
-            <p>If you have any questions, please contact our support team.</p>
-        </div>
+<div style="max-width: 600px; margin: 20px auto; padding: 20px; background-color: #ffffff; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+    <div style="text-align: center; padding: 20px 0; border-bottom: 2px solid #f4f4f4;">
+        <h2>{{ system_name }}</h2>
     </div>
-</body>
 
+    <div style="padding: 20px 0;">
+        {% block content %}{% endblock %}
+    </div>
+
+    <div style="text-align: center; padding: 20px 0; color: #666; font-size: 14px; border-top: 2px solid #f4f4f4;">
+        <p>© {{ year }} {{ system_name }}. All rights reserved.</p>
+        <p>If you have any questions, please contact our support team.</p>
+    </div>
+</div>
+</body>
 </html>

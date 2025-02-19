@@ -92,7 +92,9 @@ async def generate_mou_doc(
     )
 
     qr_organization_name = f"Organization name: {organization.name}\r\n"
-    qr_application_reference = f"MOU Reference number: {mou_application.reference_number}\r\n"
+    qr_application_reference = (
+        f"MOU Reference number: {mou_application.reference_number}\r\n"
+    )
     qr_project_duration = f"Project duration: {project.duration}"
 
     qr.add_data(qr_organization_name)
@@ -326,7 +328,8 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
         "Sub Domain of Intervention",
         "Sub Domain Function",
         "Sub Function",
-        "Location",
+        "Province",
+        "District",
         "Funding Source",
         "Funding Unit",
         "Activity",
@@ -414,6 +417,9 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
     )
     activities = (await db.execute(project_activities_query)).scalars().all()
 
+    last_province = None
+    total_budget = 0
+
     for activity in activities:
         activity_domains_query = (
             select(ActivityDomain)
@@ -440,12 +446,17 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
         for input_detail in input_details:
             district = getattr(input_detail, "district", "N/A")
             province = getattr(input_detail, "province", "N/A")
-            location = f"{district}, {province}"
+
+            if province != last_province:
+                last_province = province
+            # location = f"{district}, {province}"
+
             input_category = getattr(
                 getattr(input_detail, "input_category", None), "name", "N/A"
             )
             input_name = getattr(getattr(input_detail, "input", None), "name", "N/A")
-            budget = getattr(input_detail, "budget", "N/A")
+            budget = getattr(input_detail, "budget", 0)
+            total_budget += budget
 
             for domain in activity_domains:
                 domain_name = getattr(
@@ -469,7 +480,8 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
                     sub_domain_name,
                     sub_domain_function_name,
                     sub_function_name,
-                    location,
+                    last_province,
+                    district,
                     funding_source.name,
                     funding_unit.name,
                     activity.name,
@@ -483,6 +495,17 @@ async def generate_mou_action_plan(mou_application, db: AsyncSession = Depends(g
                     activity.fiscal_year,
                 ]
                 ws.append(data)
+
+        # Add the total budget row
+    total_row = [""] * len(headers)  # Create an empty row
+    total_row[headers.index("Planned budget")] = (
+        f"Total: {total_budget}"  # Add the total in the "Planned budget" column
+    )
+    ws.append(total_row)
+
+    # Bold the total row for better visibility
+    for cell in ws[ws.max_row]:
+        cell.font = bold_font
 
     action_plans_directory = os.path.join(os.getcwd(), "action_plans")
     os.makedirs(action_plans_directory, exist_ok=True)
