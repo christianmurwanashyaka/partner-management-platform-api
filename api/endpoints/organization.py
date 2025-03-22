@@ -96,6 +96,7 @@ async def create_organization(
     organization_type_id: uuid.UUID = Form(...),
     appointment_letter: UploadFile = File(...),
     notified_constitution_bylaws: UploadFile = None,
+    rgb_certificate: UploadFile = None,
     db: AsyncSession = Depends(get_db),
     email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
     background_tasks: BackgroundTasks = Depends,
@@ -185,6 +186,20 @@ async def create_organization(
                 created_by=user_email,
             )
             db.add(notified_constitution_bylaws_doc)
+
+        if rgb_certificate:
+            rgb_certificate_path, rgb_certificate_filename = await handle_upload_file(
+                rgb_certificate
+            )
+            rgb_certificate_doc = Document(
+                name="RGB Certificate",
+                document_type=DocumentType.RGB_CERTIFICATE,
+                path=rgb_certificate_path,
+                filename=rgb_certificate_filename,
+                organization=new_organization,
+                created_by=user_email,
+            )
+            db.add(rgb_certificate_doc)
 
         await db.commit()
         await notify_new_user(

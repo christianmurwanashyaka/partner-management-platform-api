@@ -118,7 +118,7 @@ async def update_party(
 
         await db.commit()
         await db.refresh(party)
-        await update_related_mou_application(party, db, email_handler, background_tasks)
+        await update_related_mou_application(party, background_tasks, db, email_handler)
 
         return party
     except Exception as e:

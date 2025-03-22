@@ -1,35 +1,104 @@
+# IDEs and editors
 .idea
 .fleet
-.ipynb_checkpoints
-.mypy_cache
 .vscode
+*.sublime-project
+*.sublime-workspace
+
+# Jupyter notebooks
+.ipynb_checkpoints
+
+# Python cache
 __pycache__
+*.py[cod]
+*$py.class
+
+# Test and coverage
 .pytest_cache
 htmlcov
-dist
-site
 .coverage
+.coverage.*
+.cache
+nosetests.xml
 coverage.xml
-.netlify
+*.cover
+*.py,cover
+.hypothesis/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+env/
+env3.*/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Pipenv
+Pipfile.lock
+
+# pyenv
+.python-version
+
+# tox
+.tox/
+.nox/
+
+# Sphinx documentation
+docs_build/
+site_build/
+docs.zip
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
 test.db
 log.txt
-Pipfile.lock
-env3.*
-env
-docs_build
-site_build
-venv
-docs.zip
-archive.zip
+
+# Environments
 .env
-# vim temporary files
-*~
-.*.sw?
-.cache
+.env.*
 
 # macOS
 .DS_Store
-logs
 
-.venv
-venv
+# Archive files
+archive.zip
+
+# Netlify
+.netlify
+
+# Logs
+logs/
+
+# Vim temporary files
+*~
+.*.sw?
+
+# Local history
+.localhistory/
