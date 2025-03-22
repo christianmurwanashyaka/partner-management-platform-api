@@ -12,7 +12,9 @@ from db.models import Notification
 
 class NotificationHandler(ABC):
     @abstractmethod
-    async def send_notification(self, notification: Notification, attachment: Optional[tuple] = None):
+    async def send_notification(
+        self, notification: Notification, attachment: Optional[tuple] = None
+    ):
         pass
 
 
@@ -38,7 +40,9 @@ class EmailNotificationHandler(NotificationHandler):
             print(f"Error sending email: {str(e)}")
             raise
 
-    async def send_notification(self, notification: Notification, attachment: Optional[tuple] = None):
+    async def send_notification(
+        self, notification: Notification, attachment: Optional[tuple] = None
+    ):
         message = MessageSchema(
             subject=notification.subject,
             recipients=[notification.recipient.email],
@@ -49,37 +53,14 @@ class EmailNotificationHandler(NotificationHandler):
         if attachment:
             try:
                 filename, content, content_type = attachment
+                # Create an UploadFile object without setting content_type
                 file = UploadFile(filename=filename, file=BytesIO(content))
+
+                # Set the attachment as a list of tuples
                 message.attachments = [(file, {})]  # Empty dict for metadata
             except ValueError as e:
                 print(f"Error unpacking attachment: {str(e)}")
-
         try:
             asyncio.create_task(self._send_email(message, notification))
         except Exception as e:
             raise  # Re-raise the exception after logging
-
-
-from datetime import datetime
-from pathlib import Path
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-
-
-class TemplateHandler:
-    def __init__(self):
-        template_dir = Path(__file__).parent
-        if not template_dir.exists():
-            raise FileNotFoundError(f"Template directory not found: {template_dir}")
-
-        self.env = Environment(
-            loader=FileSystemLoader(str(template_dir)),
-            autoescape=select_autoescape(['html', 'xml'])
-        )
-
-    async def render_template(self, template_name: str, **kwargs) -> str:
-        try:
-            template = self.env.get_template(f"emails/{template_name}")
-            kwargs['year'] = datetime.now().year
-            return template.render(**kwargs, system_name=settings.SYSTEM_NAME)
-        except Exception as e:
-            raise Exception(f"Error rendering template: {str(e)}")

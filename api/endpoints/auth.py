@@ -286,7 +286,7 @@ async def forgot_password(
     :return:
     """
     try:
-        query = select(User).filter(User.email == email)
+        query = select(User).filter(User.email == email.lower())
         user = await get_first_item(db, query)
 
         if not user:

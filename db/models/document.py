@@ -17,6 +17,7 @@ class DocumentType(str, Enum):
     ADDITIONAL_DOCUMENT = 'additional_document'
     ACTION_PLAN = 'action_plan'
     MOU = 'mou'
+    RGB_CERTIFICATE = "rgb_certificate"
 
 
 class Document(CommonBaseModel, table=True):
