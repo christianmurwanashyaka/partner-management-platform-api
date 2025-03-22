@@ -5,6 +5,9 @@ on:
     branches:
       - develop
       - production
+  pull_request:
+    branches:
+      - "*"
 
 jobs:
   build-and-push:
