@@ -6,8 +6,10 @@ from io import BytesIO
 from tempfile import NamedTemporaryFile
 
 import qrcode
+from dateutil.relativedelta import relativedelta
 from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, Inches
@@ -58,7 +60,10 @@ async def handle_upload_file(file: UploadFile):
 
 
 async def generate_mou_doc(
-    mou_application, template_path, db: AsyncSession = Depends(get_db)
+    mou_application,
+    template_path,
+    db: AsyncSession = Depends(get_db),
+    is_draft: bool = False,
 ):
     doc = Document(template_path)
 
@@ -83,39 +88,47 @@ async def generate_mou_doc(
     organization = project.organization
     current_date = datetime.now().strftime("%d/%m/%Y")
 
-    # generating the QR Code
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
+    expiration_date = datetime.now() + relativedelta(years=int(project.duration))
 
-    qr_organization_name = f"Organization name: {organization.name}\r\n"
-    qr_application_reference = (
-        f"MOU Reference number: {mou_application.reference_number}\r\n"
-    )
-    qr_project_duration = f"Project duration: {project.duration}"
+    if not is_draft:
+        # generating the QR Code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
 
-    qr.add_data(qr_organization_name)
-    qr.add_data(qr_application_reference)
-    qr.add_data(qr_project_duration)
+        expiration_date_str = expiration_date.strftime("%d/%m/%Y")
+        qr_organization_name = f"Organization name: {organization.name}\r\n"
+        qr_application_reference = (
+            f"MOU Reference number: {mou_application.reference_number}\r\n"
+        )
+        qr_project_duration = f"Project duration: {project.duration}\r\n"
+        qr_expiration_date = f"Expiration date: {expiration_date_str}\r\n"
+        qr_approved_str = "Approved"
 
-    qr.make(fit=True)
+        qr.add_data(qr_organization_name)
+        qr.add_data(qr_application_reference)
+        qr.add_data(qr_project_duration)
+        qr.add_data(qr_expiration_date)
+        qr.add_data(qr_approved_str)
 
-    # creating the QR Code Image
-    qr_image = qr.make_image(fill_color="black", black_color="white")
+        qr.make(fit=True)
 
-    # converting the PIL Image to bytes
-    qr_buffer = BytesIO()
-    qr_image.save(qr_buffer, format="PNG")
-    qr_buffer.seek(0)
+        # creating the QR Code Image
+        qr_image = qr.make_image(fill_color="black", black_color="white")
 
-    # getting the last paragraph of the document to add the QR
+        # converting the PIL Image to bytes
+        qr_buffer = BytesIO()
+        qr_image.save(qr_buffer, format="PNG")
+        qr_buffer.seek(0)
 
-    qr_paragraph = doc.add_paragraph()
-    qr_run = qr_paragraph.add_run()
-    qr_run.add_picture(qr_buffer, width=Inches(1))
+        # getting the last paragraph of the document to add the QR
+        qr_paragraph = doc.add_paragraph()
+        qr_paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+        qr_run = qr_paragraph.add_run()
+        qr_run.add_picture(qr_buffer, width=Inches(1))
 
     def get_attr_or_none(obj, attr):
         value = getattr(obj, attr, None)

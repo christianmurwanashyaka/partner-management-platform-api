@@ -91,6 +91,7 @@ from schemas.mou_review import MouReviewRead, MouReviewCreate
 from utils.files import generate_mou_action_plan, generate_mou_doc, save_mou_doc_to_disk
 from utils.filters import parse_uuid_list, parse_string_list
 from utils.functions import calculate_time_difference_ms, format_time_difference
+from utils.mou_application import get_review_levels
 
 router = APIRouter()
 
@@ -176,7 +177,7 @@ async def create_mou_application(
         )
 
         docx_buffer, pdf_buffer = await generate_mou_doc(
-            new_mou_application, template_path, db
+            new_mou_application, template_path, db, True
         )
 
         draft_docx_filename = (
@@ -808,9 +809,7 @@ async def get_mou_application(
 async def start_review(
     uuid: str,
     request: Request,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    email_handler: EmailNotificationHandler = Depends(get_email_notification_handler),
 ):
     user = request.state.user
     if (
@@ -839,21 +838,12 @@ async def start_review(
             )
 
         mou_application.status = MouApplicationStatus.UNDER_REVIEW
+        mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
         mou_application.last_decision_date = datetime.now()
         mou_application.last_updated_at = datetime.now()
 
         await db.commit()
         await db.refresh(mou_application)
-
-        await notify_moh_staff(
-            db,
-            email_handler,
-            levels=[MOHStaffLevel.LEGAL_ADVISOR, MOHStaffLevel.TECHNICAL_DEPARTMENT],
-            created_by=user.email,
-            subject="MOU Application Review Started",
-            message=f"An MOU application (ID: {mou_application.id}) has been set to 'Under Review' and requires your attention.",
-            background_tasks=background_tasks,
-        )
 
         mou_detail_query = select(MouDetail).where(
             MouDetail.uuid == mou_application.mou_detail_id
@@ -1030,96 +1020,71 @@ async def add_review(
                 status.HTTP_404_NOT_FOUND, detail="MOU application not found"
             )
 
-        # Initial review checks
-        if mou_application.next_level is None:
-            # New application
-            if current_user.level not in [
-                MOHStaffLevel.TECHNICAL_DEPARTMENT,
-                MOHStaffLevel.LEGAL_ADVISOR,
-            ]:
+        # Check if there are any existing reviews
+        reviews_query = select(MouReview).where(MouReview.mou_application_id == uuid)
+        existing_reviews = (await db.execute(reviews_query)).scalars().all()
+
+        # Ensure PARTNER_COORDINATOR is the first reviewer
+        if not existing_reviews:
+            if current_user.level != MOHStaffLevel.PARTNER_COORDINATOR:
                 raise HTTPException(
                     status.HTTP_403_FORBIDDEN,
-                    detail="Only technical department or legal advisor can review a new application",
+                    detail="Only the partner coordinator can make the first review",
                 )
 
-            # Handle initial reviews
+        if current_user.level == MOHStaffLevel.PARTNER_COORDINATOR:
             if review.decision == MouReviewDecision.REJECT:
+                mou_application.status = MouApplicationStatus.REJECTED
+                mou_application.next_level = None
+            elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
+                mou_application.status = MouApplicationStatus.UNDER_REVIEW
+                mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
+            elif review.decision == MouReviewDecision.VERIFIED:
+                mou_application.next_level = None
+            elif review.decision == MouReviewDecision.RECOMMEND_APPROVAL:
+                if not existing_reviews:
+                    mou_application.next_level = None
+                else:
+                    reviewer_levels = await get_review_levels(db, existing_reviews)
+
+                    if(MOHStaffLevel.TECHNICAL_DEPARTMENT in reviewer_levels and MOHStaffLevel.LEGAL_ADVISOR in reviewer_levels):
+                        mou_application.next_level = MOHStaffLevel.HOD
+                        mou_application.status = MouApplicationStatus.UNDER_APPROVAL
+                    else:
+                        mou_application.next_level = None
+            else:
                 raise HTTPException(
                     status.HTTP_403_FORBIDDEN,
-                    detail="Only partner coordinator is allowed to reject an application in the review stage",
+                    detail="Invalid decision for partner coordinator",
                 )
+        else:
             if review.decision == MouReviewDecision.VERIFIED:
-                next_level = (
+                other_department_level = (
                     MOHStaffLevel.LEGAL_ADVISOR
                     if current_user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT
                     else MOHStaffLevel.TECHNICAL_DEPARTMENT
                 )
+
+                reviewer_levels = await get_review_levels(db, existing_reviews)
+                if other_department_level in reviewer_levels:
+                    mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
+                else:
+                    mou_application.next_level = other_department_level
             elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
-                next_level = MOHStaffLevel.PARTNER_COORDINATOR
+                mou_application.status = MouApplicationStatus.UNDER_REVIEW
+                mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
             else:
                 raise HTTPException(
                     status.HTTP_403_FORBIDDEN,
-                    detail="Invalid decision for the initial review",
+                    detail="Invalid decision for technical department or legal advisor",
                 )
 
-        else:
-            # Application with reviews
-            if current_user.level != mou_application.next_level:
-                raise HTTPException(
-                    status.HTTP_403_FORBIDDEN,
-                    detail="You are not authorized to make decisions at this level",
-                )
-
-            if current_user.level == MOHStaffLevel.PARTNER_COORDINATOR:
-                if review.decision == MouReviewDecision.RECOMMEND_APPROVAL:
-                    mou_application.status = MouApplicationStatus.UNDER_APPROVAL
-                    next_level = MOHStaffLevel.HOD
-                elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
-                    mou_application.status = MouApplicationStatus.REQUEST_MODIFICATION
-                    if review.modification_entity:
-                        mou_application.modification_entity = (
-                            review.modification_entity
-                        )  # Store the list directly
-                        # Ensure next level is not stuck at partner coordinator
-                        next_level = MOHStaffLevel.PARTNER_COORDINATOR
-                elif review.decision == MouReviewDecision.REJECT:
-                    mou_application.status = MouApplicationStatus.REJECTED
-                    next_level = None
-                else:
-                    raise HTTPException(
-                        status.HTTP_403_FORBIDDEN,
-                        detail="Invalid decision for partner coordinator",
-                    )
-
-            elif current_user.level in [
-                MOHStaffLevel.TECHNICAL_DEPARTMENT,
-                MOHStaffLevel.LEGAL_ADVISOR,
-            ]:
-                if review.decision == MouReviewDecision.VERIFIED:
-                    if (
-                        not mou_application.next_level
-                    ):  # Only set next_level if it is currently null
-                        next_level = (
-                            MOHStaffLevel.LEGAL_ADVISOR
-                            if current_user.level == MOHStaffLevel.TECHNICAL_DEPARTMENT
-                            else MOHStaffLevel.TECHNICAL_DEPARTMENT
-                        )
-                    else:
-                        next_level = MOHStaffLevel.PARTNER_COORDINATOR
-                elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
-                    next_level = MOHStaffLevel.PARTNER_COORDINATOR
-                else:
-                    raise HTTPException(
-                        status.HTTP_403_FORBIDDEN,
-                        detail="Invalid decision for technical department or legal advisor",
-                    )
-
+        # Record the review and update the application
         previous_decision_time = await get_most_recent_decision_time(db, uuid)
         processing_time_ms = calculate_time_difference_ms(
             previous_decision_time, datetime.now()
         )
 
-        # Record the review
         new_review = MouReview(
             mou_application_id=uuid,
             decision=review.decision,
@@ -1131,8 +1096,6 @@ async def add_review(
         await db.commit()
         await db.refresh(new_review)
 
-        # Record the comment if any
-        comment_content = None
         if review.comment:
             new_comment = MouComment(
                 content=review.comment,
@@ -1144,16 +1107,13 @@ async def add_review(
             db.add(new_comment)
             await db.commit()
             await db.refresh(new_comment)
-            comment_content = new_comment.content
 
-        # Update MOU application with the latest review details
         mou_application.current_reviewer_id = current_user.uuid
         mou_application.last_decision_date = datetime.now()
-        mou_application.next_level = next_level
-
         await db.commit()
         await db.refresh(mou_application)
 
+        # Send notifications
         if mou_application.next_level:
             await notify_moh_staff(
                 db,
@@ -1189,7 +1149,7 @@ async def add_review(
         return MouReviewRead(
             uuid=new_review.uuid,
             decision=new_review.decision,
-            comment=comment_content,
+            comment=new_comment.content if review.comment else None,
             created_at=new_review.created_at,
             created_by=new_review.created_by,
             current_reviewer=current_user,
@@ -1238,7 +1198,6 @@ async def add_approval(
             MOHStaffLevel.LEGAL_ADVISOR,
             MOHStaffLevel.PS,
             MOHStaffLevel.MINISTER,
-            # MOHStaffLevel.MINISTER_OF_STATE,
         ]
 
         # Check if the current user is allowed to make the decision
