@@ -1,12 +1,13 @@
-# Use Python 3.11 slim base image
 FROM python:3.11-slim
 
-# Install system dependencies including LibreOffice
+# Install system dependencies including LibreOffice and additional libraries for bcrypt
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
     libpq-dev \
     gcc \
+    libffi-dev \
+    libssl-dev \
     postgresql-client \
     libreoffice \
     && rm -rf /var/lib/apt/lists/*
