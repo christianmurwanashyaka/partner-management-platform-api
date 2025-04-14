@@ -1037,8 +1037,10 @@ async def add_review(
                 mou_application.status = MouApplicationStatus.REJECTED
                 mou_application.next_level = None
             elif review.decision == MouReviewDecision.REQUEST_MODIFICATION:
-                mou_application.status = MouApplicationStatus.UNDER_REVIEW
+                mou_application.status = MouApplicationStatus.REQUEST_MODIFICATION
                 mou_application.next_level = MOHStaffLevel.PARTNER_COORDINATOR
+                if review.modification_entity:
+                    mou_application.modification_entity = review.modification_entity
             elif review.decision == MouReviewDecision.VERIFIED:
                 mou_application.next_level = None
             elif review.decision == MouReviewDecision.RECOMMEND_APPROVAL:
