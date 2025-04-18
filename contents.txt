@@ -1,0 +1,236 @@
+Files and folders in ".":
+.\.dockerignore
+.\.env
+.\.gitignore
+.\.python-version
+.\alembic.ini
+.\contents.txt
+.\dir.bat
+.\docker-compose.yml
+.\Dockerfile
+.\entrypoint.sh
+.\env.example
+.\main.py
+.\requirements.docker.txt
+.\requirements.txt
+.\__ini__.py
+
+Folder: .\.github
+
+Folder: .\.github\workflows
+.\.github\workflows\docker-publish.yml
+Skipping folder .\.venv
+
+Folder: .\alembic
+.\alembic\env.py
+.\alembic\README
+.\alembic\script.py.mako
+
+Folder: .\alembic\versions
+.\alembic\versions\082fc163a744_changes.py
+.\alembic\versions\09c327017a1a_report_fix_issue_with_project_foreign_.py
+.\alembic\versions\15173e569e00_changes.py
+.\alembic\versions\27ead6677329_changes.py
+.\alembic\versions\2faef81cc254_latest_changes_15_april.py
+.\alembic\versions\2fffb5e2fa66_report_fix_issue_with_application_.py
+.\alembic\versions\303eb8626bb1_activity_add_back_operational_zone.py
+.\alembic\versions\3279c6d2a8b1_report_fix_relationship_with_report_and_.py
+.\alembic\versions\39c47da32e7c_changes.py
+.\alembic\versions\4333a9277e04_changes.py
+.\alembic\versions\45128f0f84c8_activity_add_status_field.py
+.\alembic\versions\53a12e716407_added_m_and_e_role.py
+.\alembic\versions\54e791f1928d_accomplishments_remove_the_model.py
+.\alembic\versions\579cc75a8a84_report_activity_add_activity_uuid.py
+.\alembic\versions\5a023283bfeb_user_domains_and_partner_organization_.py
+.\alembic\versions\5b7bbb69fc04_user_fix_issue_with_organization_.py
+.\alembic\versions\677d9ea249a3_report_activity_add_changed_status.py
+.\alembic\versions\689ff90e903e_add_models_for_report_and_report_.py
+.\alembic\versions\7548ed238c10_activity_change_the_status.py
+.\alembic\versions\75d4555bb312_attempt_2.py
+.\alembic\versions\7d4f901e0650_report_make_reported_by_and_reported_at_.py
+.\alembic\versions\81c7b120380b_attempt_3.py
+.\alembic\versions\931d5a2d8712_changes.py
+.\alembic\versions\955ca2228b00_changes.py
+.\alembic\versions\985f4e37b466_add_user_verification_fields.py
+.\alembic\versions\9a14ea685340_activity_reporting_status_change_ready_.py
+.\alembic\versions\9e1a85b14030_report_fix_relationship_with_report_and_.py
+.\alembic\versions\a143b4767191_attempt_1.py
+.\alembic\versions\b23a884e9ace_changes.py
+.\alembic\versions\b3613320d997_activity_link_with_user.py
+.\alembic\versions\b3dfc21f5a21_changes.py
+.\alembic\versions\bb7533a801d9_user_multiple_domains_and_subdomains.py
+.\alembic\versions\be38aca1760a_report_fix_relationship_with_report_and_.py
+.\alembic\versions\dfd74828e2cd_changes.py
+.\alembic\versions\e869cc2643ee_changes.py
+Skipping folder .\alembic\versions\__pycache__
+Skipping folder .\alembic\__pycache__
+
+Folder: .\api
+
+Folder: .\api\dependencies
+.\api\dependencies\access_control.py
+.\api\dependencies\auth.py
+.\api\dependencies\email_notification_handler.py
+Skipping folder .\api\dependencies\__pycache__
+
+Folder: .\api\endpoints
+.\api\endpoints\activity.py
+.\api\endpoints\auth.py
+.\api\endpoints\budget_type.py
+.\api\endpoints\domain_data_entry.py
+.\api\endpoints\domain_intervention.py
+.\api\endpoints\exchange_rates.py
+.\api\endpoints\files.py
+.\api\endpoints\financing_agent.py
+.\api\endpoints\financing_scheme.py
+.\api\endpoints\funding_source.py
+.\api\endpoints\funding_unit.py
+.\api\endpoints\health.py
+.\api\endpoints\health_care_provider.py
+.\api\endpoints\input.py
+.\api\endpoints\input_category.py
+.\api\endpoints\mou.py
+.\api\endpoints\mou_application.py
+.\api\endpoints\mou_detail.py
+.\api\endpoints\organization.py
+.\api\endpoints\organization_type.py
+.\api\endpoints\party.py
+.\api\endpoints\project.py
+.\api\endpoints\report.py
+.\api\endpoints\report_activity.py
+.\api\endpoints\statistics.py
+.\api\endpoints\sub_domain.py
+.\api\endpoints\sub_domain_function.py
+.\api\endpoints\sub_financing_agent.py
+.\api\endpoints\sub_financing_scheme.py
+.\api\endpoints\sub_function.py
+.\api\endpoints\sub_health_care_provider.py
+.\api\endpoints\user.py
+Skipping folder .\api\endpoints\__pycache__
+
+Folder: .\app
+
+Folder: .\app\core
+
+Folder: .\core
+.\core\config.py
+.\core\logger.py
+Skipping folder .\core\__pycache__
+
+Folder: .\db
+.\db\database.py
+
+Folder: .\db\models
+.\db\models\activity.py
+.\db\models\activity_domain.py
+.\db\models\base.py
+.\db\models\budget_type.py
+.\db\models\comment.py
+.\db\models\document.py
+.\db\models\domain.py
+.\db\models\exchange_rate.py
+.\db\models\financing_agent.py
+.\db\models\financing_scheme.py
+.\db\models\funding_source.py
+.\db\models\funding_unit.py
+.\db\models\health_care_provider.py
+.\db\models\input_category.py
+.\db\models\input_detail.py
+.\db\models\mou.py
+.\db\models\mou_application.py
+.\db\models\mou_approval.py
+.\db\models\mou_approval_or_review.py
+.\db\models\mou_comment.py
+.\db\models\mou_detail.py
+.\db\models\mou_review.py
+.\db\models\notification.py
+.\db\models\organization.py
+.\db\models\organization_type.py
+.\db\models\pagination.py
+.\db\models\party.py
+.\db\models\project.py
+.\db\models\report.py
+.\db\models\report_activity.py
+.\db\models\types.py
+.\db\models\user.py
+.\db\models\user_activity.py
+.\db\models\user_domain.py
+.\db\models\__init__.py
+Skipping folder .\db\models\__pycache__
+Skipping folder .\db\__pycache__
+
+Folder: .\helpers
+.\helpers\activity.py
+.\helpers\comments.py
+.\helpers\db.py
+.\helpers\exceptions.py
+.\helpers\mou_application.py
+.\helpers\processing_time_helper.py
+Skipping folder .\helpers\__pycache__
+Skipping folder .\logs
+
+Folder: .\mou_templates
+.\mou_templates\mou_international.docx
+.\mou_templates\mou_local.docx
+
+Folder: .\notification
+.\notification\handlers.py
+.\notification\services.py
+.\notification\__init__.py
+Skipping folder .\notification\__pycache__
+
+Folder: .\schemas
+.\schemas\activity.py
+.\schemas\approval_and_review.py
+.\schemas\budget_type.py
+.\schemas\comment.py
+.\schemas\document.py
+.\schemas\domain_intervention.py
+.\schemas\exchange_rate.py
+.\schemas\financing_scheme.py
+.\schemas\funding_source.py
+.\schemas\funding_unit.py
+.\schemas\input.py
+.\schemas\input_category.py
+.\schemas\input_detail.py
+.\schemas\mou.py
+.\schemas\mou_application.py
+.\schemas\mou_approval.py
+.\schemas\mou_approval_or_review.py
+.\schemas\mou_detail.py
+.\schemas\mou_review.py
+.\schemas\organization.py
+.\schemas\organization_type.py
+.\schemas\party.py
+.\schemas\project.py
+.\schemas\report.py
+.\schemas\report_activity.py
+.\schemas\sub_domain.py
+.\schemas\sub_domain_function.py
+.\schemas\sub_financing_scheme.py
+.\schemas\sub_function.py
+.\schemas\user.py
+Skipping folder .\schemas\__pycache__
+
+Folder: .\service
+.\service\report_activity.py
+Skipping folder .\service\__pycache__
+
+Folder: .\templates
+.\templates\handlers.py
+
+Folder: .\templates\emails
+.\templates\emails\base_email.html
+.\templates\emails\forgot_password.html
+.\templates\emails\verification_email.html
+.\templates\emails\welcome_email.html
+Skipping folder .\templates\__pycache__
+
+Folder: .\utils
+.\utils\files.py
+.\utils\filters.py
+.\utils\functions.py
+.\utils\mou_application.py
+.\utils\security.py
+Skipping folder .\utils\__pycache__
+Skipping folder .\__pycache__

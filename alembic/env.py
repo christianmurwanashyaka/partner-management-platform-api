@@ -1,5 +1,7 @@
 import alembic_postgresql_enum
 import os
+import sqlmodel
+from sqlmodel.sql.sqltypes import AutoString, GUID
 from dotenv import load_dotenv
 from logging.config import fileConfig
 
