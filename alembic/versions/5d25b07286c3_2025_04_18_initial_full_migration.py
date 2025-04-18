@@ -1,19 +1,20 @@
 """2025‑04‑18 initial full migration
 
-Revision ID: f31df1e0acbd
+Revision ID: 5d25b07286c3
 Revises: 
-Create Date: 2025-04-18 19:03:47.794526
+Create Date: 2025-04-18 19:12:35.636610
 
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
-import sqlmodel  # <-- MUST BE INCLUDED
+import sqlmodel
 from sqlmodel.sql.sqltypes import AutoString
+from sqlalchemy.dialects import postgresql
+
 # revision identifiers, used by Alembic.
-revision: str = 'f31df1e0acbd'
+revision: str = '5d25b07286c3'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
